@@ -1,13 +1,17 @@
 using Microsoft.EntityFrameworkCore;
 using Rundan.Server.Data;
+using Rundan.Shared;
 using Rundan.Shared.Contracts;
 
 namespace Rundan.Server.Services;
 
 /// <summary>
-/// Builds the combined event standings — every player's points across all activities.
-/// In a roster event, a team's points on an activity are credited to EACH member's
-/// individual total (the partner-mixer model). Rosterless events aggregate by name.
+/// Builds the combined event standings. Two scoring models:
+///  - Cumulative: sum the actual points each team scored across activities.
+///  - Placement:  in each FINISHED activity, rank teams and award position points
+///                (1st = number of teams, then 3, 2, 1; ties share the higher points),
+///                credited to each member.
+/// A team's points are always credited to EACH of its members individually.
 /// </summary>
 public sealed class EventStandingsService(AppDbContext db, TimeProvider clock)
 {
@@ -25,8 +29,8 @@ public sealed class EventStandingsService(AppDbContext db, TimeProvider clock)
             .ToListAsync(ct);
 
         var entries = memberUsers.Count > 0
-            ? await BuildRosterStandingsAsync(eventId, memberUsers.Select(m => (m.UserId, m.Name)).ToList(), ct)
-            : await BuildFreeNameStandingsAsync(eventId, ct);
+            ? await BuildRosterAsync(eventId, ev.Scoring, memberUsers.Select(m => (m.UserId, m.Name)).ToList(), ct)
+            : await BuildFreeNameAsync(eventId, ev.Scoring, ct);
 
         Rank(entries);
 
@@ -39,57 +43,56 @@ public sealed class EventStandingsService(AppDbContext db, TimeProvider clock)
         };
     }
 
-    private async Task<List<EventStandingEntryDto>> BuildRosterStandingsAsync(
-        int eventId, List<(int UserId, string Name)> roster, CancellationToken ct)
+    private async Task<List<EventStandingEntryDto>> BuildRosterAsync(
+        int eventId, EventScoring scoring, List<(int UserId, string Name)> roster, CancellationToken ct)
     {
-        // Points earned by each team participant.
-        var answerRows = await db.Answers.AsNoTracking()
-            .Where(a => a.Participant!.Activity!.EventId == eventId)
-            .Select(a => new { Pid = a.ParticipantId, a.AwardedPoints })
-            .ToListAsync(ct);
-        var scoreRows = await db.ScoreEntries.AsNoTracking()
-            .Where(s => s.Activity!.EventId == eventId)
-            .Select(s => new { Pid = s.ParticipantId, s.Points })
-            .ToListAsync(ct);
-
-        var teamPoints = new Dictionary<int, int>();
-        foreach (var r in answerRows)
-        {
-            teamPoints[r.Pid] = teamPoints.GetValueOrDefault(r.Pid) + r.AwardedPoints;
-        }
-
-        foreach (var r in scoreRows)
-        {
-            teamPoints[r.Pid] = teamPoints.GetValueOrDefault(r.Pid) + r.Points;
-        }
-
-        // Team participant -> activity, and team participant -> member users.
-        var partActivity = await db.Participants.AsNoTracking()
+        var pointsByParticipant = await PointsByParticipantAsync(eventId, ct);
+        var teamParts = await db.Participants.AsNoTracking()
             .Where(p => p.Activity!.EventId == eventId && p.IsTeam)
             .Select(p => new { p.Id, p.ActivityId })
             .ToListAsync(ct);
-        var partToActivity = partActivity.ToDictionary(x => x.Id, x => x.ActivityId);
-
-        var memberships = await db.ParticipantMembers.AsNoTracking()
-            .Where(pm => pm.Participant!.Activity!.EventId == eventId)
-            .Select(pm => new { pm.ParticipantId, pm.UserId })
-            .ToListAsync(ct);
+        var membersByParticipant = (await db.ParticipantMembers.AsNoTracking()
+                .Where(pm => pm.Participant!.Activity!.EventId == eventId)
+                .Select(pm => new { pm.ParticipantId, pm.UserId })
+                .ToListAsync(ct))
+            .GroupBy(x => x.ParticipantId)
+            .ToDictionary(g => g.Key, g => g.Select(x => x.UserId).ToList());
 
         var totals = roster.ToDictionary(u => u.UserId, _ => 0);
-        var activitiesPlayed = roster.ToDictionary(u => u.UserId, _ => new HashSet<int>());
+        var played = roster.ToDictionary(u => u.UserId, _ => new HashSet<int>());
 
-        foreach (var m in memberships)
+        void Credit(int participantId, int points, int activityId)
         {
-            if (!totals.ContainsKey(m.UserId))
+            if (!membersByParticipant.TryGetValue(participantId, out var users))
             {
-                continue; // user removed from roster
+                return;
             }
 
-            var pts = teamPoints.GetValueOrDefault(m.ParticipantId);
-            totals[m.UserId] += pts;
-            if (pts != 0 && partToActivity.TryGetValue(m.ParticipantId, out var activityId))
+            foreach (var uid in users)
             {
-                activitiesPlayed[m.UserId].Add(activityId);
+                if (!totals.ContainsKey(uid))
+                {
+                    continue;
+                }
+
+                totals[uid] += points;
+                if (points != 0)
+                {
+                    played[uid].Add(activityId);
+                }
+            }
+        }
+
+        if (scoring == EventScoring.Placement)
+        {
+            await AwardPlacementAsync(eventId,
+                teamParts.Select(t => (t.Id, t.ActivityId)).ToList(), pointsByParticipant, Credit, ct);
+        }
+        else
+        {
+            foreach (var t in teamParts)
+            {
+                Credit(t.Id, pointsByParticipant.GetValueOrDefault(t.Id), t.ActivityId);
             }
         }
 
@@ -97,54 +100,134 @@ public sealed class EventStandingsService(AppDbContext db, TimeProvider clock)
         {
             DisplayName = u.Name,
             TotalPoints = totals[u.UserId],
-            ActivitiesPlayed = activitiesPlayed[u.UserId].Count,
+            ActivitiesPlayed = played[u.UserId].Count,
         }).ToList();
     }
 
-    private async Task<List<EventStandingEntryDto>> BuildFreeNameStandingsAsync(int eventId, CancellationToken ct)
+    private async Task<List<EventStandingEntryDto>> BuildFreeNameAsync(
+        int eventId, EventScoring scoring, CancellationToken ct)
     {
-        var answerRows = await db.Answers.AsNoTracking()
-            .Where(a => a.Participant!.Activity!.EventId == eventId)
-            .Select(a => new { Name = a.Participant!.DisplayName, ActId = a.Participant!.ActivityId, a.AwardedPoints })
-            .ToListAsync(ct);
-        var scoreRows = await db.ScoreEntries.AsNoTracking()
-            .Where(s => s.Activity!.EventId == eventId)
-            .Select(s => new { Name = s.Participant!.DisplayName, ActId = s.ActivityId, s.Points })
-            .ToListAsync(ct);
-        var names = await db.Participants.AsNoTracking()
+        var pointsByParticipant = await PointsByParticipantAsync(eventId, ct);
+        var parts = await db.Participants.AsNoTracking()
             .Where(p => p.Activity!.EventId == eventId)
-            .Select(p => p.DisplayName)
-            .Distinct()
+            .Select(p => new { p.Id, p.ActivityId, p.DisplayName })
             .ToListAsync(ct);
 
         var totals = new Dictionary<string, int>(StringComparer.Ordinal);
-        var acts = new Dictionary<string, HashSet<int>>(StringComparer.Ordinal);
-        foreach (var n in names)
+        var played = new Dictionary<string, HashSet<int>>(StringComparer.Ordinal);
+        foreach (var name in parts.Select(p => p.DisplayName).Distinct())
         {
-            totals[n] = 0;
-            acts[n] = new();
+            totals[name] = 0;
+            played[name] = new();
         }
 
-        void Add(string name, int pts, int actId)
+        var nameByParticipant = parts.ToDictionary(p => p.Id, p => p.DisplayName);
+
+        void Credit(int participantId, int points, int activityId)
         {
-            totals[name] = totals.GetValueOrDefault(name) + pts;
-            if (!acts.TryGetValue(name, out var set))
+            if (!nameByParticipant.TryGetValue(participantId, out var name))
             {
-                acts[name] = set = new();
+                return;
             }
 
-            set.Add(actId);
+            totals[name] = totals.GetValueOrDefault(name) + points;
+            if (points != 0)
+            {
+                played[name].Add(activityId);
+            }
         }
 
-        foreach (var r in answerRows) Add(r.Name, r.AwardedPoints, r.ActId);
-        foreach (var r in scoreRows) Add(r.Name, r.Points, r.ActId);
+        if (scoring == EventScoring.Placement)
+        {
+            await AwardPlacementAsync(eventId,
+                parts.Select(p => (p.Id, p.ActivityId)).ToList(), pointsByParticipant, Credit, ct);
+        }
+        else
+        {
+            foreach (var p in parts)
+            {
+                Credit(p.Id, pointsByParticipant.GetValueOrDefault(p.Id), p.ActivityId);
+            }
+        }
 
         return totals.Select(kv => new EventStandingEntryDto
         {
             DisplayName = kv.Key,
             TotalPoints = kv.Value,
-            ActivitiesPlayed = acts[kv.Key].Count,
+            ActivitiesPlayed = played[kv.Key].Count,
         }).ToList();
+    }
+
+    /// <summary>Sum of answer points + score points per participant across the event.</summary>
+    private async Task<Dictionary<int, int>> PointsByParticipantAsync(int eventId, CancellationToken ct)
+    {
+        var points = new Dictionary<int, int>();
+
+        var answerRows = await db.Answers.AsNoTracking()
+            .Where(a => a.Participant!.Activity!.EventId == eventId)
+            .Select(a => new { a.ParticipantId, a.AwardedPoints })
+            .ToListAsync(ct);
+        foreach (var r in answerRows)
+        {
+            points[r.ParticipantId] = points.GetValueOrDefault(r.ParticipantId) + r.AwardedPoints;
+        }
+
+        var scoreRows = await db.ScoreEntries.AsNoTracking()
+            .Where(s => s.Activity!.EventId == eventId)
+            .Select(s => new { s.ParticipantId, s.Points })
+            .ToListAsync(ct);
+        foreach (var r in scoreRows)
+        {
+            points[r.ParticipantId] = points.GetValueOrDefault(r.ParticipantId) + r.Points;
+        }
+
+        return points;
+    }
+
+    /// <summary>
+    /// Ranks the participants within each FINISHED activity and credits placement points
+    /// (1st = number of participants, then descending by 1; ties share the higher points).
+    /// </summary>
+    private async Task AwardPlacementAsync(
+        int eventId, List<(int ParticipantId, int ActivityId)> participants,
+        Dictionary<int, int> pointsByParticipant, Action<int, int, int> credit, CancellationToken ct)
+    {
+        var activities = await db.Activities.AsNoTracking()
+            .Where(a => a.EventId == eventId)
+            .Select(a => new { a.Id, a.Status, Lower = a.ScoringMode == ScoringMode.LowerWins })
+            .ToListAsync(ct);
+        var lowerByActivity = activities.ToDictionary(a => a.Id, a => a.Lower);
+        var finished = activities.Where(a => a.Status == ActivityStatus.Finished).Select(a => a.Id).ToHashSet();
+
+        foreach (var group in participants.GroupBy(p => p.ActivityId))
+        {
+            if (!finished.Contains(group.Key))
+            {
+                continue; // placement is awarded once an activity is finished
+            }
+
+            var n = group.Count();
+            var lower = lowerByActivity.GetValueOrDefault(group.Key);
+            var ordered = group
+                .Select(p => new { p.ParticipantId, Score = pointsByParticipant.GetValueOrDefault(p.ParticipantId) })
+                .OrderBy(x => lower ? x.Score : -x.Score)
+                .ToList();
+
+            var position = 0;
+            int? previousScore = null;
+            var seen = 0;
+            foreach (var entry in ordered)
+            {
+                seen++;
+                if (previousScore is null || entry.Score != previousScore)
+                {
+                    position = seen; // competition ranking: ties share the higher position
+                    previousScore = entry.Score;
+                }
+
+                credit(entry.ParticipantId, n - position + 1, group.Key);
+            }
+        }
     }
 
     private static void Rank(List<EventStandingEntryDto> entries)
