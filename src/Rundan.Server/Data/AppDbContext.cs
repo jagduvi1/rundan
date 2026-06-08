@@ -22,6 +22,7 @@ public class AppDbContext : DbContext
     public DbSet<AnswerOption> AnswerOptions => Set<AnswerOption>();
     public DbSet<Answer> Answers => Set<Answer>();
     public DbSet<ScoreEntry> ScoreEntries => Set<ScoreEntry>();
+    public DbSet<BracketMatch> BracketMatches => Set<BracketMatch>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -153,6 +154,15 @@ public class AppDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(x => x.UserId)
                 .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        b.Entity<BracketMatch>(e =>
+        {
+            e.HasIndex(x => new { x.ActivityId, x.Side, x.Round, x.Slot });
+            e.HasOne(x => x.Activity)
+                .WithMany()
+                .HasForeignKey(x => x.ActivityId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

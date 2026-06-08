@@ -33,6 +33,7 @@ builder.Services.AddScoped<ScoreboardService>();
 builder.Services.AddScoped<EventStandingsService>();
 builder.Services.AddScoped<TeamService>();
 builder.Services.AddScoped<GameService>();
+builder.Services.AddScoped<BracketService>();
 builder.Services.AddScoped<ScoreboardNotifier>();
 builder.Services.AddScoped<DataSeeder>();
 
@@ -110,6 +111,7 @@ app.MapActivityEndpoints();
 app.MapParticipantEndpoints();
 app.MapQuestionEndpoints();
 app.MapGameplayEndpoints();
+app.MapBracketEndpoints();
 
 app.MapHub<ScoreboardHub>(HubRoutes.Scoreboard);
 

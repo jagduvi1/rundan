@@ -1,0 +1,155 @@
+@inject RundanApi Api
+@inject AppState State
+
+<div class="card stack">
+    <div class="row">
+        <h2 class="grow">Slutspelsträd</h2>
+        @if (State.IsHost && (_bracket?.Drawn ?? false))
+        {
+            <button class="btn ghost small danger" @onclick="ResetAsync" disabled="@_busy">Reset</button>
+        }
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error">@_error</div>
+    }
+
+    @if (_bracket is null || !_bracket.Drawn)
+    {
+        <p class="muted">The bracket hasn't been drawn yet.</p>
+        @if (State.IsHost)
+        {
+            <button class="btn block success" @onclick="DrawAsync" disabled="@_busy">Draw the teams</button>
+        }
+        else
+        {
+            <p class="muted">Waiting for the host to draw the matches.</p>
+        }
+    }
+    else
+    {
+        @if (_bracket.Complete)
+        {
+            <div class="alert success">Champion: <b>@_bracket.ChampionName</b></div>
+        }
+
+        <h3>Winners</h3>
+        <div class="bracket">
+            @foreach (var r in Rounds(BracketSide.Winners))
+            {
+                <div class="round">
+                    @foreach (var m in Matches(BracketSide.Winners, r))
+                    {
+                        @RenderMatch(m)
+                    }
+                </div>
+            }
+        </div>
+
+        @if (_bracket.Matches.Any(m => m.Side == BracketSide.Losers))
+        {
+            <h3>Losers' bracket</h3>
+            <div class="bracket">
+                @foreach (var r in Rounds(BracketSide.Losers))
+                {
+                    <div class="round">
+                        @foreach (var m in Matches(BracketSide.Losers, r))
+                        {
+                            @RenderMatch(m)
+                        }
+                    </div>
+                }
+            </div>
+        }
+
+        <p class="muted" style="font-size:.8rem">Points: 3 per winners'-side win, 1 per losers'-side win — fed into the scoreboard above.</p>
+    }
+</div>
+
+@code {
+    [Parameter] public ActivityDto Activity { get; set; } = default!;
+    [Parameter] public int RefreshKey { get; set; }
+
+    private BracketDto? _bracket;
+    private bool _busy;
+    private string? _error;
+    private int _loadedActivityId = -1;
+    private int _lastRefreshKey = -1;
+
+    private RenderFragment RenderMatch(BracketMatchDto m) =>
+    @<div class="match">
+        @RenderTeam(m, m.AId, m.AName)
+        @RenderTeam(m, m.BId, m.BName)
+    </div>;
+
+    private RenderFragment RenderTeam(BracketMatchDto m, int? id, string? name) =>
+    @<text>
+        @if (CanPick(m, id))
+        {
+            <button class="bk-team pick" @onclick="() => PickWinnerAsync(m.Id, id!.Value)">@(name ?? "—")</button>
+        }
+        else
+        {
+            <div class="bk-team @TeamCls(m, id)">@(m.IsBye && id is null ? "(walkover)" : name ?? "—")</div>
+        }
+    </text>;
+
+    private bool CanPick(BracketMatchDto m, int? id)
+        => State.IsHost && !_busy && m.Ready && !m.Decided && id.HasValue;
+
+    private string TeamCls(BracketMatchDto m, int? id)
+    {
+        if (id is null)
+        {
+            return "empty";
+        }
+
+        return m.WinnerParticipantId == id ? "win" : m.Decided ? "lose" : string.Empty;
+    }
+
+    private IEnumerable<int> Rounds(BracketSide side) => _bracket!.Matches
+        .Where(m => m.Side == side).Select(m => m.Round).Distinct().OrderBy(r => r);
+
+    private IEnumerable<BracketMatchDto> Matches(BracketSide side, int round) => _bracket!.Matches
+        .Where(m => m.Side == side && m.Round == round).OrderBy(m => m.Slot);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Activity.Id != _loadedActivityId || RefreshKey != _lastRefreshKey)
+        {
+            _loadedActivityId = Activity.Id;
+            _lastRefreshKey = RefreshKey;
+            await LoadAsync();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        try { _bracket = await Api.GetBracketAsync(Activity.Id); }
+        catch (ApiException ex) { _error = ex.Message; }
+    }
+
+    private async Task DrawAsync() => await RunAsync(() => Api.DrawBracketAsync(Activity.Id));
+    private async Task ResetAsync() => await RunAsync(() => Api.ResetBracketAsync(Activity.Id));
+    private async Task PickWinnerAsync(int matchId, int teamId) =>
+        await RunAsync(() => Api.RecordBracketResultAsync(Activity.Id, matchId, teamId));
+
+    private async Task RunAsync(Func<Task<BracketDto>> action)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            _bracket = await action();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

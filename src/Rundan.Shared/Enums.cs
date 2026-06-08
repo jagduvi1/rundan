@@ -77,6 +77,16 @@ public enum ScoreEntryMode
     PerPlayer = 1,
 }
 
+/// <summary>Which side of a knockout bracket a match belongs to.</summary>
+public enum BracketSide
+{
+    /// <summary>Keep winning to reach the final.</summary>
+    Winners = 0,
+
+    /// <summary>First-round losers play here for the lower placements.</summary>
+    Losers = 1,
+}
+
 /// <summary>What a score-game measures — drives the entry UI and the displayed unit.</summary>
 public enum Measurement
 {

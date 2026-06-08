@@ -482,3 +482,15 @@ input:focus, select:focus, textarea:focus { outline: 3px solid var(--focus-ring)
 }
 #blazor-error-ui .reload { color: var(--sea-700); text-decoration: underline; }
 #blazor-error-ui .dismiss { cursor: pointer; float: right; }
+
+/* Knockout bracket tree */
+.bracket { display: flex; gap: 1rem; overflow-x: auto; padding-bottom: .5rem; align-items: stretch; }
+.bracket .round { display: flex; flex-direction: column; justify-content: space-around; gap: .75rem; min-width: 150px; }
+.bracket .match { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--card); }
+.bk-team { display: block; width: 100%; text-align: left; padding: .5rem .65rem; background: transparent; border: 0; border-bottom: 1px solid var(--border); font: inherit; color: inherit; }
+.bracket .match .bk-team:last-child { border-bottom: 0; }
+.bk-team.pick { cursor: pointer; }
+.bk-team.pick:hover { background: var(--green-50); }
+.bk-team.win { font-weight: 700; background: var(--green-100); }
+.bk-team.lose { opacity: .5; }
+.bk-team.empty { color: var(--slate-500, #889); }

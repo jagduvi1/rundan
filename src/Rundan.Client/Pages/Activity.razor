@@ -111,6 +111,9 @@ else
             case ActivityType.Tipspromenad:
                 <TipspromenadPlay @key="_activity.Id" Activity="_activity" Session="_session" />
                 break;
+            case ActivityType.Boule:
+                <BracketBoard @key="_activity.Id" Activity="_activity" RefreshKey="_scoreVersion" />
+                break;
             default:
                 <BouleBoard @key="_activity.Id" Activity="_activity" Session="_session"
                             Participants="_participants" RefreshKey="_scoreVersion" />
@@ -123,10 +126,14 @@ else
         {
             <ResultsView Activity="_activity" Session="_session" />
         }
+        else if (_activity.Type == ActivityType.Boule)
+        {
+            <BracketBoard @key="_activity.Id" Activity="_activity" RefreshKey="_scoreVersion" />
+        }
         else
         {
             <div class="card success center">
-                <h2>Final results 🎉</h2>
+                <h2>Final results</h2>
                 <p class="muted">See the scoreboard above.</p>
             </div>
         }
