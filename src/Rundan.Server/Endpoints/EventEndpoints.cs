@@ -49,6 +49,19 @@ internal static class EventEndpoints
             return Results.Ok(result);
         }).AddEndpointFilter<AdminEndpointFilter>();
 
+        // Player-facing: the events to show on the welcome page (access-gated, no admin code).
+        app.MapGet("/api/events/active", async (AppDbContext db, CancellationToken ct) =>
+        {
+            var events = await db.Events.AsNoTracking().OrderByDescending(e => e.Id).ToListAsync(ct);
+            var result = new List<EventDto>();
+            foreach (var ev in events)
+            {
+                result.Add(await LoadEventDtoAsync(db, ev, ct));
+            }
+
+            return Results.Ok(result);
+        });
+
         app.MapPut("/api/events/{id:int}/reorder", async (
             int id, ReorderActivitiesRequest req, AppDbContext db, CancellationToken ct) =>
         {
@@ -359,7 +372,59 @@ internal static class EventEndpoints
         var dtos = rows.Select(r => r.Activity.ToDto(r.Pc, r.Qc)).ToList();
         var dto = ev.ToDto(dtos, members);
         dto.AdminUserIds = memberRows.Where(m => m.IsAdmin).Select(m => m.UserId).ToList();
+        dto.EstimatedMeters = await EstimateRouteMetersAsync(db, ev.Id, rows.Select(r => r.Activity).ToList(), ct);
         return dto;
+    }
+
+    /// <summary>
+    /// Walks the geolocated route in running order — each Tipspromenad's stations (in order),
+    /// then any single activity geofence — and sums the leg distances. Null if fewer than two points.
+    /// </summary>
+    private static async Task<int?> EstimateRouteMetersAsync(
+        AppDbContext db, int eventId, List<Activity> activities, CancellationToken ct)
+    {
+        var stations = await db.Questions.AsNoTracking()
+            .Where(q => q.Activity!.EventId == eventId && q.Latitude != null && q.Longitude != null)
+            .Select(q => new { q.ActivityId, q.Order, Lat = q.Latitude!.Value, Lng = q.Longitude!.Value })
+            .ToListAsync(ct);
+
+        var points = new List<(double Lat, double Lng)>();
+        foreach (var a in activities) // already ordered by running order
+        {
+            var qs = stations.Where(s => s.ActivityId == a.Id).OrderBy(s => s.Order).ToList();
+            if (qs.Count > 0)
+            {
+                points.AddRange(qs.Select(s => (s.Lat, s.Lng)));
+            }
+            else if (a.Latitude is { } lat && a.Longitude is { } lng)
+            {
+                points.Add((lat, lng));
+            }
+        }
+
+        if (points.Count < 2)
+        {
+            return null;
+        }
+
+        var metres = 0.0;
+        for (var i = 1; i < points.Count; i++)
+        {
+            metres += Haversine(points[i - 1].Lat, points[i - 1].Lng, points[i].Lat, points[i].Lng);
+        }
+
+        return (int)Math.Round(metres);
+    }
+
+    private static double Haversine(double lat1, double lon1, double lat2, double lon2)
+    {
+        const double earthRadiusM = 6_371_000;
+        static double Rad(double d) => d * Math.PI / 180.0;
+        var dLat = Rad(lat2 - lat1);
+        var dLon = Rad(lon2 - lon1);
+        var h = (Math.Sin(dLat / 2) * Math.Sin(dLat / 2))
+                + (Math.Cos(Rad(lat1)) * Math.Cos(Rad(lat2)) * Math.Sin(dLon / 2) * Math.Sin(dLon / 2));
+        return earthRadiusM * 2 * Math.Atan2(Math.Sqrt(h), Math.Sqrt(1 - h));
     }
 
     private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

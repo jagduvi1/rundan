@@ -12,6 +12,9 @@ public class EventDto
     public string JoinCode { get; set; } = string.Empty;
     public DateTimeOffset CreatedUtc { get; set; }
 
+    /// <summary>Estimated metres covered walking the geolocated route (stations + activity points), if any.</summary>
+    public int? EstimatedMeters { get; set; }
+
     /// <summary>Activities in running order.</summary>
     public List<ActivityDto> Activities { get; set; } = new();
 
