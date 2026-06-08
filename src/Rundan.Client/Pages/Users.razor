@@ -38,8 +38,18 @@ else
                 @foreach (var u in _users)
                 {
                     <li>
-                        <span class="grow">@u.Name</span>
-                        <button class="btn ghost small danger" @onclick="() => DeleteUserAsync(u.Id)" disabled="@_busy">✕</button>
+                        @if (_renameId == u.Id)
+                        {
+                            <input class="grow" @bind="_renameName" maxlength="60" @onkeydown="@(e => OnRenameKey(e, u.Id))" />
+                            <button class="btn small success" @onclick="() => RenameAsync(u.Id)" disabled="@(_busy || string.IsNullOrWhiteSpace(_renameName))">Save</button>
+                            <button class="btn ghost small" @onclick="() => _renameId = null">Cancel</button>
+                        }
+                        else
+                        {
+                            <span class="grow">@u.Name</span>
+                            <button class="btn ghost small" @onclick="() => StartRename(u)" disabled="@_busy">Rename</button>
+                            <button class="btn ghost small danger" @onclick="() => DeleteUserAsync(u.Id)" disabled="@_busy">✕</button>
+                        }
                     </li>
                 }
             </ul>
@@ -54,6 +64,8 @@ else
     private string? _error;
     private string _newUserName = string.Empty;
     private List<UserDto> _users = new();
+    private int? _renameId;
+    private string _renameName = string.Empty;
 
     protected override async Task OnInitializedAsync()
     {
@@ -119,6 +131,47 @@ else
         {
             await Api.CreateUserAsync(name);
             _newUserName = string.Empty;
+            _users = await Api.ListUsersAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void StartRename(UserDto u)
+    {
+        _renameId = u.Id;
+        _renameName = u.Name;
+        _error = null;
+    }
+
+    private async Task OnRenameKey(KeyboardEventArgs e, int id)
+    {
+        if (e.Key == "Enter")
+        {
+            await RenameAsync(id);
+        }
+    }
+
+    private async Task RenameAsync(int id)
+    {
+        var name = _renameName.Trim();
+        if (name.Length == 0)
+        {
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            await Api.RenameUserAsync(id, name);
+            _renameId = null;
             _users = await Api.ListUsersAsync();
         }
         catch (ApiException ex)

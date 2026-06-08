@@ -60,6 +60,10 @@ public sealed class RundanApi(HttpClient http, AppState state)
         (await SendAsync<UserDto>(HttpMethod.Post, "api/users",
             body: new CreateUserRequest { Name = name }, admin: true))!;
 
+    public async Task<UserDto> RenameUserAsync(int id, string name) =>
+        (await SendAsync<UserDto>(HttpMethod.Put, $"api/users/{id}",
+            body: new CreateUserRequest { Name = name }, admin: true))!;
+
     public Task DeleteUserAsync(int id) =>
         SendAsync(HttpMethod.Delete, $"api/users/{id}", admin: true);
 
