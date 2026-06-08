@@ -1,6 +1,8 @@
 @inherits LayoutComponentBase
+@implements IDisposable
 @inject AppState State
 @inject RundanApi Api
+@inject NavigationManager Nav
 
 <div class="app-shell">
     <header class="app-header">
@@ -18,6 +20,14 @@
             <a href="admin" class="badge admin">Host</a>
         }
     </header>
+
+    @if (State.IsProxying)
+    {
+        <div class="proxy-bar" role="status">
+            <span>Playing for <b>@State.Proxy!.Name</b> — answers and scores count for them.</span>
+            <button class="proxy-bar__stop" @onclick="StopProxyAsync">Stop</button>
+        </div>
+    }
 
     <main class="app-main">
         @if (!_ready)
@@ -53,7 +63,22 @@
 
     private string AppName => State.Bootstrap?.AppName ?? "Rundan";
 
-    protected override Task OnInitializedAsync() => InitAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        State.Changed += OnStateChanged;
+        await InitAsync();
+    }
+
+    private void OnStateChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => State.Changed -= OnStateChanged;
+
+    // Stop covering a player. Force a reload so the current page re-reads the (now own) session.
+    private async Task StopProxyAsync()
+    {
+        await State.ClearProxyAsync();
+        Nav.NavigateTo(Nav.Uri, forceLoad: true);
+    }
 
     private async Task InitAsync()
     {

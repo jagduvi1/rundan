@@ -14,6 +14,7 @@ public sealed class AppState(IJSRuntime js)
     private const string AccessKey = "rundan.access";
     private const string AdminKey = "rundan.admin";
     private const string PreviewKey = "rundan.preview";
+    private const string ProxyKey = "rundan.proxy";
     private static string SessionKey(int activityId) => $"rundan.session.{activityId}";
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -30,6 +31,35 @@ public sealed class AppState(IJSRuntime js)
 
     /// <summary>True only when the device is the host AND not currently previewing as a player.</summary>
     public bool IsHost => HasAdminCode && !PreviewAsPlayer;
+
+    /// <summary>The roster player a host is currently "playing as" (their phone died), or null.</summary>
+    public ProxyIdentity? Proxy { get; private set; }
+
+    public bool IsProxying => Proxy is not null;
+
+    /// <summary>Raised when device state that a shared layout shows (e.g. the proxy) changes.</summary>
+    public event Action? Changed;
+
+    /// <summary>Start playing as another roster player (overlays their sessions + member token).</summary>
+    public async Task SetProxyAsync(ProxyIdentity proxy)
+    {
+        Proxy = proxy;
+        await SetItemAsync(ProxyKey, JsonSerializer.Serialize(proxy, JsonOptions));
+        Changed?.Invoke();
+    }
+
+    /// <summary>Stop playing as another player and return to the host's own identity.</summary>
+    public async Task ClearProxyAsync()
+    {
+        if (Proxy is null)
+        {
+            return;
+        }
+
+        Proxy = null;
+        await RemoveItemAsync(ProxyKey);
+        Changed?.Invoke();
+    }
 
     public async Task SetPreviewAsync(bool on)
     {
@@ -55,6 +85,7 @@ public sealed class AppState(IJSRuntime js)
         AccessCode = await GetItemAsync(AccessKey);
         AdminCode = await GetItemAsync(AdminKey);
         PreviewAsPlayer = await GetItemAsync(PreviewKey) == "1";
+        Proxy = await LoadProxyAsync();
         Bootstrap = await api.GetBootstrapAsync();
 
         // Only consider ourselves initialized once we actually reached the server. A failed
@@ -84,6 +115,13 @@ public sealed class AppState(IJSRuntime js)
 
     public async Task<PlayerSession?> GetSessionAsync(int activityId)
     {
+        // When a host is playing as another player, that player's team session wins for
+        // any activity they're in — so the host answers/scores/plays as them.
+        if (Proxy is { } proxy && proxy.Sessions.TryGetValue(activityId, out var proxySession))
+        {
+            return proxySession;
+        }
+
         var json = await GetItemAsync(SessionKey(activityId));
         if (string.IsNullOrEmpty(json))
         {
@@ -107,6 +145,24 @@ public sealed class AppState(IJSRuntime js)
 
     public Task ClearSessionAsync(int activityId) => RemoveItemAsync(SessionKey(activityId));
 
+    private async Task<ProxyIdentity?> LoadProxyAsync()
+    {
+        var json = await GetItemAsync(ProxyKey);
+        if (string.IsNullOrEmpty(json))
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<ProxyIdentity>(json, JsonOptions);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     // The name a device joined an event with (used to prefill and to re-join newly opened activities).
     private static string EventNameKey(int eventId) => $"rundan.eventname.{eventId}";
     public Task<string?> GetEventNameAsync(int eventId) => GetItemAsync(EventNameKey(eventId));
@@ -119,7 +175,13 @@ public sealed class AppState(IJSRuntime js)
     public Task SaveEventUserIdAsync(int eventId, int userId) => SetItemAsync(EventUserKey(eventId), userId.ToString());
 
     // The event-member token (proves an event admin) for management calls. Set by the active event page.
-    public Guid? ActiveMemberToken { get; set; }
+    // While a host is "playing as" another player, the proxy's token shadows it app-wide.
+    private Guid? _ownMemberToken;
+    public Guid? ActiveMemberToken
+    {
+        get => Proxy?.MemberToken ?? _ownMemberToken;
+        set => _ownMemberToken = value;
+    }
     private static string MemberTokenKey(int eventId) => $"rundan.membertoken.{eventId}";
     public async Task<Guid?> GetEventMemberTokenAsync(int eventId)
         => Guid.TryParse(await GetItemAsync(MemberTokenKey(eventId)), out var t) ? t : null;

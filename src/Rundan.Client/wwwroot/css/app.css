@@ -127,6 +127,32 @@ button { font-family: inherit; }
 }
 .app-header .spacer { flex: 1; }
 
+/* Banner shown while a host is "playing for" another player (their phone died). */
+.proxy-bar {
+    position: sticky;
+    top: 0;
+    z-index: 19;
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    padding: .5rem 1rem;
+    font-size: .85rem;
+    color: var(--coral-700);
+    background: var(--coral-50);
+    border-bottom: 1px solid var(--coral-200, var(--coral-100));
+}
+.proxy-bar span { flex: 1; }
+.proxy-bar__stop {
+    flex: none;
+    border: 1px solid var(--coral-700);
+    background: var(--coral-700);
+    color: #fff;
+    border-radius: var(--radius-sm, 8px);
+    padding: .25rem .7rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
 .app-main {
     flex: 1;
     width: 100%;
