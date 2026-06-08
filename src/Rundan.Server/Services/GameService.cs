@@ -123,6 +123,60 @@ public sealed class GameService(AppDbContext db, TimeProvider clock)
         };
     }
 
+    /// <summary>
+    /// Host correction of a question's answer key after answers are in (e.g. the wrong option
+    /// was marked correct). Updates the key in place — option ids are preserved so existing
+    /// answers stay valid — then re-scores every submitted answer for the question.
+    /// </summary>
+    public async Task<QuestionResultDto> UpdateAnswerKeyAsync(
+        Activity activity, int questionId, UpdateAnswerKeyRequest req, CancellationToken ct = default)
+    {
+        var question = await db.Questions.Include(q => q.Options)
+            .FirstOrDefaultAsync(q => q.Id == questionId && q.ActivityId == activity.Id, ct)
+            ?? throw new RuleViolationException("That question no longer exists.", StatusCodes.Status404NotFound);
+
+        if (question.Kind == QuestionKind.FreeText)
+        {
+            var accepted = (req.AcceptedFreeTextAnswer ?? string.Empty).Trim();
+            if (accepted.Length == 0)
+            {
+                throw new RuleViolationException("A free-text question needs an accepted answer.");
+            }
+
+            question.AcceptedFreeTextAnswer = accepted;
+        }
+        else
+        {
+            if (req.CorrectOptionId is not { } correctId || question.Options.All(o => o.Id != correctId))
+            {
+                throw new RuleViolationException("Pick which option is correct.");
+            }
+
+            foreach (var option in question.Options)
+            {
+                option.IsCorrect = option.Id == correctId;
+            }
+        }
+
+        // Re-evaluate every answer against the corrected key (the scoreboard and event standings
+        // both sum AwardedPoints, so this reflects across all scoring).
+        var answers = await db.Answers.Where(a => a.QuestionId == questionId).ToListAsync(ct);
+        foreach (var answer in answers)
+        {
+            var isCorrect = question.Kind == QuestionKind.FreeText
+                ? !string.IsNullOrWhiteSpace(question.AcceptedFreeTextAnswer)
+                  && string.Equals((answer.FreeText ?? string.Empty).Trim(),
+                      question.AcceptedFreeTextAnswer!.Trim(), StringComparison.OrdinalIgnoreCase)
+                : answer.SelectedOptionId is { } sel && question.Options.Any(o => o.Id == sel && o.IsCorrect);
+
+            answer.IsCorrect = isCorrect;
+            answer.AwardedPoints = isCorrect ? question.Points : 0;
+        }
+
+        await db.SaveChangesAsync(ct);
+        return question.ToResultDto();
+    }
+
     /// <summary>Records a score line for a round-based game (boule / generic).</summary>
     public async Task<ScoreEntryDto> RecordScoreAsync(
         Activity activity, RecordScoreRequest req, CancellationToken ct = default)

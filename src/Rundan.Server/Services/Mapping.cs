@@ -101,10 +101,18 @@ public static class Mapping
     public static QuestionResultDto ToResultDto(this Question q) => new()
     {
         QuestionId = q.Id,
+        Order = q.Order,
+        Text = q.Text,
+        Kind = q.Kind,
+        Points = q.Points,
         CorrectOptionId = q.Options.FirstOrDefault(o => o.IsCorrect)?.Id,
         CorrectAnswerText = q.Kind == QuestionKind.FreeText
             ? q.AcceptedFreeTextAnswer
             : q.Options.FirstOrDefault(o => o.IsCorrect)?.Text,
+        Options = q.Options
+            .OrderBy(o => o.Order)
+            .Select(o => new AnswerOptionDto { Id = o.Id, Order = o.Order, Text = o.Text })
+            .ToList(),
     };
 
     public static ScoreEntryDto ToDto(this ScoreEntry s) => new()

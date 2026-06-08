@@ -1,7 +1,18 @@
 @inject RundanApi Api
+@inject AppState State
 
 <div class="card stack">
     <h2>Answers</h2>
+
+    @if (State.IsHost && _results.Count > 0)
+    {
+        <p class="muted" style="font-size:.85rem">Wrong answer marked correct? Tap the right one (or edit the accepted text) — everyone's score updates automatically.</p>
+    }
+
+    @if (_error is not null)
+    {
+        <div class="alert error">@_error</div>
+    }
 
     @if (_loading)
     {
@@ -17,7 +28,54 @@
         {
             var mine = _myAnswers.GetValueOrDefault(result.QuestionId);
             <div style="border-bottom:1px solid var(--line);padding:.6rem 0">
-                <div><b>@(index + 1).</b> Correct answer: <b>@(result.CorrectAnswerText ?? "—")</b></div>
+                <div style="margin-bottom:.35rem"><b>@(index + 1).</b> @result.Text</div>
+
+                @if (result.Kind == QuestionKind.FreeText)
+                {
+                    @if (State.IsHost)
+                    {
+                        <div class="row" style="gap:.4rem">
+                            <input class="grow" maxlength="200" value="@_freeTextEdits.GetValueOrDefault(result.QuestionId, result.CorrectAnswerText ?? string.Empty)"
+                                   @onchange="e => _freeTextEdits[result.QuestionId] = e.Value?.ToString() ?? string.Empty" />
+                            <button class="btn small success" disabled="@(_savingId == result.QuestionId)"
+                                    @onclick="() => SaveFreeTextAsync(result)">Save</button>
+                        </div>
+                    }
+                    else
+                    {
+                        <div>Correct answer: <b>@(result.CorrectAnswerText ?? "—")</b></div>
+                    }
+                }
+                else
+                {
+                    <ul class="list" style="margin:.2rem 0">
+                        @foreach (var opt in result.Options)
+                        {
+                            var isCorrect = opt.Id == result.CorrectOptionId;
+                            var isMine = mine?.SelectedOptionId == opt.Id;
+                            @if (State.IsHost)
+                            {
+                                <li>
+                                    <button class="btn block @(isCorrect ? "success" : "secondary")"
+                                            style="justify-content:flex-start;text-align:left"
+                                            disabled="@(_savingId == result.QuestionId || isCorrect)"
+                                            @onclick="() => SetCorrectAsync(result, opt.Id)">
+                                        @opt.Text @if (isCorrect) { <span> ✓</span> }
+                                    </button>
+                                </li>
+                            }
+                            else
+                            {
+                                <li class="@(isCorrect ? "" : "muted")">
+                                    <span class="grow">@opt.Text</span>
+                                    @if (isCorrect) { <span class="badge">correct</span> }
+                                    @if (isMine && !isCorrect) { <span class="badge">your pick</span> }
+                                </li>
+                            }
+                        }
+                    </ul>
+                }
+
                 @if (mine is not null)
                 {
                     <div class="@(mine.IsCorrect ? "" : "muted")" style="font-size:.9rem">
@@ -34,10 +92,15 @@
     [Parameter] public PlayerSession? Session { get; set; }
 
     private bool _loading = true;
+    private string? _error;
+    private int? _savingId;
     private List<QuestionResultDto> _results = new();
     private Dictionary<int, MyAnswerDto> _myAnswers = new();
+    private readonly Dictionary<int, string> _freeTextEdits = new();
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
     {
         try
         {
@@ -55,6 +118,41 @@
         finally
         {
             _loading = false;
+        }
+    }
+
+    private Task SetCorrectAsync(QuestionResultDto result, int optionId) => SaveKeyAsync(result, optionId, null);
+
+    private Task SaveFreeTextAsync(QuestionResultDto result) =>
+        SaveKeyAsync(result, null, _freeTextEdits.GetValueOrDefault(result.QuestionId, result.CorrectAnswerText ?? string.Empty));
+
+    private async Task SaveKeyAsync(QuestionResultDto result, int? correctOptionId, string? acceptedText)
+    {
+        _savingId = result.QuestionId;
+        _error = null;
+        try
+        {
+            var updated = await Api.UpdateAnswerKeyAsync(Activity.Id, result.QuestionId, correctOptionId, acceptedText);
+            var i = _results.FindIndex(r => r.QuestionId == result.QuestionId);
+            if (i >= 0)
+            {
+                _results[i] = updated;
+            }
+
+            // Our own answer's correct/awarded may have changed too.
+            if (Session is not null)
+            {
+                var mine = await Api.GetMyAnswersAsync(Activity.Id, Session.Token);
+                _myAnswers = mine.ToDictionary(a => a.QuestionId);
+            }
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _savingId = null;
         }
     }
 

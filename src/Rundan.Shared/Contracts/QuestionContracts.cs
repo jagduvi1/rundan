@@ -58,10 +58,31 @@ public class QuestionUpsertRequest
     public string? AcceptedFreeTextAnswer { get; set; }
 }
 
-/// <summary>Reveals the correct answer for a question (after the activity is finished).</summary>
+/// <summary>Reveals a question and its correct answer (after the activity is finished).</summary>
 public class QuestionResultDto
 {
     public int QuestionId { get; set; }
+    public int Order { get; set; }
+    public string Text { get; set; } = string.Empty;
+    public QuestionKind Kind { get; set; }
+    public int Points { get; set; }
+
     public int? CorrectOptionId { get; set; }
     public string? CorrectAnswerText { get; set; }
+
+    /// <summary>All options (no correctness flag; the correct one is <see cref="CorrectOptionId"/>).</summary>
+    public List<AnswerOptionDto> Options { get; set; } = new();
+}
+
+/// <summary>
+/// Host correction of a question's answer key after the fact (e.g. the wrong option was marked
+/// correct). Applied in place — option ids are preserved — and re-scores every submitted answer.
+/// </summary>
+public class UpdateAnswerKeyRequest
+{
+    /// <summary>The option that should be correct (for multiple-choice / true-false).</summary>
+    public int? CorrectOptionId { get; set; }
+
+    /// <summary>The accepted answer (for free-text questions).</summary>
+    public string? AcceptedFreeTextAnswer { get; set; }
 }
