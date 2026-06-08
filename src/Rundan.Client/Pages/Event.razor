@@ -248,11 +248,19 @@ else
                 <div class="alert error">@_adminError</div>
             }
 
-            @* Run order *@
-            @foreach (var a in _event.Activities)
+            @* Run order — reorder, advance/pause, edit, remove *@
+            @for (var i = 0; i < _event.Activities.Count; i++)
             {
-                <div class="row" style="border-bottom:1px solid var(--line);padding:.4rem 0">
+                var a = _event.Activities[i];
+                var index = i;
+                <div class="row wrap" style="border-bottom:1px solid var(--line);padding:.4rem 0;gap:.3rem">
                     <span class="grow"><b>@a.Order. @a.Title</b> <StatusBadge Status="a.Status" /></span>
+
+                    <button class="btn small ghost" title="Move up" @onclick="() => MoveAsync(a.Id, -1)"
+                            disabled="@(_busy || index == 0)">↑</button>
+                    <button class="btn small ghost" title="Move down" @onclick="() => MoveAsync(a.Id, 1)"
+                            disabled="@(_busy || index == _event.Activities.Count - 1)">↓</button>
+
                     @foreach (var (label, status) in HostActions(a.Status))
                     {
                         <button class="btn small success" @onclick="() => SetStatusAsync(a.Id, status)"
@@ -260,12 +268,28 @@ else
                             @label
                         </button>
                     }
+                    @if (a.Status != ActivityStatus.Draft)
+                    {
+                        <button class="btn small ghost" title="Deactivate but keep in the event"
+                                @onclick="() => SetStatusAsync(a.Id, ActivityStatus.Draft)" disabled="@_busy">Pause</button>
+                    }
+
                     <button class="btn small secondary" @onclick="() => SimulateActivityAsync(a.Id)" disabled="@_busy">Simulate</button>
                     <a class="btn small ghost" href="@($"manage/{a.Id}")">Edit</a>
+
+                    @if (_confirmDeleteId == a.Id)
+                    {
+                        <button class="btn small danger" @onclick="() => RemoveActivityAsync(a.Id)" disabled="@_busy">Remove?</button>
+                        <button class="btn small ghost" @onclick="() => _confirmDeleteId = null">Cancel</button>
+                    }
+                    else
+                    {
+                        <button class="btn small ghost danger" @onclick="() => _confirmDeleteId = a.Id" disabled="@_busy">Remove</button>
+                    }
                 </div>
             }
 
-            <h3 style="margin-top:.5rem">Add an activity</h3>
+            <h3 style="margin-top:.5rem">Add an activity — start fresh</h3>
             <input type="text" placeholder="Activity title" @bind="_newTitle" maxlength="200" />
             <select @bind="_newType">
                 <option value="@ActivityType.Quiz">Quiz</option>
@@ -278,20 +302,27 @@ else
                 Add to event
             </button>
 
-            @if (State.IsHost && _library.Count > 0)
+            @if (State.IsHost)
             {
-                <h3 style="margin-top:.5rem">Reuse from library</h3>
-                <p class="muted" style="font-size:.85rem">Add a copy of a public activity (rules, questions, scoring all carried over).</p>
-                <select @bind="_libSourceId">
-                    <option value="0">Pick a public activity…</option>
-                    @foreach (var lib in _library)
-                    {
-                        <option value="@lib.Id">@lib.Title</option>
-                    }
-                </select>
-                <button class="btn block secondary" @onclick="AddFromLibraryAsync" disabled="@(_busy || _libSourceId <= 0)">
-                    Add a copy to this event
-                </button>
+                <h3 style="margin-top:.5rem">…or add from the activity library</h3>
+                @if (_library.Count == 0)
+                {
+                    <p class="muted" style="font-size:.85rem">No reusable activities yet. Mark any activity <b>public</b> on its Edit page (or create a standalone one) and it'll show up here to copy.</p>
+                }
+                else
+                {
+                    <p class="muted" style="font-size:.85rem">Add a copy of a public activity (rules, questions, scoring all carried over).</p>
+                    <select @bind="_libSourceId">
+                        <option value="0">Pick a public activity…</option>
+                        @foreach (var lib in _library)
+                        {
+                            <option value="@lib.Id">@lib.Title</option>
+                        }
+                    </select>
+                    <button class="btn block secondary" @onclick="AddFromLibraryAsync" disabled="@(_busy || _libSourceId <= 0)">
+                        Add a copy to this event
+                    </button>
+                }
             }
 
             <h3 style="margin-top:.5rem">Dry run</h3>
@@ -457,6 +488,7 @@ else
     private List<ActivityDto> _library = new();
     private int _libSourceId;
     private bool _confirmClear;
+    private int? _confirmDeleteId;
     private bool _isViewer;
     private string _viewerName = string.Empty;
 
@@ -1113,6 +1145,24 @@ else
     {
         _confirmClear = false;
         await HostActionAsync(() => Api.ResetEventResultsAsync(Id));
+    }
+
+    // Reorder: swap with the neighbour and persist the new running order.
+    private async Task MoveAsync(int activityId, int delta)
+    {
+        if (_event is null) return;
+        var ids = _event.Activities.Select(a => a.Id).ToList();
+        var i = ids.IndexOf(activityId);
+        var j = i + delta;
+        if (i < 0 || j < 0 || j >= ids.Count) return;
+        (ids[i], ids[j]) = (ids[j], ids[i]);
+        await HostActionAsync(() => Api.ReorderActivitiesAsync(Id, ids));
+    }
+
+    private async Task RemoveActivityAsync(int activityId)
+    {
+        _confirmDeleteId = null;
+        await HostActionAsync(() => Api.DeleteActivityAsync(activityId));
     }
 
     private async Task HostActionAsync(Func<Task> action)

@@ -281,6 +281,9 @@ internal static class ActivityEndpoints
         // A host may deliberately re-open a finished activity (admin-gated).
         (ActivityStatus.Finished, ActivityStatus.Live) => true,
         (ActivityStatus.Finished, ActivityStatus.Open) => true,
+        // "Pause": deactivate an activity back to Draft (hidden from players) but keep it in the event.
+        (ActivityStatus.Live, ActivityStatus.Draft) => true,
+        (ActivityStatus.Finished, ActivityStatus.Draft) => true,
         _ => false,
     };
 
