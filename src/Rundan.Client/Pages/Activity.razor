@@ -50,7 +50,7 @@ else
             }
             @if (!string.IsNullOrWhiteSpace(_activity.Description))
             {
-                <p style="white-space:pre-wrap">@_activity.Description</p>
+                <div class="rte-content">@((MarkupString)Fmt.RichHtml(_activity.Description))</div>
             }
         </div>
     }
