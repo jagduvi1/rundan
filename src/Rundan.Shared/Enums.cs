@@ -19,6 +19,9 @@ public enum ActivityType
 
     /// <summary>Generic score-tracked game (round-based points). Use for anything new.</summary>
     ScoreGame = 4,
+
+    /// <summary>Word game: flip letter tiles and form the longest word against a timer.</summary>
+    WordGame = 5,
 }
 
 /// <summary>Lifecycle of an activity.</summary>

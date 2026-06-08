@@ -114,6 +114,9 @@ else
             case ActivityType.Boule:
                 <BracketBoard @key="_activity.Id" Activity="_activity" RefreshKey="_scoreVersion" />
                 break;
+            case ActivityType.WordGame:
+                <WordGamePlay @key="_activity.Id" Activity="_activity" Session="_session" RefreshKey="_scoreVersion" />
+                break;
             default:
                 <BouleBoard @key="_activity.Id" Activity="_activity" Session="_session"
                             Participants="_participants" RefreshKey="_scoreVersion" />
@@ -129,6 +132,10 @@ else
         else if (_activity.Type == ActivityType.Boule)
         {
             <BracketBoard @key="_activity.Id" Activity="_activity" RefreshKey="_scoreVersion" />
+        }
+        else if (_activity.Type == ActivityType.WordGame)
+        {
+            <WordGamePlay @key="_activity.Id" Activity="_activity" Session="_session" RefreshKey="_scoreVersion" />
         }
         else
         {
@@ -291,6 +298,7 @@ else
         ActivityType.Tipspromenad => "Tipspromenad",
         ActivityType.Boule => "Boule",
         ActivityType.ScoreGame => "Score game",
+        ActivityType.WordGame => "Word game",
         _ => type.ToString(),
     };
 }

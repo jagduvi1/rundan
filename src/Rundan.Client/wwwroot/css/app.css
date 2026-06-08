@@ -494,3 +494,9 @@ input:focus, select:focus, textarea:focus { outline: 3px solid var(--focus-ring)
 .bk-team.win { font-weight: 700; background: var(--green-100); }
 .bk-team.lose { opacity: .5; }
 .bk-team.empty { color: var(--slate-500, #889); }
+
+/* Word game tiles */
+.tiles { display: grid; grid-template-columns: repeat(5, 1fr); gap: .5rem; }
+.tile { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; font-family: var(--font-display); font-size: 1.5rem; font-weight: 700; border-radius: 12px; border: 2px solid var(--border); background: var(--card-2, var(--card)); color: var(--slate-500, #889); cursor: pointer; }
+.tile.open { background: var(--green-100); color: var(--slate-900, #123); border-color: var(--green-300); cursor: default; }
+.tile:disabled:not(.open) { opacity: .55; cursor: default; }
