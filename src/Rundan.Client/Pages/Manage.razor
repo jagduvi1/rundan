@@ -74,8 +74,42 @@ else
             <ImageUploader Value="_editImage" ValueChanged="v => _editImage = v" />
         </div>
 
+        @if (_activity.UsesQuestions)
+        {
+            <div class="field">
+                <label class="row" style="font-weight:500">
+                    <input type="checkbox" style="width:auto;min-height:auto"
+                           checked="@_editRandomize" @onchange="e => _editRandomize = (bool)e.Value!" />
+                    <span>Randomize question order per player</span>
+                </label>
+            </div>
+        }
+
         @if (_activity.UsesRounds)
         {
+            <div class="field">
+                <label>What you record</label>
+                <select @bind="_editMeasurement">
+                    <option value="@Measurement.Points">Points / count</option>
+                    <option value="@Measurement.TimeSeconds">Time (mm:ss)</option>
+                    <option value="@Measurement.Millimetres">Length (millimetres)</option>
+                </select>
+            </div>
+            <div class="field">
+                <label>Who wins</label>
+                <select @bind="_editScoringMode">
+                    <option value="@ScoringMode.HigherWins">Highest wins</option>
+                    <option value="@ScoringMode.LowerWins">Lowest wins (e.g. fastest time)</option>
+                    <option value="@ScoringMode.ClosestToTarget">Closest to a target wins</option>
+                </select>
+            </div>
+            @if (_editScoringMode == ScoringMode.ClosestToTarget)
+            {
+                <div class="field">
+                    <label>Target @(_editMeasurement == Measurement.TimeSeconds ? "(seconds — 147 = 2:27)" : "value")</label>
+                    <input type="number" min="0" max="100000" @bind="_editTarget" style="width:160px" />
+                </div>
+            }
             <div class="field">
                 <label>Score entry</label>
                 <select @bind="_editScoreEntryMode">
@@ -126,6 +160,10 @@ else
     private string? _editDescription;
     private string? _editImage;
     private ScoreEntryMode _editScoreEntryMode = ScoreEntryMode.Team;
+    private ScoringMode _editScoringMode = ScoringMode.HigherWins;
+    private Measurement _editMeasurement = Measurement.Points;
+    private int _editTarget = 147;
+    private bool _editRandomize;
     private double? _editLat;
     private double? _editLng;
     private int _editRadius = 25;
@@ -140,6 +178,10 @@ else
             _editDescription = _activity.Description;
             _editImage = _activity.ImageUrl;
             _editScoreEntryMode = _activity.ScoreEntryMode;
+            _editScoringMode = _activity.ScoringMode;
+            _editMeasurement = _activity.Measurement;
+            _editTarget = _activity.TargetValue ?? 147;
+            _editRandomize = _activity.RandomizeQuestions;
             _editLat = _activity.Latitude;
             _editLng = _activity.Longitude;
             _editRadius = _activity.RadiusMeters ?? 25;
@@ -176,6 +218,10 @@ else
                 Title = _editTitle.Trim(),
                 Description = _editDescription,
                 ImageUrl = _editImage,
+                ScoringMode = _editScoringMode,
+                Measurement = _editMeasurement,
+                TargetValue = _editTarget,
+                RandomizeQuestions = _editRandomize,
                 ScoreEntryMode = _editScoreEntryMode,
                 Latitude = _editLat,
                 Longitude = _editLng,

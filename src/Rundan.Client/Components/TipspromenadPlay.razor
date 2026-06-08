@@ -31,6 +31,10 @@ else
             <span>@BannerText</span>
         </div>
         <div id="tipspromenad-map" class="map"></div>
+        <div class="row wrap">
+            <button class="btn ghost small" @onclick="CenterOnMeAsync" disabled="@(_lastPos is null)">Center on me</button>
+            <button class="btn ghost small" @onclick="ShowAllAsync">Show all stations</button>
+        </div>
     </div>
 
     <div class="card">
@@ -43,6 +47,7 @@ else
                 var canOpen = done || WithinRadius(q);
                 <li>
                     <span class="grow"><b>Station @q.Order</b></span>
+                    <a class="btn ghost small" href="@MapsUrl(q)" target="_blank" rel="noopener">Maps</a>
                     @if (done)
                     {
                         <span class="badge live">done</span>
@@ -53,7 +58,7 @@ else
                     }
                     else
                     {
-                        <span class="muted">🔒 @StatusText(q)</span>
+                        <span class="muted">@StatusText(q)</span>
                     }
                 </li>
             }
@@ -66,6 +71,7 @@ else
         <div class="card stack">
             <div class="row">
                 <h2 class="grow">Question @sel.Order</h2>
+                <a class="btn ghost small" href="@MapsUrl(sel)" target="_blank" rel="noopener">Maps</a>
                 <button class="btn ghost small" @onclick="() => _selectedId = null">Close</button>
             </div>
             <div class="q-text">@sel.Text</div>
@@ -183,7 +189,9 @@ else
 
     private bool _anyLocated;
 
-    private IEnumerable<QuestionDto> LocatedQuestions => _questions.Where(q => q.HasLocation).OrderBy(q => q.Order);
+    private IEnumerable<QuestionDto> LocatedQuestions => Activity.RandomizeQuestions
+        ? _questions.Where(q => q.HasLocation)
+        : _questions.Where(q => q.HasLocation).OrderBy(q => q.Order);
     private QuestionDto? Selected => _selectedId is { } id ? _questions.FirstOrDefault(q => q.Id == id) : null;
 
     protected override async Task OnInitializedAsync()
@@ -197,6 +205,11 @@ else
         try
         {
             _questions = await Api.GetQuestionsAsync(Activity.Id);
+            if (Activity.RandomizeQuestions)
+            {
+                QuestionShuffle.Shuffle(_questions, Session.Token);
+            }
+
             var mine = await Api.GetMyAnswersAsync(Activity.Id, Session.Token);
             _answered = mine.ToDictionary(a => a.QuestionId);
             _anyLocated = _questions.Any(q => q.HasLocation);
@@ -429,6 +442,24 @@ else
 
     private static string ConfettiColor(int i) =>
         new[] { "var(--coral-400)", "var(--sun-400)", "var(--green-300)", "#fff", "var(--sea-200)" }[i % 5];
+
+    private async Task CenterOnMeAsync()
+    {
+        if (_lastPos is { } p)
+        {
+            await _map.PanToAsync(p.Latitude, p.Longitude);
+        }
+    }
+
+    private async Task ShowAllAsync() => await _map.FitToMarkersAsync(BuildMarkers());
+
+    // Opens Google Maps walking directions from the player's live GPS to the station.
+    private static string MapsUrl(QuestionDto q)
+    {
+        var lat = q.Latitude!.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var lng = q.Longitude!.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        return $"https://www.google.com/maps/dir/?api=1&destination={lat},{lng}&travelmode=walking";
+    }
 
     private static int RadiusOf(QuestionDto q) => q.RadiusMeters is > 0 ? q.RadiusMeters.Value : DefaultRadiusMeters;
 

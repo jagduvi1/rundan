@@ -31,6 +31,16 @@ public class ActivityDto
     public string JoinCode { get; set; } = string.Empty;
 
     public ScoringMode ScoringMode { get; set; }
+
+    /// <summary>What this score game measures (points / time / length).</summary>
+    public Measurement Measurement { get; set; }
+
+    /// <summary>Target value for ClosestToTarget scoring (e.g. 147 = 2:27 in seconds).</summary>
+    public int? TargetValue { get; set; }
+
+    /// <summary>Serve question activities in a random order per player.</summary>
+    public bool RandomizeQuestions { get; set; }
+
     public int ParticipantCount { get; set; }
     public int QuestionCount { get; set; }
     public DateTimeOffset CreatedUtc { get; set; }
@@ -45,6 +55,12 @@ public class ActivityDto
 
     /// <summary>True for round-based score games (Boule / generic).</summary>
     public bool UsesRounds => Type is ActivityType.Boule or ActivityType.ScoreGame;
+
+    /// <summary>Score game measured as a duration (stopwatch entry).</summary>
+    public bool MeasuresTime => Measurement == Measurement.TimeSeconds;
+
+    /// <summary>Score game measured as a length in millimetres.</summary>
+    public bool MeasuresLength => Measurement == Measurement.Millimetres;
 }
 
 /// <summary>Admin request to create a new activity.</summary>
@@ -55,6 +71,8 @@ public class CreateActivityRequest
     public string? Description { get; set; }
     public string? ImageUrl { get; set; }
     public ScoringMode ScoringMode { get; set; } = ScoringMode.HigherWins;
+    public Measurement Measurement { get; set; } = Measurement.Points;
+    public int? TargetValue { get; set; }
 
     /// <summary>If set, the activity is added to this event (order auto-assigned to the end).</summary>
     public int? EventId { get; set; }
@@ -66,6 +84,10 @@ public class UpdateActivityRequest
     public string Title { get; set; } = string.Empty;
     public string? Description { get; set; }
     public string? ImageUrl { get; set; }
+    public ScoringMode ScoringMode { get; set; } = ScoringMode.HigherWins;
+    public Measurement Measurement { get; set; } = Measurement.Points;
+    public int? TargetValue { get; set; }
+    public bool RandomizeQuestions { get; set; }
     public ScoreEntryMode ScoreEntryMode { get; set; } = ScoreEntryMode.Team;
     public double? Latitude { get; set; }
     public double? Longitude { get; set; }

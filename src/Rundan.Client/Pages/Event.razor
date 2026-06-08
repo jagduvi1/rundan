@@ -128,6 +128,7 @@ else
                         <StatusBadge Status="a.Status" />
                         @if (a.Status == ActivityStatus.Live && a.HasLocation && !WithinRadius(a))
                         {
+                            <a class="btn ghost small" href="@ActivityMapsUrl(a)" target="_blank" rel="noopener">Maps</a>
                             <span class="muted" style="font-size:.82rem">@LockText(a)</span>
                         }
                         else if (a.Status is ActivityStatus.Live or ActivityStatus.Open or ActivityStatus.Finished)
@@ -390,6 +391,13 @@ else
         StateHasChanged();
         return Task.CompletedTask;
     });
+
+    private static string ActivityMapsUrl(ActivityDto a)
+    {
+        var lat = a.Latitude!.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var lng = a.Longitude!.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        return $"https://www.google.com/maps/dir/?api=1&destination={lat},{lng}&travelmode=walking";
+    }
 
     private static int RadiusOf(ActivityDto a) => a.RadiusMeters is > 0 ? a.RadiusMeters.Value : 25;
     private bool WithinRadius(ActivityDto a) => _distances.TryGetValue(a.Id, out var d) && d <= RadiusOf(a);

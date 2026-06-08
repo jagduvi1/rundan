@@ -30,6 +30,15 @@ public class Activity
 
     public ScoringMode ScoringMode { get; set; } = ScoringMode.HigherWins;
 
+    /// <summary>What a score-game measures (points / time / length).</summary>
+    public Measurement Measurement { get; set; } = Measurement.Points;
+
+    /// <summary>Target value for <see cref="ScoringMode.ClosestToTarget"/> (e.g. 147 seconds = 2:27).</summary>
+    public int? TargetValue { get; set; }
+
+    /// <summary>For question activities: serve the questions in a random order per player.</summary>
+    public bool RandomizeQuestions { get; set; }
+
     /// <summary>Score-game point entry: one score per team, or per player (summed to the team).</summary>
     public ScoreEntryMode ScoreEntryMode { get; set; } = ScoreEntryMode.Team;
 

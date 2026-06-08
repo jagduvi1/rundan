@@ -49,6 +49,14 @@ public sealed class LeafletInterop(IJSRuntime js) : IAsyncDisposable
         }
     }
 
+    public async Task PanToAsync(double lat, double lng)
+    {
+        if (_module is not null && _handle is not null)
+        {
+            await _module.InvokeVoidAsync("panTo", _handle, lat, lng);
+        }
+    }
+
     // ---- Location picker ----
     public async Task InitPickerAsync(string elementId, double? lat, double? lng, int radius, object dotNetRef)
     {
