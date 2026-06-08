@@ -13,15 +13,39 @@
         <ul class="list">
             @foreach (var q in _questions)
             {
-                <li>
+                <li style="flex-wrap:wrap">
                     <span class="grow">
                         <b>@q.Order.</b> @q.Text
                         <span class="muted" style="font-size:.78rem">
                             · @KindLabel(q.Kind) · @q.Points pt@(q.Points == 1 ? "" : "s")
-                            @if (q.Latitude.HasValue) { <span> · 📍</span> }
+                            @if (Activity.UsesMap)
+                            {
+                                <span> · @(q.Latitude.HasValue ? "placed" : "no spot")</span>
+                            }
                         </span>
                     </span>
+                    @if (Activity.UsesMap)
+                    {
+                        <button class="btn ghost small" @onclick="() => ToggleLoc(q)" disabled="@_busy">
+                            @(_locEditId == q.Id ? "Close" : q.Latitude.HasValue ? "Edit spot" : "Set spot")
+                        </button>
+                    }
                     <button class="btn ghost small danger" @onclick="() => DeleteAsync(q.Id)" disabled="@_busy">✕</button>
+
+                    @if (_locEditId == q.Id)
+                    {
+                        <div style="flex-basis:100%;margin-top:.5rem">
+                            <LocationPicker @key="q.Id" Lat="_locLat" Lng="_locLng" Radius="_locRadius" Changed="OnLocChanged" />
+                            <div class="row" style="margin-top:.4rem">
+                                <button class="btn small success" @onclick="() => SaveLocAsync(q)" disabled="@(_busy || _locLat is null)">Save spot</button>
+                                <button class="btn small ghost" @onclick="() => _locEditId = null">Cancel</button>
+                                @if (q.Latitude.HasValue)
+                                {
+                                    <button class="btn small ghost danger" @onclick="() => ClearLocAsync(q)" disabled="@_busy">Remove spot</button>
+                                }
+                            </div>
+                        </div>
+                    }
                 </li>
             }
         </ul>
@@ -37,19 +61,46 @@
         <div class="alert error">@_libError</div>
     }
 
-    @if (_tags.Count > 0)
+    @if (TopicTags.Count > 0)
     {
-        <div class="row wrap" style="gap:.4rem">
-            @foreach (var tag in _tags)
-            {
-                <button class="btn small @(_selectedTags.Contains(tag) ? "" : "ghost")" @onclick="() => ToggleTagAsync(tag)">@Pretty(tag)</button>
-            }
+        <div class="field">
+            <label>Categories (pick one or more)</label>
+            <div class="row wrap" style="gap:.4rem">
+                @foreach (var tag in TopicTags)
+                {
+                    <button class="btn small @(_selectedTags.Contains(tag) ? "" : "ghost")" @onclick="() => ToggleTagAsync(tag)">@Label(tag)</button>
+                }
+            </div>
+        </div>
+    }
+    @if (AgeTags.Count > 0)
+    {
+        <div class="field">
+            <label>Age (optional)</label>
+            <div class="row wrap" style="gap:.4rem">
+                @foreach (var tag in AgeTags)
+                {
+                    <button class="btn small @(_selectedTags.Contains(tag) ? "" : "ghost")" @onclick="() => ToggleTagAsync(tag)">@Label(tag)</button>
+                }
+            </div>
+        </div>
+    }
+    @if (DifficultyTags.Count > 0)
+    {
+        <div class="field">
+            <label>Difficulty (optional)</label>
+            <div class="row wrap" style="gap:.4rem">
+                @foreach (var tag in DifficultyTags)
+                {
+                    <button class="btn small @(_selectedTags.Contains(tag) ? "" : "ghost")" @onclick="() => ToggleTagAsync(tag)">@Label(tag)</button>
+                }
+            </div>
         </div>
     }
 
     <div class="row">
-        <div class="field" style="width:96px">
-            <label>How many</label>
+        <div class="field" style="width:150px">
+            <label>Number of questions</label>
             <input type="number" min="1" max="50" @bind="_libCount" />
         </div>
         <span class="muted grow" style="align-self:flex-end;padding-bottom:.6rem">@_libAvailable available</span>
@@ -175,6 +226,16 @@
     private bool _libBusy;
     private string? _libError;
 
+    // Per-question location editing (tipspromenad stations).
+    private int? _locEditId;
+    private double? _locLat;
+    private double? _locLng;
+    private int _locRadius = 25;
+
+    private List<string> TopicTags => _tags.Where(t => t.StartsWith("topic:", StringComparison.Ordinal)).ToList();
+    private List<string> AgeTags => _tags.Where(t => t.StartsWith("age:", StringComparison.Ordinal)).ToList();
+    private List<string> DifficultyTags => _tags.Where(t => t.StartsWith("difficulty:", StringComparison.Ordinal)).ToList();
+
     protected override async Task OnInitializedAsync()
     {
         await ReloadAsync();
@@ -222,7 +283,74 @@
         }
     }
 
-    private static string Pretty(string tag) => tag.Replace(":", ": ");
+    // "topic:sport" -> "Sport", "age:family" -> "Family".
+    private static string Label(string tag)
+    {
+        var i = tag.IndexOf(':');
+        var s = i >= 0 ? tag[(i + 1)..] : tag;
+        return s.Length == 0 ? tag : char.ToUpperInvariant(s[0]) + s[1..];
+    }
+
+    private void ToggleLoc(QuestionAdminDto q)
+    {
+        if (_locEditId == q.Id)
+        {
+            _locEditId = null;
+            return;
+        }
+
+        _locEditId = q.Id;
+        _locLat = q.Latitude;
+        _locLng = q.Longitude;
+        _locRadius = q.RadiusMeters ?? 25;
+    }
+
+    private void OnLocChanged((double? Lat, double? Lng, int Radius) loc)
+    {
+        _locLat = loc.Lat;
+        _locLng = loc.Lng;
+        _locRadius = loc.Radius;
+    }
+
+    private async Task SaveLocAsync(QuestionAdminDto q)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            await Api.SetQuestionLocationAsync(Activity.Id, q.Id, _locLat, _locLng, _locRadius);
+            _locEditId = null;
+            await ReloadAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ClearLocAsync(QuestionAdminDto q)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            await Api.SetQuestionLocationAsync(Activity.Id, q.Id, null, null, null);
+            _locEditId = null;
+            await ReloadAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
 
     private async Task ReloadAsync()
     {

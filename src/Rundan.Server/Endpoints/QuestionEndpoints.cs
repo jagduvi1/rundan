@@ -107,6 +107,25 @@ internal static class QuestionEndpoints
             return Results.Ok(question.ToAdminDto());
         }).AddEndpointFilter<ActivityManagerFilter>();
 
+        // Set/clear a single question's GPS station (tipspromenad). Geo only — allowed any time,
+        // including after a question was pulled from the library (which carries no location).
+        app.MapPut("/api/activities/{id:int}/questions/{questionId:int}/location", async (
+            int id, int questionId, SetQuestionLocationRequest req, AppDbContext db, CancellationToken ct) =>
+        {
+            var question = await db.Questions.Include(q => q.Options)
+                .FirstOrDefaultAsync(q => q.Id == questionId && q.ActivityId == id, ct);
+            if (question is null)
+            {
+                return Results.NotFound();
+            }
+
+            question.Latitude = req.Latitude;
+            question.Longitude = req.Longitude;
+            question.RadiusMeters = req.RadiusMeters is > 0 ? req.RadiusMeters : null;
+            await db.SaveChangesAsync(ct);
+            return Results.Ok(question.ToAdminDto());
+        }).AddEndpointFilter<ActivityManagerFilter>();
+
         // Host fixes a wrong answer key after the fact and re-scores everyone (works post-finish).
         app.MapPut("/api/activities/{id:int}/questions/{questionId:int}/answer-key", async (
             int id, int questionId, UpdateAnswerKeyRequest req, AppDbContext db, GameService game,

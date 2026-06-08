@@ -74,6 +74,14 @@ public class QuestionResultDto
     public List<AnswerOptionDto> Options { get; set; } = new();
 }
 
+/// <summary>Sets (or clears) one question's GPS point + radius — the per-station map for a tipspromenad.</summary>
+public class SetQuestionLocationRequest
+{
+    public double? Latitude { get; set; }
+    public double? Longitude { get; set; }
+    public int? RadiusMeters { get; set; }
+}
+
 /// <summary>
 /// Host correction of a question's answer key after the fact (e.g. the wrong option was marked
 /// correct). Applied in place — option ids are preserved — and re-scores every submitted answer.
