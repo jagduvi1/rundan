@@ -9,6 +9,13 @@ public class EventDto
     public string? ImageUrl { get; set; }
     public int TeamSize { get; set; } = 2;
     public EventScoring Scoring { get; set; } = EventScoring.Cumulative;
+
+    /// <summary>The "slap" twist mode (Off by default).</summary>
+    public SlapMode SlapMode { get; set; } = SlapMode.Off;
+
+    /// <summary>A slap that must be resolved before the next activity can start (null if none).</summary>
+    public PendingSlapDto? PendingSlap { get; set; }
+
     public string JoinCode { get; set; } = string.Empty;
     public DateTimeOffset CreatedUtc { get; set; }
 
@@ -31,6 +38,48 @@ public class EventDto
 
     /// <summary>True once the event has activities and every one of them is finished.</summary>
     public bool IsComplete => Activities.Count > 0 && Activities.TrueForAll(a => a.Status == ActivityStatus.Finished);
+}
+
+/// <summary>A person who can be picked as a slap target or recipient.</summary>
+public class SlapPersonDto
+{
+    public int UserId { get; set; }
+    public string Name { get; set; } = string.Empty;
+}
+
+/// <summary>Details of a slap that's waiting to be resolved before the next activity.</summary>
+public class PendingSlapDto
+{
+    public int ActivityId { get; set; }
+    public string ActivityTitle { get; set; } = string.Empty;
+
+    /// <summary>The winning team's display name.</summary>
+    public string WinnerName { get; set; } = string.Empty;
+
+    /// <summary>The winning team's member user ids (a member of this team performs the slap; can't be slapped).</summary>
+    public List<int> WinnerUserIds { get; set; } = new();
+
+    /// <summary>The resolved effect for this activity (Vanish or SendToPlayer; Random is decided here).</summary>
+    public SlapMode EffectiveMode { get; set; }
+
+    /// <summary>All event members, for the target / recipient pickers.</summary>
+    public List<SlapPersonDto> Members { get; set; } = new();
+}
+
+/// <summary>The winning player performs the slap.</summary>
+public class PerformSlapRequest
+{
+    public int ActivityId { get; set; }
+    public int SlappedUserId { get; set; }
+
+    /// <summary>For a "send" slap: who receives the points.</summary>
+    public int? RecipientUserId { get; set; }
+}
+
+/// <summary>Host skips the pending slap (e.g. the winner isn't around).</summary>
+public class SkipSlapRequest
+{
+    public int ActivityId { get; set; }
 }
 
 /// <summary>Registers (or heartbeats) a viewer of an event. Pass the existing token to update.</summary>
@@ -71,6 +120,7 @@ public class UpdateEventRequest
     public string? ImageUrl { get; set; }
     public int TeamSize { get; set; } = 2;
     public EventScoring Scoring { get; set; } = EventScoring.Cumulative;
+    public SlapMode SlapMode { get; set; } = SlapMode.Off;
 }
 
 /// <summary>Request to set a custom event code, or regenerate one when Code is empty.</summary>

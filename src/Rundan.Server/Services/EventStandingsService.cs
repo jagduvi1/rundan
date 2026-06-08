@@ -96,6 +96,21 @@ public sealed class EventStandingsService(AppDbContext db, TimeProvider clock)
             }
         }
 
+        // Apply slap penalties: the slapped player loses points; a "send" slap gives them to a recipient.
+        var slaps = await db.Slaps.AsNoTracking().Where(s => s.EventId == eventId && !s.Skipped).ToListAsync(ct);
+        foreach (var s in slaps)
+        {
+            if (totals.ContainsKey(s.SlappedUserId))
+            {
+                totals[s.SlappedUserId] -= s.Penalty;
+            }
+
+            if (s.RecipientUserId is { } r && totals.ContainsKey(r))
+            {
+                totals[r] += s.Penalty;
+            }
+        }
+
         return roster.Select(u => new EventStandingEntryDto
         {
             DisplayName = u.Name,
