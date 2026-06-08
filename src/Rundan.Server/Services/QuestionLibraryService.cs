@@ -76,10 +76,19 @@ public sealed class QuestionLibraryService(AppDbContext db, TimeProvider clock)
         await db.SaveChangesAsync(ct);
     }
 
-    /// <summary>Unused templates whose tags include every selected tag.</summary>
+    /// <summary>
+    /// Unused templates matching the selected tags. Tags are grouped by dimension (the part
+    /// before ':' — e.g. topic / age / difficulty): within a dimension a template needs ANY of
+    /// the chosen tags (so several categories act as OR), and it must satisfy every dimension (AND).
+    /// </summary>
     private async Task<List<QuestionTemplate>> CandidatesAsync(IReadOnlyCollection<string> tags, CancellationToken ct)
     {
-        var wanted = tags.Select(t => t.Trim().ToLowerInvariant()).Where(t => t.Length > 0).ToHashSet();
+        var wanted = tags.Select(t => t.Trim().ToLowerInvariant()).Where(t => t.Length > 0).ToList();
+        var groups = wanted
+            .GroupBy(t => t.Contains(':') ? t[..t.IndexOf(':')] : t)
+            .Select(g => g.ToHashSet())
+            .ToList();
+
         var usedIds = await db.QuestionTemplateUsages.AsNoTracking().Select(u => u.QuestionTemplateId).ToListAsync(ct);
         var used = usedIds.ToHashSet();
 
@@ -90,7 +99,7 @@ public sealed class QuestionLibraryService(AppDbContext db, TimeProvider clock)
 
         return all
             .Where(t => !used.Contains(t.Id))
-            .Where(t => wanted.Count == 0 || wanted.All(w => t.Tags.Any(tag => tag.Tag == w)))
+            .Where(t => groups.All(group => t.Tags.Any(tag => group.Contains(tag.Tag))))
             .ToList();
     }
 }

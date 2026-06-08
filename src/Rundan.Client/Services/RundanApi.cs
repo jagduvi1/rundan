@@ -305,6 +305,11 @@ public sealed class RundanApi(HttpClient http, AppState state)
     public Task DeleteQuestionAsync(int id, int questionId) =>
         SendAsync(HttpMethod.Delete, $"api/activities/{id}/questions/{questionId}", admin: true);
 
+    /// <summary>Set/clear one question's GPS station (per-question map for a tipspromenad).</summary>
+    public async Task<QuestionAdminDto> SetQuestionLocationAsync(int id, int questionId, double? lat, double? lng, int? radius) =>
+        (await SendAsync<QuestionAdminDto>(HttpMethod.Put, $"api/activities/{id}/questions/{questionId}/location",
+            body: new SetQuestionLocationRequest { Latitude = lat, Longitude = lng, RadiusMeters = radius }, admin: true))!;
+
     public Task KickParticipantAsync(int id, int participantId) =>
         SendAsync(HttpMethod.Delete, $"api/activities/{id}/participants/{participantId}", admin: true);
 
