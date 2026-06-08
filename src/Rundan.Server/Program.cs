@@ -36,6 +36,7 @@ builder.Services.AddScoped<GameService>();
 builder.Services.AddScoped<BracketService>();
 builder.Services.AddScoped<WordGameService>();
 builder.Services.AddScoped<ActivityLibraryService>();
+builder.Services.AddScoped<SimulationService>();
 builder.Services.AddScoped<ScoreboardNotifier>();
 builder.Services.AddScoped<DataSeeder>();
 
@@ -115,6 +116,7 @@ app.MapQuestionEndpoints();
 app.MapGameplayEndpoints();
 app.MapBracketEndpoints();
 app.MapWordGameEndpoints();
+app.MapSimulationEndpoints();
 
 app.MapHub<ScoreboardHub>(HubRoutes.Scoreboard);
 

@@ -161,6 +161,7 @@ else
                     {
                         <button class="btn small success" @onclick="() => SetStatusAsync(a.Id, status)" disabled="@_busy">@label</button>
                     }
+                    <button class="btn small secondary" @onclick="() => SimulateActivityAsync(a.Id)" disabled="@_busy">Simulate</button>
                     <a class="btn small ghost" href="@($"manage/{a.Id}")">Edit</a>
                 </div>
             }
@@ -193,6 +194,22 @@ else
                     Add a copy to this event
                 </button>
             }
+
+            <h3 style="margin-top:.5rem">Dry run</h3>
+            <p class="muted" style="font-size:.85rem">Fill the activities with random results to check the scoreboards, bracket and standings work — then clear it before the real day.</p>
+            <div class="row wrap">
+                <button class="btn small secondary" @onclick="SimulateEventAsync" disabled="@_busy">Simulate all</button>
+                @if (!_confirmClear)
+                {
+                    <button class="btn small ghost danger" @onclick="() => _confirmClear = true" disabled="@_busy">Clear all results</button>
+                }
+                else
+                {
+                    <span class="muted">Clear every result?</span>
+                    <button class="btn small danger" @onclick="ClearAllResultsAsync" disabled="@_busy">Yes, clear</button>
+                    <button class="btn small ghost" @onclick="() => _confirmClear = false">Cancel</button>
+                }
+            </div>
         </div>
     }
 
@@ -306,6 +323,7 @@ else
 
     private List<ActivityDto> _library = new();
     private int _libSourceId;
+    private bool _confirmClear;
 
     private bool CanManage => State.IsHost || _isEventAdmin;
 
@@ -721,6 +739,35 @@ else
         {
             await Api.CreateActivityAsync(new CreateActivityRequest { Title = _newTitle.Trim(), Type = _newType, EventId = Id });
             _newTitle = string.Empty;
+            await RefreshAsync();
+        }
+        catch (ApiException ex)
+        {
+            _adminError = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task SimulateActivityAsync(int activityId) => await HostActionAsync(() => Api.SimulateActivityAsync(activityId));
+
+    private async Task SimulateEventAsync() => await HostActionAsync(() => Api.SimulateEventAsync(Id));
+
+    private async Task ClearAllResultsAsync()
+    {
+        _confirmClear = false;
+        await HostActionAsync(() => Api.ResetEventResultsAsync(Id));
+    }
+
+    private async Task HostActionAsync(Func<Task> action)
+    {
+        _busy = true;
+        _adminError = null;
+        try
+        {
+            await action();
             await RefreshAsync();
         }
         catch (ApiException ex)

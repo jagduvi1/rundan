@@ -193,6 +193,19 @@ public sealed class RundanApi(HttpClient http, AppState state)
         (await SendAsync<ScoreEntryDto>(
             HttpMethod.Post, $"api/activities/{id}/scores", body: request, participantToken: token))!;
 
+    // ---- Dry run (simulate / clear results) --------------------------------
+    public async Task<ActivityDto> SimulateActivityAsync(int id) =>
+        (await SendAsync<ActivityDto>(HttpMethod.Post, $"api/activities/{id}/simulate", admin: true))!;
+
+    public async Task<ActivityDto> ResetActivityResultsAsync(int id) =>
+        (await SendAsync<ActivityDto>(HttpMethod.Post, $"api/activities/{id}/reset-results", admin: true))!;
+
+    public async Task SimulateEventAsync(int eventId) =>
+        await SendAsync<object>(HttpMethod.Post, $"api/events/{eventId}/simulate", admin: true);
+
+    public async Task ResetEventResultsAsync(int eventId) =>
+        await SendAsync<object>(HttpMethod.Post, $"api/events/{eventId}/reset-results", admin: true);
+
     public Task<List<ActivityDto>> GetLibraryAsync() =>
         GetListAsync<ActivityDto>("api/activities/library", admin: true);
 
