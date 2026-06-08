@@ -139,6 +139,13 @@ public sealed class RundanApi(HttpClient http, AppState state)
     public Task<List<EventDto>> GetActiveEventsAsync() =>
         GetListAsync<EventDto>("api/events/active");
 
+    public async Task<ViewerDto> RegisterViewerAsync(int eventId, string name, Guid? token) =>
+        (await SendAsync<ViewerDto>(HttpMethod.Post, $"api/events/{eventId}/viewers",
+            body: new RegisterViewerRequest { Name = name, Token = token }))!;
+
+    public Task RemoveViewerAsync(int eventId, Guid token) =>
+        SendAsync(HttpMethod.Delete, $"api/events/{eventId}/viewers/{token}");
+
     public async Task<EventDto> CreateEventAsync(CreateEventRequest request) =>
         (await SendAsync<EventDto>(HttpMethod.Post, "api/events", body: request, admin: true))!;
 

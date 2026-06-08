@@ -24,6 +24,7 @@ public class AppDbContext : DbContext
     public DbSet<ScoreEntry> ScoreEntries => Set<ScoreEntry>();
     public DbSet<BracketMatch> BracketMatches => Set<BracketMatch>();
     public DbSet<Court> Courts => Set<Court>();
+    public DbSet<EventViewer> EventViewers => Set<EventViewer>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -155,6 +156,17 @@ public class AppDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(x => x.UserId)
                 .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        b.Entity<EventViewer>(e =>
+        {
+            e.Property(x => x.Name).HasMaxLength(60).IsRequired();
+            e.HasIndex(x => x.Token).IsUnique();
+            e.HasIndex(x => x.EventId);
+            e.HasOne(x => x.Event)
+                .WithMany()
+                .HasForeignKey(x => x.EventId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         b.Entity<Court>(e =>

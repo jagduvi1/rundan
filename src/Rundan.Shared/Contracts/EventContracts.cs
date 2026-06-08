@@ -24,10 +24,27 @@ public class EventDto
     /// <summary>User ids among the members who are event admins (can manage this event).</summary>
     public List<int> AdminUserIds { get; set; } = new();
 
+    /// <summary>Names of people currently watching the event (recently seen).</summary>
+    public List<string> Viewers { get; set; } = new();
+
     public bool HasRoster => Members.Count > 0;
 
     /// <summary>True once the event has activities and every one of them is finished.</summary>
     public bool IsComplete => Activities.Count > 0 && Activities.TrueForAll(a => a.Status == ActivityStatus.Finished);
+}
+
+/// <summary>Registers (or heartbeats) a viewer of an event. Pass the existing token to update.</summary>
+public class RegisterViewerRequest
+{
+    public string Name { get; set; } = string.Empty;
+    public Guid? Token { get; set; }
+}
+
+/// <summary>A registered viewer's identity.</summary>
+public class ViewerDto
+{
+    public Guid Token { get; set; }
+    public string Name { get; set; } = string.Empty;
 }
 
 /// <summary>Admin request to create an event.</summary>

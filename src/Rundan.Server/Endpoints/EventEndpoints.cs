@@ -62,6 +62,58 @@ internal static class EventEndpoints
             return Results.Ok(result);
         });
 
+        // Viewers (spectators): register / heartbeat / leave — access-gated, no competing identity.
+        app.MapPost("/api/events/{id:int}/viewers", async (
+            int id, RegisterViewerRequest req, AppDbContext db, TimeProvider clock, CancellationToken ct) =>
+        {
+            if (!await db.Events.AnyAsync(e => e.Id == id, ct))
+            {
+                return Results.NotFound();
+            }
+
+            var name = (req.Name ?? string.Empty).Trim();
+            if (name.Length == 0)
+            {
+                throw new RuleViolationException("Enter a name to watch.");
+            }
+
+            if (name.Length > 60)
+            {
+                name = name[..60];
+            }
+
+            EventViewer? viewer = null;
+            if (req.Token is { } token)
+            {
+                viewer = await db.EventViewers.FirstOrDefaultAsync(v => v.Token == token && v.EventId == id, ct);
+            }
+
+            if (viewer is null)
+            {
+                viewer = new EventViewer { EventId = id, Token = Guid.NewGuid() };
+                db.EventViewers.Add(viewer);
+            }
+
+            viewer.Name = name;
+            viewer.LastSeenUtc = clock.GetUtcNow();
+            await db.SaveChangesAsync(ct);
+
+            return Results.Ok(new ViewerDto { Token = viewer.Token, Name = viewer.Name });
+        });
+
+        app.MapDelete("/api/events/{id:int}/viewers/{token:guid}", async (
+            int id, Guid token, AppDbContext db, CancellationToken ct) =>
+        {
+            var viewer = await db.EventViewers.FirstOrDefaultAsync(v => v.Token == token && v.EventId == id, ct);
+            if (viewer is not null)
+            {
+                db.EventViewers.Remove(viewer);
+                await db.SaveChangesAsync(ct);
+            }
+
+            return Results.NoContent();
+        });
+
         app.MapPut("/api/events/{id:int}/reorder", async (
             int id, ReorderActivitiesRequest req, AppDbContext db, CancellationToken ct) =>
         {
@@ -373,6 +425,20 @@ internal static class EventEndpoints
         var dto = ev.ToDto(dtos, members);
         dto.AdminUserIds = memberRows.Where(m => m.IsAdmin).Select(m => m.UserId).ToList();
         dto.EstimatedMeters = await EstimateRouteMetersAsync(db, ev.Id, rows.Select(r => r.Activity).ToList(), ct);
+
+        // Recently-seen viewers (filtered in memory — SQLite can't compare DateTimeOffset in a query).
+        var viewerRows = await db.EventViewers.AsNoTracking()
+            .Where(v => v.EventId == ev.Id)
+            .Select(v => new { v.Name, v.LastSeenUtc })
+            .ToListAsync(ct);
+        var cutoff = DateTimeOffset.UtcNow.AddMinutes(-15);
+        dto.Viewers = viewerRows
+            .Where(v => v.LastSeenUtc >= cutoff)
+            .Select(v => v.Name)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
         return dto;
     }
 

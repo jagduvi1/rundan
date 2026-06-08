@@ -127,9 +127,30 @@ public sealed class AppState(IJSRuntime js)
 
     // Viewer (spectator) role for an event — sees everything but doesn't compete.
     private static string ViewerKey(int eventId) => $"rundan.viewer.{eventId}";
+    private static string ViewerNameKey(int eventId) => $"rundan.viewername.{eventId}";
+    private static string ViewerTokenKey(int eventId) => $"rundan.viewertoken.{eventId}";
+
     public async Task<bool> GetViewerAsync(int eventId) => await GetItemAsync(ViewerKey(eventId)) == "1";
     public Task SetViewerAsync(int eventId, bool on) =>
         on ? SetItemAsync(ViewerKey(eventId), "1") : RemoveItemAsync(ViewerKey(eventId));
+
+    public Task<string?> GetViewerNameAsync(int eventId) => GetItemAsync(ViewerNameKey(eventId));
+    public async Task<Guid?> GetViewerTokenAsync(int eventId)
+        => Guid.TryParse(await GetItemAsync(ViewerTokenKey(eventId)), out var t) ? t : null;
+
+    public async Task SaveViewerAsync(int eventId, string name, Guid token)
+    {
+        await SetItemAsync(ViewerKey(eventId), "1");
+        await SetItemAsync(ViewerNameKey(eventId), name);
+        await SetItemAsync(ViewerTokenKey(eventId), token.ToString());
+    }
+
+    public async Task ClearViewerAsync(int eventId)
+    {
+        await RemoveItemAsync(ViewerKey(eventId));
+        await RemoveItemAsync(ViewerNameKey(eventId));
+        await RemoveItemAsync(ViewerTokenKey(eventId));
+    }
 
     private async Task<string?> GetItemAsync(string key)
     {
