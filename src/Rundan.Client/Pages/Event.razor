@@ -93,7 +93,7 @@ else
     {
         <div class="card stack center">
             <span class="badge">Viewer</span>
-            <p class="muted">You're watching @_event.Name — everything updates live, but you're not competing.</p>
+            <p class="muted">You're watching @_event.Name as <b>@_viewerName</b> — everything updates live, but you're not competing.</p>
             <button class="btn block secondary" @onclick="StopViewingAsync" disabled="@_busy">Join as a player instead</button>
         </div>
     }
@@ -113,7 +113,6 @@ else
                 {
                     <button class="btn block secondary" @onclick="() => ClaimAsync(m.Id)" disabled="@_busy">@m.Name</button>
                 }
-                <button class="btn ghost block" @onclick="BecomeViewerAsync" disabled="@_busy">Just watching (viewer)</button>
             </div>
         }
         else
@@ -125,13 +124,29 @@ else
                 <button class="btn block" @onclick="JoinFreeNameAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_joinName))">
                     Join the event
                 </button>
-                <button class="btn ghost block" @onclick="BecomeViewerAsync" disabled="@_busy">Just watching (viewer)</button>
             </div>
         }
+
+        <div class="card stack">
+            <h3>Just watching?</h3>
+            <p class="muted">Spectate everything live without competing.</p>
+            <input type="text" maxlength="60" placeholder="Your name" @bind="_viewerName" @bind:event="oninput" />
+            <button class="btn ghost block" @onclick="WatchAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_viewerName))">
+                Watch as viewer
+            </button>
+        </div>
     }
     else
     {
         <div class="card center muted">You're playing as <b>@_eventName</b>.</div>
+    }
+
+    @if (_event.Viewers.Count > 0)
+    {
+        <div class="card">
+            <h3>Watching now (@_event.Viewers.Count)</h3>
+            <p class="muted">@string.Join(", ", _event.Viewers)</p>
+        </div>
     }
 
     <div class="card">
@@ -354,6 +369,7 @@ else
     private int _libSourceId;
     private bool _confirmClear;
     private bool _isViewer;
+    private string _viewerName = string.Empty;
 
     private bool CanManage => State.IsHost || _isEventAdmin;
 
@@ -405,6 +421,20 @@ else
         {
             SyncEditFields();
             _isViewer = await State.GetViewerAsync(Id);
+            if (_isViewer)
+            {
+                _viewerName = await State.GetViewerNameAsync(Id) ?? string.Empty;
+                var viewerToken = await State.GetViewerTokenAsync(Id);
+                if (!string.IsNullOrWhiteSpace(_viewerName))
+                {
+                    try
+                    {
+                        var res = await Api.RegisterViewerAsync(Id, _viewerName, viewerToken); // heartbeat
+                        await State.SaveViewerAsync(Id, res.Name, res.Token);
+                    }
+                    catch (ApiException) { }
+                }
+            }
 
             if (_event.HasRoster)
             {
@@ -793,16 +823,54 @@ else
         }
     }
 
-    private async Task BecomeViewerAsync()
+    private async Task WatchAsync()
     {
-        await State.SetViewerAsync(Id, true);
-        _isViewer = true;
+        var name = _viewerName.Trim();
+        if (name.Length == 0)
+        {
+            return;
+        }
+
+        _busy = true;
+        _joinError = null;
+        try
+        {
+            var token = await State.GetViewerTokenAsync(Id);
+            var res = await Api.RegisterViewerAsync(Id, name, token);
+            await State.SaveViewerAsync(Id, res.Name, res.Token);
+            _viewerName = res.Name;
+            _isViewer = true;
+            _event = await Api.GetEventAsync(Id) ?? _event;
+        }
+        catch (ApiException ex)
+        {
+            _joinError = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
     }
 
     private async Task StopViewingAsync()
     {
-        await State.SetViewerAsync(Id, false);
-        _isViewer = false;
+        _busy = true;
+        try
+        {
+            if (await State.GetViewerTokenAsync(Id) is { } token)
+            {
+                try { await Api.RemoveViewerAsync(Id, token); } catch (ApiException) { }
+            }
+
+            await State.ClearViewerAsync(Id);
+            _isViewer = false;
+            _viewerName = string.Empty;
+            _event = await Api.GetEventAsync(Id) ?? _event;
+        }
+        finally
+        {
+            _busy = false;
+        }
     }
 
     private async Task SimulateActivityAsync(int activityId) => await HostActionAsync(() => Api.SimulateActivityAsync(activityId));
