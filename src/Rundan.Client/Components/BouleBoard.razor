@@ -19,7 +19,34 @@
         <div class="alert error">@_error</div>
     }
 
-    @if (_teams.Count > 0)
+    @if (!IsPoints)
+    {
+        @* Measured game: one value per team (time mm:ss / length mm), latest reading replaces. *@
+        @if (Units().Count == 0)
+        {
+            <p class="muted">No players have joined yet.</p>
+        }
+        else
+        {
+            @foreach (var u in Units())
+            {
+                var key = $"{u.Id}";
+                var pending = _pending.GetValueOrDefault(key, 0);
+                var has = UnitCount(u.Id) > 0;
+                <div class="row" style="border-bottom:1px solid var(--line);padding:.5rem 0">
+                    <span class="grow"><b>@u.Name</b>@(has ? $" · {Format(UnitValue(u.Id))}" : "")</span>
+                    @if (Activity.MeasuresTime)
+                    {
+                        <button class="btn ghost small" @onclick="() => ToggleStopwatch(key)">@(IsRunning(key) ? "Stop" : "Start")</button>
+                    }
+                    <input type="number" min="0" max="100000" style="width:84px" value="@pending" @onchange="e => SetPending(key, e)" />
+                    <span class="muted">@UnitSuffix</span>
+                    <button class="btn small success" @onclick="() => RecordSingleAsync(u.Id, key)" disabled="@(_busy || pending <= 0)">Set</button>
+                </div>
+            }
+        }
+    }
+    else if (_teams.Count > 0)
     {
         @* Event activity — teams (and per-player entry when configured) *@
         @foreach (var team in _teams)
@@ -86,7 +113,7 @@
                 <li>
                     <span class="badge">R@(s.Round)</span>
                     <span class="grow">@(s.UserName ?? s.ParticipantName)</span>
-                    <b style="font-variant-numeric:tabular-nums">@(s.Points >= 0 ? "+" : "")@s.Points</b>
+                    <b style="font-variant-numeric:tabular-nums">@(IsPoints ? (s.Points >= 0 ? "+" : "") + s.Points : Format(s.Points))</b>
                     @if (State.IsHost)
                     {
                         <button class="btn ghost small danger" @onclick="() => DeleteAsync(s.Id)" disabled="@_busy">✕</button>
@@ -112,7 +139,81 @@
     private int _lastRefreshKey = -1;
     private int _loadedActivityId = -1;
 
+    private readonly Dictionary<string, DateTimeOffset> _swStart = new();
+
     private bool PerPlayer => Activity.ScoreEntryMode == ScoreEntryMode.PerPlayer;
+    private bool IsPoints => Activity.Measurement == Measurement.Points;
+    private string UnitSuffix => Activity.MeasuresTime ? "s" : Activity.MeasuresLength ? "mm" : string.Empty;
+
+    private List<(int Id, string Name)> Units() => _teams.Count > 0
+        ? _teams.Select(t => (t.ParticipantId, t.Name)).ToList()
+        : Participants.Select(p => (p.Id, p.DisplayName)).ToList();
+
+    private int UnitValue(int id) => _history.Where(s => s.ParticipantId == id).Sum(s => s.Points);
+    private int UnitCount(int id) => _history.Count(s => s.ParticipantId == id);
+
+    private string Format(int value) => Activity.Measurement switch
+    {
+        Measurement.TimeSeconds => $"{value / 60}:{value % 60:00}",
+        Measurement.Millimetres => $"{value} mm",
+        _ => value.ToString(),
+    };
+
+    private bool IsRunning(string key) => _swStart.ContainsKey(key);
+
+    private void ToggleStopwatch(string key)
+    {
+        if (_swStart.TryGetValue(key, out var start))
+        {
+            _pending[key] = Math.Clamp((int)Math.Round((DateTimeOffset.UtcNow - start).TotalSeconds), 0, 100000);
+            _swStart.Remove(key);
+        }
+        else
+        {
+            _swStart[key] = DateTimeOffset.UtcNow;
+        }
+    }
+
+    private void SetPending(string key, ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var v))
+        {
+            _pending[key] = Math.Clamp(v, 0, 100000);
+        }
+    }
+
+    private async Task RecordSingleAsync(int participantId, string key)
+    {
+        var value = _pending.GetValueOrDefault(key, 0);
+        if (value <= 0)
+        {
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            await Api.RecordScoreAsync(Activity.Id, new RecordScoreRequest
+            {
+                ParticipantId = participantId,
+                Round = 1,
+                Points = value,
+            }, Session.Token);
+
+            _pending[key] = 0;
+            _swStart.Remove(key);
+            await LoadHistoryAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
 
     private RenderFragment StepperFor(string key, int pending) => builder =>
     {

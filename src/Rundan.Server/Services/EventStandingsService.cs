@@ -194,9 +194,9 @@ public sealed class EventStandingsService(AppDbContext db, TimeProvider clock)
     {
         var activities = await db.Activities.AsNoTracking()
             .Where(a => a.EventId == eventId)
-            .Select(a => new { a.Id, a.Status, Lower = a.ScoringMode == ScoringMode.LowerWins })
+            .Select(a => new { a.Id, a.Status, a.ScoringMode, a.TargetValue })
             .ToListAsync(ct);
-        var lowerByActivity = activities.ToDictionary(a => a.Id, a => a.Lower);
+        var modeByActivity = activities.ToDictionary(a => a.Id, a => (a.ScoringMode, Target: a.TargetValue ?? 0));
         var finished = activities.Where(a => a.Status == ActivityStatus.Finished).Select(a => a.Id).ToHashSet();
 
         foreach (var group in participants.GroupBy(p => p.ActivityId))
@@ -207,22 +207,29 @@ public sealed class EventStandingsService(AppDbContext db, TimeProvider clock)
             }
 
             var n = group.Count();
-            var lower = lowerByActivity.GetValueOrDefault(group.Key);
+            var (mode, target) = modeByActivity.GetValueOrDefault(group.Key, (ScoringMode.HigherWins, 0));
+            double Key(int score) => mode switch
+            {
+                ScoringMode.LowerWins => score,
+                ScoringMode.ClosestToTarget => Math.Abs(score - target),
+                _ => -score,
+            };
             var ordered = group
                 .Select(p => new { p.ParticipantId, Score = pointsByParticipant.GetValueOrDefault(p.ParticipantId) })
-                .OrderBy(x => lower ? x.Score : -x.Score)
+                .OrderBy(x => Key(x.Score))
                 .ToList();
 
             var position = 0;
-            int? previousScore = null;
+            double? previousKey = null;
             var seen = 0;
             foreach (var entry in ordered)
             {
                 seen++;
-                if (previousScore is null || entry.Score != previousScore)
+                var key = Key(entry.Score);
+                if (previousKey is null || key != previousKey)
                 {
                     position = seen; // competition ranking: ties share the higher position
-                    previousScore = entry.Score;
+                    previousKey = key;
                 }
 
                 credit(entry.ParticipantId, n - position + 1, group.Key);

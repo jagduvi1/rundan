@@ -166,9 +166,17 @@ public sealed class GameService(AppDbContext db, TimeProvider clock)
         }
 
         // The UI clamps points, but the API must reject out-of-range/forged values too.
-        if (req.Points is < -1000 or > 1000)
+        // The range is generous so it also covers seconds and millimetres measurements.
+        if (req.Points is < -100000 or > 100000)
         {
-            throw new RuleViolationException("Points must be between -1000 and 1000.");
+            throw new RuleViolationException("That value is out of range.");
+        }
+
+        // Time / length are single measurements per team — a new reading replaces the old.
+        if (activity.Measurement is Measurement.TimeSeconds or Measurement.Millimetres)
+        {
+            var previous = db.ScoreEntries.Where(s => s.ActivityId == activity.Id && s.ParticipantId == target.Id);
+            db.ScoreEntries.RemoveRange(previous);
         }
 
         var entry = new ScoreEntry

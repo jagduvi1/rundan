@@ -77,12 +77,28 @@ public enum ScoreEntryMode
     PerPlayer = 1,
 }
 
-/// <summary>For score games: which direction wins, used only for ranking.</summary>
+/// <summary>What a score-game measures — drives the entry UI and the displayed unit.</summary>
+public enum Measurement
+{
+    /// <summary>Plain count / points (a +/- stepper, summed over rounds).</summary>
+    Points = 0,
+
+    /// <summary>A duration in seconds (stopwatch or mm:ss entry, single value).</summary>
+    TimeSeconds = 1,
+
+    /// <summary>A length in millimetres (number entry, single value).</summary>
+    Millimetres = 2,
+}
+
+/// <summary>For score games: how results are ranked.</summary>
 public enum ScoringMode
 {
     /// <summary>Highest total wins (boule to 13, most quiz points, ...).</summary>
     HigherWins = 0,
 
-    /// <summary>Lowest total wins (golf-like games).</summary>
+    /// <summary>Lowest total wins (fastest time, golf-like games).</summary>
     LowerWins = 1,
+
+    /// <summary>Closest to a target value wins (e.g. closest to 2:27).</summary>
+    ClosestToTarget = 2,
 }

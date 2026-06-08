@@ -110,6 +110,11 @@ else
         try
         {
             _questions = await Api.GetQuestionsAsync(Activity.Id);
+            if (Activity.RandomizeQuestions)
+            {
+                QuestionShuffle.Shuffle(_questions, Session.Token);
+            }
+
             var mine = await Api.GetMyAnswersAsync(Activity.Id, Session.Token);
             _answered = mine.ToDictionary(a => a.QuestionId);
             _index = FirstUnansweredIndex();

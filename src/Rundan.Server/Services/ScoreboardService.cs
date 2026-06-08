@@ -72,6 +72,19 @@ public sealed class ScoreboardService(AppDbContext db, TimeProvider clock)
             }
         }
 
+        // Rank key: higher-is-better → -total; lower-is-better → total; closest → |total - target|.
+        var target = activity.TargetValue ?? 0;
+        double Key(ScoreboardEntryDto e) => activity.ScoringMode switch
+        {
+            ScoringMode.LowerWins => e.TotalPoints,
+            ScoringMode.ClosestToTarget => Math.Abs(e.TotalPoints - target),
+            _ => -e.TotalPoints,
+        };
+        // In lowest/closest games, players who haven't scored yet must not outrank real
+        // results with their seeded 0 — push them to the bottom.
+        bool Unscored(ScoreboardEntryDto e) =>
+            activity.ScoringMode is ScoringMode.LowerWins or ScoringMode.ClosestToTarget && e.Entries == 0;
+
         var ordered = participants
             .Select(p => new ScoreboardEntryDto
             {
@@ -80,25 +93,27 @@ public sealed class ScoreboardService(AppDbContext db, TimeProvider clock)
                 TotalPoints = totals[p.Id].Points,
                 Entries = totals[p.Id].Entries,
             })
-            // In a LowerWins (golf-like) game, players who haven't scored yet must not
-            // outrank real low scores with their seeded 0 — push them to the bottom.
-            .OrderBy(e => activity.ScoringMode == ScoringMode.LowerWins && e.Entries == 0)
-            .ThenBy(e => activity.ScoringMode == ScoringMode.LowerWins ? e.TotalPoints : -e.TotalPoints)
+            .OrderBy(Unscored)
+            .ThenBy(Key)
             .ThenBy(e => e.DisplayName, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        // Standard competition ranking: tied totals share a rank; the next distinct total
+        // Standard competition ranking: tied keys share a rank; the next distinct key
         // takes its position-based rank (e.g. 1, 1, 3).
         var rank = 0;
-        int? previousPoints = null;
+        double? previousKey = null;
+        bool? previousUnscored = null;
         var seen = 0;
         foreach (var entry in ordered)
         {
             seen++;
-            if (previousPoints is null || entry.TotalPoints != previousPoints)
+            var key = Key(entry);
+            var unscored = Unscored(entry);
+            if (previousKey is null || key != previousKey || unscored != previousUnscored)
             {
                 rank = seen;
-                previousPoints = entry.TotalPoints;
+                previousKey = key;
+                previousUnscored = unscored;
             }
 
             entry.Rank = rank;

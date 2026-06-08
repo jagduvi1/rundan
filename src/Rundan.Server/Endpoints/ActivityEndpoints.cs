@@ -50,6 +50,8 @@ internal static class ActivityEndpoints
                 Description = string.IsNullOrWhiteSpace(req.Description) ? null : req.Description.Trim(),
                 ImageUrl = string.IsNullOrWhiteSpace(req.ImageUrl) ? null : req.ImageUrl.Trim(),
                 ScoringMode = req.ScoringMode,
+                Measurement = req.Measurement,
+                TargetValue = req.TargetValue,
                 Status = ActivityStatus.Draft,
                 JoinCode = await codes.NextAsync(db, ct),
                 CreatedUtc = clock.GetUtcNow(),
@@ -129,6 +131,12 @@ internal static class ActivityEndpoints
             activity.Title = req.Title.Trim();
             activity.Description = string.IsNullOrWhiteSpace(req.Description) ? null : req.Description.Trim();
             activity.ImageUrl = string.IsNullOrWhiteSpace(req.ImageUrl) ? null : req.ImageUrl.Trim();
+            activity.ScoringMode = req.ScoringMode;
+            activity.Measurement = req.Measurement;
+            activity.TargetValue = req.Measurement == Measurement.TimeSeconds || req.ScoringMode == ScoringMode.ClosestToTarget
+                ? req.TargetValue
+                : null;
+            activity.RandomizeQuestions = req.RandomizeQuestions;
             activity.ScoreEntryMode = req.ScoreEntryMode;
             activity.Latitude = req.Latitude;
             activity.Longitude = req.Longitude;

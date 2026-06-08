@@ -6,9 +6,10 @@ using Rundan.Shared;
 namespace Rundan.Server.Services;
 
 /// <summary>
-/// Seeds sample data for testing: a pre-registered roster, one event (team size 2) with
-/// a Tipspromenad, a Quiz and a Boule game, auto-generated reshuffled teams, and team
-/// results so the per-player combined standings is already populated. No-op if data exists.
+/// Seeds the starting day: a pre-registered roster and one event ("Skärgårdsdagen") with the
+/// eight planned activities — a quiz walk, catching/throwing games, fastest-time and tallest-tower
+/// measured games, a closest-to-target timing game, a boule knockout and a word game. Teams are
+/// pre-generated; results start empty so the host runs each activity during the day. No-op if data exists.
 /// </summary>
 public sealed class DataSeeder(AppDbContext db, TimeProvider clock)
 {
@@ -29,15 +30,15 @@ public sealed class DataSeeder(AppDbContext db, TimeProvider clock)
         db.Users.AddRange(users);
         await db.SaveChangesAsync(ct);
 
-        // 2) Event (team size 2) with the whole roster as members.
+        // 2) The day's event (teams of 2, placement scoring) with the whole roster.
         var ev = new Event
         {
-            Name = "Sommarfesten på bryggan",
-            Description = "Lagtävling i tre grenar. Ni får ny lagkamrat inför varje gren — "
-                          + "varje grens placering ger poäng (1:a = antal lag) till båda i laget. Högsta individuella total vinner!",
+            Name = "Skärgårdsdagen",
+            Description = "En dag med åtta grenar. Ni byter lagkamrat inför varje gren — varje grens "
+                          + "placering ger poäng (1:a = antal lag) till båda i laget. Högsta individuella total vinner!",
             TeamSize = 2,
             Scoring = EventScoring.Placement,
-            JoinCode = "SOMMAR",
+            JoinCode = "RUNDAN",
             CreatedUtc = now,
         };
         db.Events.Add(ev);
@@ -51,47 +52,84 @@ public sealed class DataSeeder(AppDbContext db, TimeProvider clock)
         }));
         await db.SaveChangesAsync(ct);
 
-        // 3) Activities.
-        var walk = NewActivity(ev.Id, 1, ActivityType.Tipspromenad, "Skärgårdsrundan", "WALK", now,
-            "Gå laget runt till varje station. När ni är inom 30 m dyker frågan upp på telefonen.", ActivityStatus.Finished);
-        walk.Questions.Add(GeoMc(1, "Vilket träd dominerar i skärgården?", 59.3251, 18.1000,
-            ("Tall · Pine", true), ("Ek · Oak", false), ("Bok · Beech", false)));
-        walk.Questions.Add(GeoMc(2, "Sveriges inofficiella nationaldjur?", 59.3258, 18.1016,
-            ("Älg · Moose", true), ("Räv · Fox", false), ("Igelkott · Hedgehog", false)));
-        walk.Questions.Add(GeoMc(3, "Vilken fågel hörs ofta vid bryggan?", 59.3262, 18.0989,
-            ("Mås · Gull", true), ("Uggla · Owl", false), ("Örn · Eagle", false)));
-        walk.Questions.Add(GeoMc(4, "Vad används en eka till?", 59.3244, 18.1009,
-            ("Ro · Rowing", true), ("Flyga · Flying", false), ("Gräva · Digging", false)));
+        var activities = new List<Activity>();
 
-        var quiz = NewActivity(ev.Id, 2, ActivityType.Quiz, "Kvällsquizet", "QUIZ", now,
-            "Fem frågor. En i taget — nästa fråga dyker upp när ni svarat.", ActivityStatus.Finished);
-        quiz.Questions.Add(Mc(1, "Vad är Sveriges huvudstad?", ("Stockholm", true), ("Göteborg", false), ("Malmö", false), ("Oslo", false)));
-        quiz.Questions.Add(Mc(2, "Hur många ben har en spindel?", ("8", true), ("6", false), ("10", false), ("4", false)));
-        quiz.Questions.Add(Mc(3, "Blå och gul blir?", ("Grön · Green", true), ("Lila · Purple", false), ("Orange", false)));
-        quiz.Questions.Add(Mc(4, "Vad heter Pippi Långstrumps häst?", ("Lilla Gubben", true), ("Herr Nilsson", false), ("Blixten", false)));
-        quiz.Questions.Add(Mc(5, "Vilket hav ligger öster om Sverige?", ("Östersjön · Baltic", true), ("Atlanten", false), ("Medelhavet", false)));
+        // 1 — Poängpromenad (runs all day): 10 questions (1·X·2), random order.
+        var walk = NewActivity(ev.Id, 1, ActivityType.Tipspromenad, "Poängpromenad", "PROM", now,
+            "Pågår under hela dagen. Start i Husvik – avslut vid Utkiken. 1 poäng för varje rätt svar.",
+            ActivityStatus.Live);
+        walk.RandomizeQuestions = true;
+        walk.Questions.Add(GeoMc(1, "Sveriges största sjö?", 59.3250, 18.1000, ("Vänern", true), ("Vättern", false), ("Mälaren", false)));
+        walk.Questions.Add(GeoMc(2, "Hur många kommuner har Sverige?", 59.3256, 18.1012, ("90", false), ("290", true), ("490", false)));
+        walk.Questions.Add(GeoMc(3, "Vilket är skärgårdens vanligaste träd?", 59.3262, 18.0994, ("Tall", true), ("Ek", false), ("Bok", false)));
+        walk.Questions.Add(GeoMc(4, "Vad heter Sveriges nationaldjur (inofficiellt)?", 59.3268, 18.1006, ("Räv", false), ("Älg", true), ("Igelkott", false)));
+        walk.Questions.Add(GeoMc(5, "Hur djup är Östersjön som mest (ca)?", 59.3245, 18.1018, ("160 m", false), ("330 m", false), ("459 m", true)));
+        walk.Questions.Add(GeoMc(6, "Vilken färg får man av blått och gult?", 59.3239, 18.0998, ("Grön", true), ("Lila", false), ("Orange", false)));
+        walk.Questions.Add(GeoMc(7, "Vad används en eka till?", 59.3271, 18.0985, ("Ro", true), ("Flyga", false), ("Gräva", false)));
+        walk.Questions.Add(GeoMc(8, "Vilket år firade Sverige 500 år som nation? (ca)", 59.3233, 18.1024, ("1923", false), ("2023", true), ("1523-firande", false)));
+        walk.Questions.Add(GeoMc(9, "Hur många ben har en spindel?", 59.3277, 18.1003, ("6", false), ("8", true), ("10", false)));
+        walk.Questions.Add(GeoMc(10, "Vad heter Pippis häst?", 59.3228, 18.0991, ("Lilla Gubben", true), ("Herr Nilsson", false), ("Blixten", false)));
 
-        var boule = NewActivity(ev.Id, 3, ActivityType.Boule, "Boulekulan", "BOULE", now,
-            "Bäst av flera omgångar. Närmast lillen vinner omgången.", ActivityStatus.Live);
-        boule.ScoreEntryMode = ScoreEntryMode.PerPlayer; // scorekeeper enters points per player; team total = sum
+        // 2 — Marshmallowfångst: 1 p per caught marshmallow (15 per par).
+        var marsh = NewActivity(ev.Id, 2, ActivityType.ScoreGame, "Marshmallowfångst", "MARSH", now,
+            "Fånga så många marshmallows som möjligt i en skål eller kastrull. En person sitter med ryggen "
+            + "mot kastaren som slungar marshmallows över axeln/huvudet. 15 marshmallows per par, 1 p per fångad.",
+            ActivityStatus.Open);
+        marsh.ScoreEntryMode = ScoreEntryMode.PerPlayer; // each catcher's catches add to the team
 
-        db.Activities.AddRange(walk, quiz, boule);
+        // 3 — Skala potatis: fastest time wins.
+        var potato = NewActivity(ev.Id, 3, ActivityType.ScoreGame, "Skala potatis", "POTATIS", now,
+            "Två och två – skala en potatis så snabbt som möjligt. En person håller potatisen, den andra "
+            + "skalar. Varje person får bara använda en hand. Kortast tid vinner.",
+            ActivityStatus.Open);
+        potato.Measurement = Measurement.TimeSeconds;
+        potato.ScoringMode = ScoringMode.LowerWins;
+
+        // 4 — Boule (knockout): placement decides points. (Bracket engine pending.)
+        var boule = NewActivity(ev.Id, 4, ActivityType.Boule, "Boule – utslagsspel", "BOULE", now,
+            "Lagen möts i en utslagstävling. Appen lottar matcherna. Vinnarna går vidare till nästa omgång "
+            + "och en final; förlorarna lottas in i ett förlorarträd. Placeringen avgör poängen.",
+            ActivityStatus.Open);
+
+        // 5 — Bygga högst torn: tallest (mm) wins.
+        var tower = NewActivity(ev.Id, 5, ActivityType.ScoreGame, "Bygga högst torn", "TORN", now,
+            "Bygg det högsta tornet du kan på 4 minuter av saker du hittar utomhus. När tiden är ute: släpp "
+            + "tornet och mät med tumstock. Högst torn vinner.",
+            ActivityStatus.Open);
+        tower.Measurement = Measurement.Millimetres;
+        tower.ScoringMode = ScoringMode.HigherWins;
+
+        // 6 — Cornhole Flight: sum of throws (rings worth 1/2/3).
+        var corn = NewActivity(ev.Id, 6, ActivityType.ScoreGame, "Cornhole Flight", "CORN", now,
+            "Kasta påsar i ringar gjorda av snöre på olika avstånd. Ringarna är märkta 1, 2 eller 3 poäng "
+            + "beroende på avstånd. Plussa ihop poängen från kasten.",
+            ActivityStatus.Open);
+        corn.ScoreEntryMode = ScoreEntryMode.PerPlayer;
+
+        // 7 — Gå ur ringen i rätt tid: closest to 2:27 (147 s).
+        var ring = NewActivity(ev.Id, 7, ActivityType.ScoreGame, "Gå ur ringen i rätt tid", "RING", now,
+            "Lämna ringen så nära 2 min 27 sek som möjligt. Gå in i ringen när aktiviteten startar och kliv "
+            + "ut när du tror att exakt 2:27 har gått. Ingen klocka tillåten – känn på dig! Närmast rätt tid vinner.",
+            ActivityStatus.Open);
+        ring.Measurement = Measurement.TimeSeconds;
+        ring.ScoringMode = ScoringMode.ClosestToTarget;
+        ring.TargetValue = 147; // 2:27
+
+        // 8 — Ordbygge med lappar: longest word wins. (Letter game pending.)
+        var words = NewActivity(ev.Id, 8, ActivityType.ScoreGame, "Ordbygge med lappar", "ORD", now,
+            "Bilda så långt ord som möjligt på 60 sekunder. Appen lottar 20 bokstavslappar upp och ner; ni "
+            + "får vända upp 10 av dem. Längst ord vinner.",
+            ActivityStatus.Open);
+
+        activities.AddRange([walk, marsh, potato, boule, tower, corn, ring, words]);
+        db.Activities.AddRange(activities);
         await db.SaveChangesAsync(ct);
 
-        // 4) Teams per activity (reshuffled), and team results.
-        var walkTeams = MakeTeams(walk, users, ev.TeamSize, now);
-        var quizTeams = MakeTeams(quiz, users, ev.TeamSize, now);
-        var bouleTeams = MakeTeams(boule, users, ev.TeamSize, now);
-        await db.SaveChangesAsync(ct);
-
-        // Distinct results so the four teams rank 1-2-3-4 in each finished activity.
-        SeedTeamAnswers(walk, walkTeams, new[] { 4, 3, 2, 1 }, now);
-        SeedTeamAnswers(quiz, quizTeams, new[] { 5, 4, 3, 2 }, now);
-        // Boule is still live (not yet counted in placement) — distinct team scores.
-        AddTeamScore(boule.Id, bouleTeams[0], now, 13);
-        AddTeamScore(boule.Id, bouleTeams[1], now, 10);
-        AddTeamScore(boule.Id, bouleTeams[2], now, 7);
-        AddTeamScore(boule.Id, bouleTeams[3], now, 4);
+        // Pre-generate reshuffled teams for every activity (no results yet — the host runs them live).
+        foreach (var a in activities)
+        {
+            MakeTeams(a, users, ev.TeamSize, now);
+        }
 
         await db.SaveChangesAsync(ct);
         return true;
@@ -109,7 +147,7 @@ public sealed class DataSeeder(AppDbContext db, TimeProvider clock)
         ScoringMode = ScoringMode.HigherWins,
         Status = status,
         CreatedUtc = now,
-        StartedUtc = now,
+        StartedUtc = status is ActivityStatus.Live or ActivityStatus.Finished ? now : null,
         FinishedUtc = status == ActivityStatus.Finished ? now : null,
     };
 
@@ -154,38 +192,5 @@ public sealed class DataSeeder(AppDbContext db, TimeProvider clock)
         }
 
         return teams;
-    }
-
-    private void SeedTeamAnswers(Activity activity, List<Participant> teams, int[] correctCounts, DateTimeOffset now)
-    {
-        var questions = activity.Questions.OrderBy(q => q.Order).ToList();
-        for (var t = 0; t < teams.Count && t < correctCounts.Length; t++)
-        {
-            foreach (var q in questions.Take(correctCounts[t]))
-            {
-                var correct = q.Options.First(o => o.IsCorrect);
-                db.Answers.Add(new Answer
-                {
-                    QuestionId = q.Id,
-                    ParticipantId = teams[t].Id,
-                    SelectedOptionId = correct.Id,
-                    IsCorrect = true,
-                    AwardedPoints = q.Points,
-                    SubmittedUtc = now,
-                });
-            }
-        }
-    }
-
-    private void AddTeamScore(int activityId, Participant team, DateTimeOffset now, params int[] rounds)
-    {
-        var round = 1;
-        foreach (var points in rounds)
-        {
-            db.ScoreEntries.Add(new ScoreEntry
-            {
-                ActivityId = activityId, ParticipantId = team.Id, Round = round++, Points = points, RecordedUtc = now,
-            });
-        }
     }
 }
