@@ -67,7 +67,8 @@ else
         </div>
         <div class="field">
             <label>Rules / info</label>
-            <textarea @bind="_editDescription" placeholder="Explain how this game works"></textarea>
+            <RichTextEditor @key="_activity.Id" Value="_editDescription" ValueChanged="v => _editDescription = v"
+                            Placeholder="Explain how this game works — use the toolbar for bullet lists" />
         </div>
         <div class="field">
             <label>Picture / map</label>
