@@ -39,6 +39,9 @@ public class Activity
     /// <summary>For question activities: serve the questions in a random order per player.</summary>
     public bool RandomizeQuestions { get; set; }
 
+    /// <summary>If true, this activity's definition is reusable from the library in other events.</summary>
+    public bool IsPublic { get; set; }
+
     /// <summary>What the playing surfaces are called (Court / Field / Track / Lane).</summary>
     public string CourtLabel { get; set; } = "Court";
 

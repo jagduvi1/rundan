@@ -170,12 +170,29 @@ else
             <select @bind="_newType">
                 <option value="@ActivityType.Quiz">Quiz</option>
                 <option value="@ActivityType.Tipspromenad">Tipspromenad (quiz walk)</option>
-                <option value="@ActivityType.Boule">Boule</option>
+                <option value="@ActivityType.Boule">Boule (knockout)</option>
                 <option value="@ActivityType.ScoreGame">Other score game</option>
+                <option value="@ActivityType.WordGame">Word game</option>
             </select>
             <button class="btn block success" @onclick="AddActivityAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_newTitle))">
                 Add to event
             </button>
+
+            @if (State.IsHost && _library.Count > 0)
+            {
+                <h3 style="margin-top:.5rem">Reuse from library</h3>
+                <p class="muted" style="font-size:.85rem">Add a copy of a public activity (rules, questions, scoring all carried over).</p>
+                <select @bind="_libSourceId">
+                    <option value="0">Pick a public activity…</option>
+                    @foreach (var lib in _library)
+                    {
+                        <option value="@lib.Id">@lib.Title</option>
+                    }
+                </select>
+                <button class="btn block secondary" @onclick="AddFromLibraryAsync" disabled="@(_busy || _libSourceId <= 0)">
+                    Add a copy to this event
+                </button>
+            }
         </div>
     }
 
@@ -287,6 +304,9 @@ else
     private HashSet<int> _selectedAdminIds = new();
     private bool _isEventAdmin;
 
+    private List<ActivityDto> _library = new();
+    private int _libSourceId;
+
     private bool CanManage => State.IsHost || _isEventAdmin;
 
     private string _editName = string.Empty;
@@ -347,6 +367,7 @@ else
             if (State.IsHost)
             {
                 try { _allUsers = await Api.ListUsersAsync(); } catch (ApiException) { }
+                try { _library = await Api.GetLibraryAsync(); } catch (ApiException) { }
                 _selectedMemberIds = _event.Members.Select(m => m.Id).ToHashSet();
                 _selectedAdminIds = _event.AdminUserIds.ToHashSet();
             }
@@ -700,6 +721,31 @@ else
         {
             await Api.CreateActivityAsync(new CreateActivityRequest { Title = _newTitle.Trim(), Type = _newType, EventId = Id });
             _newTitle = string.Empty;
+            await RefreshAsync();
+        }
+        catch (ApiException ex)
+        {
+            _adminError = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task AddFromLibraryAsync()
+    {
+        if (_libSourceId <= 0)
+        {
+            return;
+        }
+
+        _busy = true;
+        _adminError = null;
+        try
+        {
+            await Api.AddFromLibraryAsync(Id, _libSourceId);
+            _libSourceId = 0;
             await RefreshAsync();
         }
         catch (ApiException ex)

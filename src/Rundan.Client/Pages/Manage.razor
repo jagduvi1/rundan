@@ -74,6 +74,14 @@ else
             <ImageUploader Value="_editImage" ValueChanged="v => _editImage = v" />
         </div>
 
+        <div class="field">
+            <label class="row" style="font-weight:500">
+                <input type="checkbox" style="width:auto;min-height:auto"
+                       checked="@_editPublic" @onchange="e => _editPublic = (bool)e.Value!" />
+                <span>Add to the library (reusable in other events)</span>
+            </label>
+        </div>
+
         @if (_activity.UsesQuestions)
         {
             <div class="field">
@@ -186,6 +194,7 @@ else
     private Measurement _editMeasurement = Measurement.Points;
     private int _editTarget = 147;
     private bool _editRandomize;
+    private bool _editPublic;
     private string _editCourtLabel = "Court";
     private List<string> _editCourtNames = new();
     private double? _editLat;
@@ -206,6 +215,7 @@ else
             _editMeasurement = _activity.Measurement;
             _editTarget = _activity.TargetValue ?? 147;
             _editRandomize = _activity.RandomizeQuestions;
+            _editPublic = _activity.IsPublic;
             _editCourtLabel = _activity.CourtLabel;
             _editCourtNames = _activity.Courts.Select(c => c.Name).ToList();
             _editLat = _activity.Latitude;
@@ -278,6 +288,7 @@ else
                 Measurement = _editMeasurement,
                 TargetValue = _editTarget,
                 RandomizeQuestions = _editRandomize,
+                IsPublic = _editPublic,
                 ScoreEntryMode = _editScoreEntryMode,
                 Latitude = _editLat,
                 Longitude = _editLng,
