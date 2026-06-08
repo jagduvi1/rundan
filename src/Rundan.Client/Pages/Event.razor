@@ -88,8 +88,16 @@ else
         }
     </div>
 
-    @* ---- Identity: claim (roster) or free-name join (rosterless) ---- *@
-    @if (_eventName is null)
+    @* ---- Identity: viewer, or claim (roster) / free-name join ---- *@
+    @if (_isViewer)
+    {
+        <div class="card stack center">
+            <span class="badge">Viewer</span>
+            <p class="muted">You're watching @_event.Name — everything updates live, but you're not competing.</p>
+            <button class="btn block secondary" @onclick="StopViewingAsync" disabled="@_busy">Join as a player instead</button>
+        </div>
+    }
+    else if (_eventName is null)
     {
         @if (_joinError is not null)
         {
@@ -105,6 +113,7 @@ else
                 {
                     <button class="btn block secondary" @onclick="() => ClaimAsync(m.Id)" disabled="@_busy">@m.Name</button>
                 }
+                <button class="btn ghost block" @onclick="BecomeViewerAsync" disabled="@_busy">Just watching (viewer)</button>
             </div>
         }
         else
@@ -116,6 +125,7 @@ else
                 <button class="btn block" @onclick="JoinFreeNameAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_joinName))">
                     Join the event
                 </button>
+                <button class="btn ghost block" @onclick="BecomeViewerAsync" disabled="@_busy">Just watching (viewer)</button>
             </div>
         }
     }
@@ -343,6 +353,7 @@ else
     private List<ActivityDto> _library = new();
     private int _libSourceId;
     private bool _confirmClear;
+    private bool _isViewer;
 
     private bool CanManage => State.IsHost || _isEventAdmin;
 
@@ -393,6 +404,7 @@ else
         if (_event is not null)
         {
             SyncEditFields();
+            _isViewer = await State.GetViewerAsync(Id);
 
             if (_event.HasRoster)
             {
@@ -779,6 +791,18 @@ else
         {
             _busy = false;
         }
+    }
+
+    private async Task BecomeViewerAsync()
+    {
+        await State.SetViewerAsync(Id, true);
+        _isViewer = true;
+    }
+
+    private async Task StopViewingAsync()
+    {
+        await State.SetViewerAsync(Id, false);
+        _isViewer = false;
     }
 
     private async Task SimulateActivityAsync(int activityId) => await HostActionAsync(() => Api.SimulateActivityAsync(activityId));
