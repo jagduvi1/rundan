@@ -25,6 +25,9 @@ public class EventDto
     public List<int> AdminUserIds { get; set; } = new();
 
     public bool HasRoster => Members.Count > 0;
+
+    /// <summary>True once the event has activities and every one of them is finished.</summary>
+    public bool IsComplete => Activities.Count > 0 && Activities.TrueForAll(a => a.Status == ActivityStatus.Finished);
 }
 
 /// <summary>Admin request to create an event.</summary>

@@ -61,6 +61,7 @@ else
 @code {
     private List<EventDto> _events = new();
     private readonly Dictionary<int, string> _names = new();
+    private readonly Dictionary<int, string> _winners = new();
     private bool _loading = true;
 
     private string _code = string.Empty;
@@ -74,6 +75,16 @@ else
             <img src="@ev.ImageUrl" alt="" style="width:100%;border-radius:var(--radius-md)" />
         }
         <h2>@ev.Name</h2>
+        @if (ev.IsComplete)
+        {
+            <div class="row" style="gap:.5rem;align-items:center">
+                <span class="final-badge">Completed</span>
+                @if (_winners.TryGetValue(ev.Id, out var win))
+                {
+                    <span><b>Winner: @win</b></span>
+                }
+            </div>
+        }
         @if (!string.IsNullOrWhiteSpace(ev.Description))
         {
             <p class="muted" style="white-space:pre-wrap">@ev.Description</p>
@@ -108,7 +119,9 @@ else
         }
 
         <button class="btn block success" @onclick="() => Enter(ev.Id)">
-            @(_names.TryGetValue(ev.Id, out var name) ? $"Continue as {name}" : $"Enter {ev.Name}")
+            @(ev.IsComplete
+                ? "See final results"
+                : _names.TryGetValue(ev.Id, out var name) ? $"Continue as {name}" : $"Enter {ev.Name}")
         </button>
     </div>;
 
@@ -124,6 +137,16 @@ else
                 if (saved is not null)
                 {
                     _names[ev.Id] = saved;
+                }
+
+                if (ev.IsComplete)
+                {
+                    var standings = await Api.GetEventStandingsAsync(ev.Id);
+                    var winners = standings?.Entries.Where(e => e.Rank == 1).Select(e => e.DisplayName).ToList();
+                    if (winners is { Count: > 0 })
+                    {
+                        _winners[ev.Id] = string.Join(" & ", winners);
+                    }
                 }
             }
         }

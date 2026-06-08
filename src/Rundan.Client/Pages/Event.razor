@@ -44,8 +44,27 @@ else
         </div>
     </div>
 
+    @if (_event.IsComplete && _standings is not null && _standings.Entries.Count > 0)
+    {
+        <div class="card stack center final-results">
+            <span class="final-badge">Final results</span>
+            <h2 style="margin:.3rem 0">@WinnerLine()</h2>
+            <p class="muted">@_event.Name is done — thanks for playing!</p>
+            <div class="podium">
+                @foreach (var e in _standings.Entries.Take(3))
+                {
+                    <div class="podium-spot p@(e.Rank)">
+                        <div class="medal">@e.Rank</div>
+                        <div class="who">@e.DisplayName</div>
+                        <div class="pts">@e.TotalPoints p</div>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+
     <div class="card">
-        <h2>Total standings</h2>
+        <h2>@(_event.IsComplete ? "Final standings" : "Total standings")</h2>
         <p class="muted" style="font-size:.8rem;margin-top:-.4rem">@ScoringLabel</p>
         @if (_standings is null || _standings.Entries.Count == 0)
         {
@@ -335,6 +354,17 @@ else
     private string _editCode = string.Empty;
 
     private bool IsMe(string name) => string.Equals(name, _eventName, StringComparison.Ordinal);
+
+    private string WinnerLine()
+    {
+        var winners = _standings?.Entries.Where(e => e.Rank == 1).Select(e => e.DisplayName).ToList() ?? new();
+        if (winners.Count == 0)
+        {
+            return "Final results";
+        }
+
+        return winners.Count == 1 ? $"{winners[0]} wins!" : $"{string.Join(" & ", winners)} tie for the win!";
+    }
 
     private string ScoringLabel => _event?.Scoring == EventScoring.Placement
         ? "Placement points — your team's position each activity (1st = most), summed."
