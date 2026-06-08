@@ -85,6 +85,13 @@ else
                 }
             </div>
         }
+        @if (ev.SlapMode != SlapMode.Off)
+        {
+            <div class="row" style="gap:.5rem;align-items:center">
+                <span class="final-badge">Slaps on</span>
+                <span class="muted" style="font-size:.85rem">After each activity, @SlapBlurb(ev.SlapMode)</span>
+            </div>
+        }
         @if (!string.IsNullOrWhiteSpace(ev.Description))
         {
             <p class="muted" style="white-space:pre-wrap">@ev.Description</p>
@@ -161,6 +168,14 @@ else
     }
 
     private void Enter(int eventId) => Nav.NavigateTo($"e/{eventId}");
+
+    private static string SlapBlurb(SlapMode mode) => mode switch
+    {
+        SlapMode.Vanish => "the winner can slap a rival, halving their lead — those points vanish.",
+        SlapMode.SendToPlayer => "the winner can slap a rival, halving their lead — and hand the points to someone.",
+        SlapMode.Random => "the winner can slap a rival, halving their lead — points vanish or get passed on (random).",
+        _ => "",
+    };
 
     private static string FormatDistance(int meters) =>
         meters >= 1000 ? $"{meters / 1000.0:0.0} km" : $"{meters} m";

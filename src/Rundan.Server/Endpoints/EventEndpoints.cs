@@ -161,6 +161,7 @@ internal static class EventEndpoints
             ev.ImageUrl = Clean(req.ImageUrl);
             ev.TeamSize = Math.Clamp(req.TeamSize, 1, 20);
             ev.Scoring = req.Scoring;
+            ev.SlapMode = req.SlapMode;
             await db.SaveChangesAsync(ct);
             return Results.Ok(await LoadEventDtoAsync(db, ev, ct));
         }).AddEndpointFilter<EventManagerFilter>();
@@ -235,17 +236,59 @@ internal static class EventEndpoints
 
         // --- Players: look up + standings ---------------------------------------
 
-        app.MapGet("/api/events/{id:int}", async (int id, AppDbContext db, CancellationToken ct) =>
+        app.MapGet("/api/events/{id:int}", async (int id, AppDbContext db, SlapService slaps, CancellationToken ct) =>
         {
             var ev = await db.Events.AsNoTracking().FirstOrDefaultAsync(e => e.Id == id, ct);
-            return ev is null ? Results.NotFound() : Results.Ok(await LoadEventDtoAsync(db, ev, ct));
+            if (ev is null)
+            {
+                return Results.NotFound();
+            }
+
+            var dto = await LoadEventDtoAsync(db, ev, ct);
+            dto.PendingSlap = await slaps.PendingAsync(id, ct);
+            return Results.Ok(dto);
         });
 
-        app.MapGet("/api/events/by-code/{code}", async (string code, AppDbContext db, CancellationToken ct) =>
+        app.MapGet("/api/events/by-code/{code}", async (string code, AppDbContext db, SlapService slaps, CancellationToken ct) =>
         {
             var normalized = code.Trim().ToUpperInvariant();
             var ev = await db.Events.AsNoTracking().FirstOrDefaultAsync(e => e.JoinCode == normalized, ct);
-            return ev is null ? Results.NotFound() : Results.Ok(await LoadEventDtoAsync(db, ev, ct));
+            if (ev is null)
+            {
+                return Results.NotFound();
+            }
+
+            var dto = await LoadEventDtoAsync(db, ev, ct);
+            dto.PendingSlap = await slaps.PendingAsync(ev.Id, ct);
+            return Results.Ok(dto);
+        });
+
+        // --- Slaps (the optional twist) -----------------------------------------
+        app.MapPost("/api/events/{id:int}/slap", async (
+            int id, PerformSlapRequest req, AppDbContext db, SlapService slaps,
+            ScoreboardNotifier notifier, HttpContext http, CancellationToken ct) =>
+        {
+            // The slapper must prove they are a member of this event (their event-member token → userId).
+            var slapperUserId = await ResolveMemberUserIdAsync(http, db, id, ct)
+                ?? throw new RuleViolationException("Only a player in this event can slap.", StatusCodes.Status403Forbidden);
+
+            await slaps.PerformAsync(id, req.ActivityId, slapperUserId, req.SlappedUserId, req.RecipientUserId, ct);
+            await notifier.PushScoreboardAsync(req.ActivityId, ct); // nudges everyone's standings to refresh
+            return Results.Ok(new { ok = true });
+        });
+
+        app.MapPost("/api/events/{id:int}/slap/skip", async (
+            int id, SkipSlapRequest req, AppDbContext db, RundanOptions options,
+            SlapService slaps, ScoreboardNotifier notifier, HttpContext http, CancellationToken ct) =>
+        {
+            if (!await EventAuthorization.CanManageEventAsync(http, db, options, id, ct))
+            {
+                return EventManagerFilter.Forbidden();
+            }
+
+            await slaps.SkipAsync(id, req.ActivityId, ct);
+            await notifier.PushScoreboardAsync(req.ActivityId, ct);
+            return Results.Ok(new { ok = true });
         });
 
         app.MapGet("/api/events/{id:int}/standings", async (
@@ -498,6 +541,20 @@ internal static class EventEndpoints
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
             .ToList();
+    }
+
+    // Maps the caller's event-member token to their roster user id (proves who they are).
+    private static async Task<int?> ResolveMemberUserIdAsync(HttpContext http, AppDbContext db, int eventId, CancellationToken ct)
+    {
+        if (!Guid.TryParse(http.Request.Headers["X-Rundan-Member"].FirstOrDefault(), out var token))
+        {
+            return null;
+        }
+
+        return await db.EventMembers
+            .Where(m => m.Token == token && m.EventId == eventId)
+            .Select(m => (int?)m.UserId)
+            .FirstOrDefaultAsync(ct);
     }
 
     private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

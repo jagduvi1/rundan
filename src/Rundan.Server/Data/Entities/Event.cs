@@ -24,6 +24,9 @@ public class Event
     /// <summary>How the combined event total is calculated.</summary>
     public EventScoring Scoring { get; set; } = EventScoring.Cumulative;
 
+    /// <summary>The optional "slap" twist (off by default).</summary>
+    public SlapMode SlapMode { get; set; } = SlapMode.Off;
+
     /// <summary>Short, human-typable join code for the whole event.</summary>
     public string JoinCode { get; set; } = string.Empty;
 

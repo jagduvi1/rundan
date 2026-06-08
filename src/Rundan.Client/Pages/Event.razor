@@ -44,6 +44,58 @@ else
         </div>
     </div>
 
+    @if (_event.PendingSlap is { } slap)
+    {
+        <div class="card stack accent">
+            <h2>Slap time!</h2>
+            <p><b>@slap.WinnerName</b> won “@slap.ActivityTitle” — @SlapBlurb(_event.SlapMode) The next activity can't start until this is done.</p>
+
+            @if (CanSlap(slap))
+            {
+                @if (_adminError is not null)
+                {
+                    <div class="alert error">@_adminError</div>
+                }
+                <div class="field">
+                    <label>Slap a rival</label>
+                    <select @bind="_slapTarget">
+                        <option value="0">Pick someone…</option>
+                        @foreach (var p in SlapTargets(slap))
+                        {
+                            <option value="@p.UserId">@p.Name</option>
+                        }
+                    </select>
+                </div>
+                @if (slap.EffectiveMode == SlapMode.SendToPlayer)
+                {
+                    <div class="field">
+                        <label>Give the points to</label>
+                        <select @bind="_slapRecipient">
+                            <option value="0">Pick someone…</option>
+                            @foreach (var p in SlapRecipients(slap))
+                            {
+                                <option value="@p.UserId">@p.Name</option>
+                            }
+                        </select>
+                    </div>
+                }
+                <button class="btn block success" @onclick="() => PerformSlapAsync(slap)"
+                        disabled="@(_busy || _slapTarget == 0 || (slap.EffectiveMode == SlapMode.SendToPlayer && _slapRecipient == 0))">
+                    Slap!
+                </button>
+            }
+            else
+            {
+                <p class="muted">Waiting for @slap.WinnerName to take the slap…</p>
+            }
+
+            @if (CanManage)
+            {
+                <button class="btn ghost small" @onclick="() => SkipSlapAsync(slap)" disabled="@_busy">Skip slap (host)</button>
+            }
+        </div>
+    }
+
     @if (_event.IsComplete && _standings is not null && _standings.Entries.Count > 0)
     {
         <div class="card stack center final-results">
@@ -203,7 +255,10 @@ else
                     <span class="grow"><b>@a.Order. @a.Title</b> <StatusBadge Status="a.Status" /></span>
                     @foreach (var (label, status) in HostActions(a.Status))
                     {
-                        <button class="btn small success" @onclick="() => SetStatusAsync(a.Id, status)" disabled="@_busy">@label</button>
+                        <button class="btn small success" @onclick="() => SetStatusAsync(a.Id, status)"
+                                disabled="@(_busy || (status == ActivityStatus.Live && _event.PendingSlap is not null && _event.PendingSlap.ActivityId != a.Id))">
+                            @label
+                        </button>
                     }
                     <button class="btn small secondary" @onclick="() => SimulateActivityAsync(a.Id)" disabled="@_busy">Simulate</button>
                     <a class="btn small ghost" href="@($"manage/{a.Id}")">Edit</a>
@@ -325,6 +380,15 @@ else
                 </select>
             </div>
             <div class="field">
+                <label>Slaps (make it spicy — winner of each activity slaps a rival)</label>
+                <select @bind="_editSlapMode">
+                    <option value="@SlapMode.Off">Off</option>
+                    <option value="@SlapMode.Vanish">On — halve a rival's lead, points vanish</option>
+                    <option value="@SlapMode.SendToPlayer">On — halve a rival's lead, give the points to someone</option>
+                    <option value="@SlapMode.Random">On — random (vanish or give) each activity</option>
+                </select>
+            </div>
+            <div class="field">
                 <label>Picture / map</label>
                 <ImageUploader Value="_editImage" ValueChanged="v => _editImage = v" />
             </div>
@@ -378,9 +442,27 @@ else
     private string? _editImage;
     private int _editTeamSize = 2;
     private EventScoring _editScoring = EventScoring.Cumulative;
+    private SlapMode _editSlapMode = SlapMode.Off;
     private string _editCode = string.Empty;
 
+    private int _slapTarget;
+    private int _slapRecipient;
+
     private bool IsMe(string name) => string.Equals(name, _eventName, StringComparison.Ordinal);
+
+    private bool CanSlap(PendingSlapDto slap) => _userId is { } uid && slap.WinnerUserIds.Contains(uid);
+    private IEnumerable<SlapPersonDto> SlapTargets(PendingSlapDto slap) =>
+        slap.Members.Where(m => !slap.WinnerUserIds.Contains(m.UserId));
+    private IEnumerable<SlapPersonDto> SlapRecipients(PendingSlapDto slap) =>
+        slap.Members.Where(m => m.UserId != _userId && m.UserId != _slapTarget);
+
+    private static string SlapBlurb(SlapMode mode) => mode switch
+    {
+        SlapMode.Vanish => "the winner halves a rival's lead — those points vanish.",
+        SlapMode.SendToPlayer => "the winner halves a rival's lead — and hands the points to someone.",
+        SlapMode.Random => "the winner halves a rival's lead — points vanish or get passed on (random each round).",
+        _ => "",
+    };
 
     private string WinnerLine()
     {
@@ -524,6 +606,7 @@ else
         _editImage = _event.ImageUrl;
         _editTeamSize = _event.TeamSize;
         _editScoring = _event.Scoring;
+        _editSlapMode = _event.SlapMode;
         _editCode = _event.JoinCode;
     }
 
@@ -785,6 +868,7 @@ else
                 ImageUrl = _editImage,
                 TeamSize = _editTeamSize,
                 Scoring = _editScoring,
+                SlapMode = _editSlapMode,
             });
             SyncEditFields();
         }
@@ -886,6 +970,35 @@ else
             _busy = false;
         }
     }
+
+    private async Task PerformSlapAsync(PendingSlapDto slap)
+    {
+        if (_slapTarget == 0)
+        {
+            return;
+        }
+
+        _busy = true;
+        _adminError = null;
+        try
+        {
+            int? recipient = slap.EffectiveMode == SlapMode.SendToPlayer ? _slapRecipient : null;
+            await Api.PerformSlapAsync(Id, slap.ActivityId, _slapTarget, recipient);
+            _slapTarget = 0;
+            _slapRecipient = 0;
+            await RefreshAsync();
+        }
+        catch (ApiException ex)
+        {
+            _adminError = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task SkipSlapAsync(PendingSlapDto slap) => await HostActionAsync(() => Api.SkipSlapAsync(Id, slap.ActivityId));
 
     private async Task SimulateActivityAsync(int activityId) => await HostActionAsync(() => Api.SimulateActivityAsync(activityId));
 

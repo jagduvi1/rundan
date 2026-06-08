@@ -80,6 +80,25 @@ public enum ScoreEntryMode
     PerPlayer = 1,
 }
 
+/// <summary>
+/// The "slap" twist for an event. When on, each activity's winning team slaps a rival,
+/// halving that rival's lead over the player just below them. Default Off.
+/// </summary>
+public enum SlapMode
+{
+    /// <summary>No slaps (default).</summary>
+    Off = 0,
+
+    /// <summary>The slapped player's lost points simply vanish.</summary>
+    Vanish = 1,
+
+    /// <summary>The slapper hands the lost points to another player (not themselves).</summary>
+    SendToPlayer = 2,
+
+    /// <summary>The system randomly picks Vanish or SendToPlayer for each activity.</summary>
+    Random = 3,
+}
+
 /// <summary>Which side of a knockout bracket a match belongs to.</summary>
 public enum BracketSide
 {

@@ -99,7 +99,7 @@ internal static class ActivityEndpoints
 
         app.MapPut("/api/activities/{id:int}/status", async (
             int id, UpdateActivityStatusRequest req, AppDbContext db,
-            ScoreboardNotifier notifier, TeamService teams, TimeProvider clock, CancellationToken ct) =>
+            ScoreboardNotifier notifier, TeamService teams, SlapService slaps, TimeProvider clock, CancellationToken ct) =>
         {
             var activity = await db.Activities.FirstOrDefaultAsync(a => a.Id == id, ct)
                 ?? throw new RuleViolationException("Activity not found.", StatusCodes.Status404NotFound);
@@ -114,6 +114,18 @@ internal static class ActivityEndpoints
                 throw new RuleViolationException(
                     $"Cannot change status from {activity.Status} to {req.Status}.",
                     StatusCodes.Status409Conflict);
+            }
+
+            // Slap twist: a pending slap must be resolved before the next activity starts.
+            if (req.Status == ActivityStatus.Live && activity.EventId is { } slapEventId)
+            {
+                var pending = await slaps.PendingAsync(slapEventId, ct);
+                if (pending is not null && pending.ActivityId != id)
+                {
+                    throw new RuleViolationException(
+                        $"{pending.WinnerName} still owes a slap from “{pending.ActivityTitle}” — resolve it first.",
+                        StatusCodes.Status409Conflict);
+                }
             }
 
             if (req.Status == ActivityStatus.Live && activity.StartedUtc is null)

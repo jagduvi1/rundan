@@ -139,6 +139,15 @@ public sealed class RundanApi(HttpClient http, AppState state)
     public Task<List<EventDto>> GetActiveEventsAsync() =>
         GetListAsync<EventDto>("api/events/active");
 
+    // ---- Slaps -------------------------------------------------------------
+    public async Task PerformSlapAsync(int eventId, int activityId, int slappedUserId, int? recipientUserId) =>
+        await SendAsync<object>(HttpMethod.Post, $"api/events/{eventId}/slap",
+            body: new PerformSlapRequest { ActivityId = activityId, SlappedUserId = slappedUserId, RecipientUserId = recipientUserId });
+
+    public async Task SkipSlapAsync(int eventId, int activityId) =>
+        await SendAsync<object>(HttpMethod.Post, $"api/events/{eventId}/slap/skip",
+            body: new SkipSlapRequest { ActivityId = activityId }, admin: true);
+
     public async Task<ViewerDto> RegisterViewerAsync(int eventId, string name, Guid? token) =>
         (await SendAsync<ViewerDto>(HttpMethod.Post, $"api/events/{eventId}/viewers",
             body: new RegisterViewerRequest { Name = name, Token = token }))!;
