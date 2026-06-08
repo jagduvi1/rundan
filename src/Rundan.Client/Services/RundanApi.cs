@@ -139,6 +139,20 @@ public sealed class RundanApi(HttpClient http, AppState state)
     public Task<List<EventDto>> GetActiveEventsAsync() =>
         GetListAsync<EventDto>("api/events/active");
 
+    // ---- Question library --------------------------------------------------
+    public Task<List<string>> GetLibraryTagsAsync() =>
+        GetListAsync<string>("api/question-library/tags");
+
+    public async Task<int> GetLibraryAvailableAsync(List<string> tags)
+    {
+        var qs = tags.Count > 0 ? "?tags=" + Uri.EscapeDataString(string.Join(",", tags)) : string.Empty;
+        return await SendAsync<int>(HttpMethod.Get, $"api/question-library/available{qs}");
+    }
+
+    public async Task<LibraryGenerateResult> GenerateFromLibraryAsync(int activityId, int count, List<string> tags) =>
+        (await SendAsync<LibraryGenerateResult>(HttpMethod.Post, $"api/activities/{activityId}/questions/from-library",
+            body: new LibraryGenerateRequest { Count = count, Tags = tags }, admin: true))!;
+
     // ---- Slaps -------------------------------------------------------------
     public async Task PerformSlapAsync(int eventId, int activityId, int slappedUserId, int? recipientUserId) =>
         await SendAsync<object>(HttpMethod.Post, $"api/events/{eventId}/slap",
