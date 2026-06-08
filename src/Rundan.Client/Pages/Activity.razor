@@ -64,11 +64,34 @@ else
     {
         <div class="card muted">This activity hasn't opened yet. The host is still setting it up.</div>
     }
+    else if (_isViewer)
+    {
+        @* Spectator: the scoreboard above updates live; show the bracket / results too. *@
+        <div class="card stack center">
+            <span class="badge">Viewer</span>
+            <p class="muted">You're watching this activity — scores update live above.</p>
+            <button class="btn small secondary" @onclick="StopViewingAsync">Join to play</button>
+        </div>
+        @if (_activity.Type == ActivityType.Boule)
+        {
+            <BracketBoard @key="_activity.Id" Activity="_activity" RefreshKey="_scoreVersion" />
+        }
+        else if (_activity.Status == ActivityStatus.Finished && _activity.UsesQuestions)
+        {
+            <ResultsView Activity="_activity" />
+        }
+    }
     else if (_session is null)
     {
         @if (_activity.Status is ActivityStatus.Open or ActivityStatus.Live)
         {
             <JoinPanel Activity="_activity" OnJoined="OnJoinedAsync" />
+            @if (_activity.EventId is not null)
+            {
+                <div class="card center muted">
+                    <button class="btn ghost small" @onclick="WatchAsync">Just watch</button>
+                </div>
+            }
         }
         else if (_activity.Status == ActivityStatus.Finished && _activity.UsesQuestions)
         {
@@ -167,6 +190,7 @@ else
     private int _scoreVersion;
     private bool _loading = true;
     private bool _reconnecting;
+    private bool _isViewer;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -190,6 +214,11 @@ else
 
         if (_activity is not null)
         {
+            if (_activity.EventId is { } evId)
+            {
+                _isViewer = await State.GetViewerAsync(evId);
+            }
+
             _session = await State.GetSessionAsync(Id);
             _board = await Api.GetScoreboardAsync(Id);
             _participants = await Api.GetParticipantsAsync(Id);
@@ -258,6 +287,25 @@ else
         }
 
         InvokeAsync(StateHasChanged);
+    }
+
+    private async Task WatchAsync()
+    {
+        if (_activity?.EventId is { } evId)
+        {
+            await State.SetViewerAsync(evId, true);
+            _isViewer = true;
+        }
+    }
+
+    private async Task StopViewingAsync()
+    {
+        if (_activity?.EventId is { } evId)
+        {
+            await State.SetViewerAsync(evId, false);
+        }
+
+        _isViewer = false;
     }
 
     private async Task OnJoinedAsync(JoinResultDto result)

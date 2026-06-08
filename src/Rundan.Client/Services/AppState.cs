@@ -125,6 +125,12 @@ public sealed class AppState(IJSRuntime js)
         => Guid.TryParse(await GetItemAsync(MemberTokenKey(eventId)), out var t) ? t : null;
     public Task SaveEventMemberTokenAsync(int eventId, Guid token) => SetItemAsync(MemberTokenKey(eventId), token.ToString());
 
+    // Viewer (spectator) role for an event — sees everything but doesn't compete.
+    private static string ViewerKey(int eventId) => $"rundan.viewer.{eventId}";
+    public async Task<bool> GetViewerAsync(int eventId) => await GetItemAsync(ViewerKey(eventId)) == "1";
+    public Task SetViewerAsync(int eventId, bool on) =>
+        on ? SetItemAsync(ViewerKey(eventId), "1") : RemoveItemAsync(ViewerKey(eventId));
+
     private async Task<string?> GetItemAsync(string key)
     {
         try
