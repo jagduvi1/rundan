@@ -58,10 +58,10 @@ public sealed class EventStandingsService(AppDbContext db, TimeProvider clock)
             .GroupBy(x => x.ParticipantId)
             .ToDictionary(g => g.Key, g => g.Select(x => x.UserId).ToList());
 
-        var totals = roster.ToDictionary(u => u.UserId, _ => 0);
+        var totals = roster.ToDictionary(u => u.UserId, _ => 0d);
         var played = roster.ToDictionary(u => u.UserId, _ => new HashSet<int>());
 
-        void Credit(int participantId, int points, int activityId)
+        void Credit(int participantId, double points, int activityId)
         {
             if (!membersByParticipant.TryGetValue(participantId, out var users))
             {
@@ -128,7 +128,7 @@ public sealed class EventStandingsService(AppDbContext db, TimeProvider clock)
             .Select(p => new { p.Id, p.ActivityId, p.DisplayName })
             .ToListAsync(ct);
 
-        var totals = new Dictionary<string, int>(StringComparer.Ordinal);
+        var totals = new Dictionary<string, double>(StringComparer.Ordinal);
         var played = new Dictionary<string, HashSet<int>>(StringComparer.Ordinal);
         foreach (var name in parts.Select(p => p.DisplayName).Distinct())
         {
@@ -138,7 +138,7 @@ public sealed class EventStandingsService(AppDbContext db, TimeProvider clock)
 
         var nameByParticipant = parts.ToDictionary(p => p.Id, p => p.DisplayName);
 
-        void Credit(int participantId, int points, int activityId)
+        void Credit(int participantId, double points, int activityId)
         {
             if (!nameByParticipant.TryGetValue(participantId, out var name))
             {
@@ -174,9 +174,9 @@ public sealed class EventStandingsService(AppDbContext db, TimeProvider clock)
     }
 
     /// <summary>Sum of answer points + score points per participant across the event.</summary>
-    private async Task<Dictionary<int, int>> PointsByParticipantAsync(int eventId, CancellationToken ct)
+    private async Task<Dictionary<int, double>> PointsByParticipantAsync(int eventId, CancellationToken ct)
     {
-        var points = new Dictionary<int, int>();
+        var points = new Dictionary<int, double>();
 
         var answerRows = await db.Answers.AsNoTracking()
             .Where(a => a.Participant!.Activity!.EventId == eventId)
@@ -205,7 +205,7 @@ public sealed class EventStandingsService(AppDbContext db, TimeProvider clock)
     /// </summary>
     private async Task AwardPlacementAsync(
         int eventId, List<(int ParticipantId, int ActivityId)> participants,
-        Dictionary<int, int> pointsByParticipant, Action<int, int, int> credit, CancellationToken ct)
+        Dictionary<int, double> pointsByParticipant, Action<int, double, int> credit, CancellationToken ct)
     {
         var activities = await db.Activities.AsNoTracking()
             .Where(a => a.EventId == eventId)
@@ -223,7 +223,7 @@ public sealed class EventStandingsService(AppDbContext db, TimeProvider clock)
 
             var n = group.Count();
             var (mode, target) = modeByActivity.GetValueOrDefault(group.Key, (ScoringMode.HigherWins, 0));
-            double Key(int score) => mode switch
+            double Key(double score) => mode switch
             {
                 ScoringMode.LowerWins => score,
                 ScoringMode.ClosestToTarget => Math.Abs(score - target),
@@ -260,7 +260,7 @@ public sealed class EventStandingsService(AppDbContext db, TimeProvider clock)
             .ToList();
 
         var rank = 0;
-        int? prev = null;
+        double? prev = null;
         var seen = 0;
         foreach (var e in ordered)
         {

@@ -19,7 +19,9 @@ public class ScoreEntry
     public User? User { get; set; }
 
     public int Round { get; set; } = 1;
-    public int Points { get; set; }
+
+    /// <summary>The recorded value (points, seconds, or millimetres). Decimal for measured games.</summary>
+    public double Points { get; set; }
     public string? Note { get; set; }
     public DateTimeOffset RecordedUtc { get; set; }
 }

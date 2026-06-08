@@ -12,7 +12,7 @@ public class ScoreEntryDto
     public string? UserName { get; set; }
 
     public int Round { get; set; }
-    public int Points { get; set; }
+    public double Points { get; set; }
     public string? Note { get; set; }
     public DateTimeOffset RecordedUtc { get; set; }
 }
@@ -26,6 +26,6 @@ public class RecordScoreRequest
     public int? UserId { get; set; }
 
     public int Round { get; set; } = 1;
-    public int Points { get; set; }
+    public double Points { get; set; }
     public string? Note { get; set; }
 }

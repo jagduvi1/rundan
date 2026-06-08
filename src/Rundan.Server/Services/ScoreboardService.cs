@@ -30,7 +30,7 @@ public sealed class ScoreboardService(AppDbContext db, TimeProvider clock)
             .ToListAsync(ct);
 
         // points[participantId] = (total, entryCount)
-        var totals = participants.ToDictionary(p => p.Id, _ => (Points: 0, Entries: 0));
+        var totals = participants.ToDictionary(p => p.Id, _ => (Points: 0d, Entries: 0));
 
         var isQuestionGame = activity.Type is ActivityType.Quiz or ActivityType.Tipspromenad;
         var totalQuestions = 0;

@@ -178,7 +178,7 @@ public sealed class SlapService(AppDbContext db, ScoreboardService scoreboard, E
     }
 
     /// <summary>Half the slapped player's lead over the next-lower player in the current standings.</summary>
-    private async Task<int> PenaltyForAsync(int eventId, int slappedUserId, CancellationToken ct)
+    private async Task<double> PenaltyForAsync(int eventId, int slappedUserId, CancellationToken ct)
     {
         var name = (await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == slappedUserId, ct))?.Name;
         var board = await standings.BuildAsync(eventId, ct);
@@ -196,7 +196,7 @@ public sealed class SlapService(AppDbContext db, ScoreboardService scoreboard, E
 
         var total = entries[idx].TotalPoints;
         var following = entries.Skip(idx + 1).FirstOrDefault(e => e.TotalPoints < total);
-        return following is null ? 0 : Math.Max(0, (total - following.TotalPoints) / 2);
+        return following is null ? 0 : Math.Max(0d, (total - following.TotalPoints) / 2d);
     }
 
     /// <summary>The winning team (rank 1) of an activity and its roster member ids, or null.</summary>

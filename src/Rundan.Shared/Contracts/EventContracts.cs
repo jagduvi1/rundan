@@ -166,7 +166,7 @@ public class EventStandingEntryDto
 {
     public string DisplayName { get; set; } = string.Empty;
     public int Rank { get; set; }
-    public int TotalPoints { get; set; }
+    public double TotalPoints { get; set; }
 
     /// <summary>How many of the event's activities this player has scored in.</summary>
     public int ActivitiesPlayed { get; set; }

@@ -6,7 +6,7 @@ public class ScoreboardEntryDto
     public int ParticipantId { get; set; }
     public string DisplayName { get; set; } = string.Empty;
     public int Rank { get; set; }
-    public int TotalPoints { get; set; }
+    public double TotalPoints { get; set; }
 
     /// <summary>For question games: how many answered. For score games: how many entries/rounds.</summary>
     public int Entries { get; set; }

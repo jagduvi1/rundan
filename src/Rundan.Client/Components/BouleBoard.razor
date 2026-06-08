@@ -39,7 +39,7 @@
                     {
                         <button class="btn ghost small" @onclick="() => ToggleStopwatch(key)">@(IsRunning(key) ? "Stop" : "Start")</button>
                     }
-                    <input type="number" min="0" max="100000" style="width:84px" value="@pending" @onchange="e => SetPending(key, e)" />
+                    <input type="number" min="0" max="100000" step="any" style="width:84px" value="@Num(pending)" @onchange="e => SetPending(key, e)" />
                     <span class="muted">@UnitSuffix</span>
                     <button class="btn small success" @onclick="() => RecordSingleAsync(u.Id, key)" disabled="@(_busy || pending <= 0)">Set</button>
                 </div>
@@ -113,7 +113,7 @@
                 <li>
                     <span class="badge">R@(s.Round)</span>
                     <span class="grow">@(s.UserName ?? s.ParticipantName)</span>
-                    <b style="font-variant-numeric:tabular-nums">@(IsPoints ? (s.Points >= 0 ? "+" : "") + s.Points : Format(s.Points))</b>
+                    <b style="font-variant-numeric:tabular-nums">@(IsPoints ? (s.Points >= 0 ? "+" : "") + Num(s.Points) : Format(s.Points))</b>
                     @if (State.IsHost)
                     {
                         <button class="btn ghost small danger" @onclick="() => DeleteAsync(s.Id)" disabled="@_busy">✕</button>
@@ -131,7 +131,7 @@
     [Parameter] public int RefreshKey { get; set; }
 
     private int _round = 1;
-    private readonly Dictionary<string, int> _pending = new();
+    private readonly Dictionary<string, double> _pending = new();
     private List<ScoreEntryDto> _history = new();
     private List<TeamDto> _teams = new();
     private bool _busy;
@@ -149,14 +149,17 @@
         ? _teams.Select(t => (t.ParticipantId, t.Name)).ToList()
         : Participants.Select(p => (p.Id, p.DisplayName)).ToList();
 
-    private int UnitValue(int id) => _history.Where(s => s.ParticipantId == id).Sum(s => s.Points);
+    private double UnitValue(int id) => _history.Where(s => s.ParticipantId == id).Sum(s => s.Points);
     private int UnitCount(int id) => _history.Count(s => s.ParticipantId == id);
 
-    private string Format(int value) => Activity.Measurement switch
+    private static string Num(double v) =>
+        v % 1 == 0 ? ((long)v).ToString() : v.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+
+    private string Format(double value) => Activity.Measurement switch
     {
-        Measurement.TimeSeconds => $"{value / 60}:{value % 60:00}",
-        Measurement.Millimetres => $"{value} mm",
-        _ => value.ToString(),
+        Measurement.TimeSeconds => $"{Num(value)} s",
+        Measurement.Millimetres => $"{Num(value)} mm",
+        _ => Num(value),
     };
 
     private bool IsRunning(string key) => _swStart.ContainsKey(key);
@@ -165,7 +168,7 @@
     {
         if (_swStart.TryGetValue(key, out var start))
         {
-            _pending[key] = Math.Clamp((int)Math.Round((DateTimeOffset.UtcNow - start).TotalSeconds), 0, 100000);
+            _pending[key] = Math.Clamp(Math.Round((DateTimeOffset.UtcNow - start).TotalSeconds), 0d, 100000d);
             _swStart.Remove(key);
         }
         else
@@ -176,9 +179,10 @@
 
     private void SetPending(string key, ChangeEventArgs e)
     {
-        if (int.TryParse(e.Value?.ToString(), out var v))
+        if (double.TryParse(e.Value?.ToString(), System.Globalization.NumberStyles.Any,
+            System.Globalization.CultureInfo.InvariantCulture, out var v))
         {
-            _pending[key] = Math.Clamp(v, 0, 100000);
+            _pending[key] = Math.Clamp(v, 0d, 100000d);
         }
     }
 
@@ -215,7 +219,7 @@
         }
     }
 
-    private RenderFragment StepperFor(string key, int pending) => builder =>
+    private RenderFragment StepperFor(string key, double pending) => builder =>
     {
         builder.OpenElement(0, "div");
         builder.AddAttribute(1, "class", "stepper");
@@ -230,7 +234,7 @@
         builder.OpenElement(7, "span");
         builder.AddAttribute(8, "class", "value");
         builder.AddAttribute(9, "style", "min-width:2ch;font-size:1.3rem");
-        builder.AddContent(10, pending);
+        builder.AddContent(10, Num(pending));
         builder.CloseElement();
 
         builder.OpenElement(11, "button");
@@ -289,7 +293,7 @@
     private void SetRound(int value) => _round = Math.Max(1, value);
 
     private void Adjust(string key, int delta)
-        => _pending[key] = Math.Clamp(_pending.GetValueOrDefault(key, 0) + delta, 0, 99);
+        => _pending[key] = Math.Clamp(_pending.GetValueOrDefault(key, 0) + delta, 0d, 99d);
 
     private async Task RecordAsync(int participantId, int? userId, string key)
     {

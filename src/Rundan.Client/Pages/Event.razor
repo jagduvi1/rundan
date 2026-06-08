@@ -108,7 +108,7 @@ else
                     <div class="podium-spot p@(e.Rank)">
                         <div class="medal">@e.Rank</div>
                         <div class="who">@e.DisplayName</div>
-                        <div class="pts">@e.TotalPoints p</div>
+                        <div class="pts">@Fmt.Num(e.TotalPoints) p</div>
                     </div>
                 }
             </div>
@@ -133,7 +133,7 @@ else
                             <b>@e.DisplayName @if (IsMe(e.DisplayName)) { <span class="you"> · You</span> }</b>
                             <span class="sub">@e.ActivitiesPlayed of @_event.Activities.Count activities</span>
                         </div>
-                        <div class="score-row__score">@e.TotalPoints</div>
+                        <div class="score-row__score">@Fmt.Num(e.TotalPoints)</div>
                     </div>
                 }
             </div>
