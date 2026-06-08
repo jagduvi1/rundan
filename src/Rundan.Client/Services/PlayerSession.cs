@@ -1,3 +1,5 @@
+using Rundan.Shared.Contracts;
+
 namespace Rundan.Client.Services;
 
 /// <summary>A device's saved identity within one activity (persisted to localStorage).</summary>
@@ -7,6 +9,23 @@ public sealed class PlayerSession
     public int ParticipantId { get; set; }
     public string DisplayName { get; set; } = string.Empty;
     public bool IsAdmin { get; set; }
+
+    /// <summary>Session for a per-activity slot (roster claim / free-name join), labelled with a display name.</summary>
+    public static PlayerSession FromSlot(EventJoinSlotDto slot, string displayName) => new()
+    {
+        Token = slot.Token,
+        ParticipantId = slot.ParticipantId,
+        DisplayName = displayName,
+    };
+
+    /// <summary>Session from joining a single activity (carries the admin flag from the join result).</summary>
+    public static PlayerSession FromJoin(JoinResultDto result) => new()
+    {
+        Token = result.Token,
+        ParticipantId = result.Participant.Id,
+        DisplayName = result.Participant.DisplayName,
+        IsAdmin = result.Participant.IsAdmin,
+    };
 }
 
 /// <summary>

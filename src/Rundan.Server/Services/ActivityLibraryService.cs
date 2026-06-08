@@ -15,11 +15,13 @@ public sealed class ActivityLibraryService(AppDbContext db, JoinCodeGenerator co
 {
     public async Task<int> CopyToEventAsync(int sourceId, int eventId, CancellationToken ct = default)
     {
+        // Only public library activities may be copied — never a private activity from
+        // another event (which would leak its questions and answer keys).
         var src = await db.Activities
             .AsNoTracking()
             .Include(a => a.Questions).ThenInclude(q => q.Options)
             .Include(a => a.Courts)
-            .FirstOrDefaultAsync(a => a.Id == sourceId, ct)
+            .FirstOrDefaultAsync(a => a.Id == sourceId && a.IsPublic, ct)
             ?? throw new RuleViolationException("Library activity not found.", StatusCodes.Status404NotFound);
 
         var order = (await db.Activities.Where(a => a.EventId == eventId).MaxAsync(a => (int?)a.Order, ct) ?? 0) + 1;

@@ -215,7 +215,7 @@ else
                     <li>
                         <span class="grow">
                             <b>@a.Order. @a.Title</b>
-                            <span class="muted" style="font-size:.8rem"> · @TypeLabel(a.Type)</span>
+                            <span class="muted" style="font-size:.8rem"> · @Fmt.TypeLabel(a.Type)</span>
                             @if (_teamByActivity.TryGetValue(a.Id, out var team) && !string.IsNullOrEmpty(team))
                             {
                                 <span class="sub" style="display:block;font-size:.8rem;color:var(--sea-600)">Your team: @team</span>
@@ -805,12 +805,7 @@ else
         foreach (var slot in slots)
         {
             _teamByActivity[slot.ActivityId] = slot.TeamName;
-            await State.SaveSessionAsync(slot.ActivityId, new PlayerSession
-            {
-                Token = slot.Token,
-                ParticipantId = slot.ParticipantId,
-                DisplayName = slot.TeamName,
-            });
+            await State.SaveSessionAsync(slot.ActivityId, PlayerSession.FromSlot(slot, slot.TeamName));
         }
     }
 
@@ -866,12 +861,7 @@ else
         UserId = userId,
         Name = res.DisplayName,
         MemberToken = res.MemberToken,
-        Sessions = res.Slots.ToDictionary(s => s.ActivityId, s => new PlayerSession
-        {
-            Token = s.Token,
-            ParticipantId = s.ParticipantId,
-            DisplayName = s.TeamName,
-        }),
+        Sessions = res.Slots.ToDictionary(s => s.ActivityId, s => PlayerSession.FromSlot(s, s.TeamName)),
     };
 
     private async Task StopPlayingAsAsync()
@@ -895,13 +885,7 @@ else
             var result = await Api.JoinEventAsync(_event.JoinCode, name);
             await State.SaveEventNameAsync(Id, name);
             _eventName = name;
-            foreach (var slot in result.Slots)
-            {
-                await State.SaveSessionAsync(slot.ActivityId, new PlayerSession
-                {
-                    Token = slot.Token, ParticipantId = slot.ParticipantId, DisplayName = name,
-                });
-            }
+            await SaveFreeNameSlotsAsync(result, name);
             _standings = await Api.GetEventStandingsAsync(Id);
         }
         catch (ApiException ex)
@@ -920,15 +904,18 @@ else
         try
         {
             var result = await Api.JoinEventAsync(_event.JoinCode, _eventName);
-            foreach (var slot in result.Slots)
-            {
-                await State.SaveSessionAsync(slot.ActivityId, new PlayerSession
-                {
-                    Token = slot.Token, ParticipantId = slot.ParticipantId, DisplayName = _eventName,
-                });
-            }
+            await SaveFreeNameSlotsAsync(result, _eventName);
         }
         catch (ApiException) { }
+    }
+
+    // Persist a per-activity session for each joinable slot under one free-name identity.
+    private async Task SaveFreeNameSlotsAsync(EventJoinResultDto result, string displayName)
+    {
+        foreach (var slot in result.Slots)
+        {
+            await State.SaveSessionAsync(slot.ActivityId, PlayerSession.FromSlot(slot, displayName));
+        }
     }
 
     // ---- Admin actions ----
@@ -1215,12 +1202,4 @@ else
         _ => "Open",
     };
 
-    private static string TypeLabel(ActivityType type) => type switch
-    {
-        ActivityType.Quiz => "Quiz",
-        ActivityType.Tipspromenad => "Tipspromenad",
-        ActivityType.Boule => "Boule",
-        ActivityType.ScoreGame => "Score game",
-        _ => type.ToString(),
-    };
 }

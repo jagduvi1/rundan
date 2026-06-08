@@ -25,8 +25,8 @@ internal static class EventEndpoints
             var ev = new Event
             {
                 Name = req.Name.Trim(),
-                Description = Clean(req.Description),
-                ImageUrl = Clean(req.ImageUrl),
+                Description = TextHelpers.Clean(req.Description),
+                ImageUrl = TextHelpers.Clean(req.ImageUrl),
                 TeamSize = Math.Clamp(req.TeamSize, 1, 20),
                 JoinCode = await codes.NextAsync(db, ct),
                 CreatedUtc = clock.GetUtcNow(),
@@ -37,30 +37,11 @@ internal static class EventEndpoints
         }).AddEndpointFilter<AdminEndpointFilter>();
 
         app.MapGet("/api/events", async (AppDbContext db, CancellationToken ct) =>
-        {
-            // SQLite can't ORDER BY a DateTimeOffset; Id is monotonic with creation.
-            var events = await db.Events.AsNoTracking().OrderByDescending(e => e.Id).ToListAsync(ct);
-            var result = new List<EventDto>();
-            foreach (var ev in events)
-            {
-                result.Add(await LoadEventDtoAsync(db, ev, ct));
-            }
-
-            return Results.Ok(result);
-        }).AddEndpointFilter<AdminEndpointFilter>();
+            Results.Ok(await ListAllEventDtosAsync(db, ct))).AddEndpointFilter<AdminEndpointFilter>();
 
         // Player-facing: the events to show on the welcome page (access-gated, no admin code).
         app.MapGet("/api/events/active", async (AppDbContext db, CancellationToken ct) =>
-        {
-            var events = await db.Events.AsNoTracking().OrderByDescending(e => e.Id).ToListAsync(ct);
-            var result = new List<EventDto>();
-            foreach (var ev in events)
-            {
-                result.Add(await LoadEventDtoAsync(db, ev, ct));
-            }
-
-            return Results.Ok(result);
-        });
+            Results.Ok(await ListAllEventDtosAsync(db, ct)));
 
         // Viewers (spectators): register / heartbeat / leave — access-gated, no competing identity.
         app.MapPost("/api/events/{id:int}/viewers", async (
@@ -157,8 +138,8 @@ internal static class EventEndpoints
             }
 
             ev.Name = req.Name.Trim();
-            ev.Description = Clean(req.Description);
-            ev.ImageUrl = Clean(req.ImageUrl);
+            ev.Description = TextHelpers.Clean(req.Description);
+            ev.ImageUrl = TextHelpers.Clean(req.ImageUrl);
             ev.TeamSize = Math.Clamp(req.TeamSize, 1, 20);
             ev.Scoring = req.Scoring;
             ev.SlapMode = req.SlapMode;
@@ -451,6 +432,19 @@ internal static class EventEndpoints
         });
     }
 
+    // Newest-first list of every event as DTOs (SQLite can't ORDER BY DateTimeOffset; Id ≈ creation order).
+    private static async Task<List<EventDto>> ListAllEventDtosAsync(AppDbContext db, CancellationToken ct)
+    {
+        var events = await db.Events.AsNoTracking().OrderByDescending(e => e.Id).ToListAsync(ct);
+        var result = new List<EventDto>();
+        foreach (var ev in events)
+        {
+            result.Add(await LoadEventDtoAsync(db, ev, ct));
+        }
+
+        return result;
+    }
+
     private static async Task<EventDto> LoadEventDtoAsync(AppDbContext db, Event ev, CancellationToken ct)
     {
         var rows = await db.Activities.AsNoTracking()
@@ -546,7 +540,7 @@ internal static class EventEndpoints
     // Maps the caller's event-member token to their roster user id (proves who they are).
     private static async Task<int?> ResolveMemberUserIdAsync(HttpContext http, AppDbContext db, int eventId, CancellationToken ct)
     {
-        if (!Guid.TryParse(http.Request.Headers["X-Rundan-Member"].FirstOrDefault(), out var token))
+        if (!Guid.TryParse(http.Request.Headers[EventAuthorization.MemberHeader].FirstOrDefault(), out var token))
         {
             return null;
         }
@@ -556,6 +550,4 @@ internal static class EventEndpoints
             .Select(m => (int?)m.UserId)
             .FirstOrDefaultAsync(ct);
     }
-
-    private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

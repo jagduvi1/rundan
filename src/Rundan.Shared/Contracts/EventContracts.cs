@@ -164,6 +164,9 @@ public class ReorderActivitiesRequest
 /// <summary>One row in the combined event standings (summed across all activities).</summary>
 public class EventStandingEntryDto
 {
+    /// <summary>Roster user id this row belongs to (0 for free-name events, which don't use it).</summary>
+    public int UserId { get; set; }
+
     public string DisplayName { get; set; } = string.Empty;
     public int Rank { get; set; }
     public double TotalPoints { get; set; }

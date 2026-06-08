@@ -514,8 +514,6 @@ else
         return _distances.TryGetValue(q.Id, out var d) ? $"{(int)Math.Round(d)} m" : "—";
     }
 
-    private static string Truncate(string text) => text.Length <= 40 ? text : text[..38] + "…";
-
     public async ValueTask DisposeAsync()
     {
         _disposed = true; // short-circuit any queued geolocation callback before teardown

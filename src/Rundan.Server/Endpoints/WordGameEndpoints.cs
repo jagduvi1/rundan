@@ -14,8 +14,7 @@ internal static class WordGameEndpoints
         app.MapGet("/api/activities/{id:int}/wordgame", async (
             int id, AppDbContext db, WordGameService svc, HttpContext http, CancellationToken ct) =>
         {
-            var participant = await http.ResolveAsync(db, ct);
-            EnsureSameActivity(participant.ActivityId, id);
+            var participant = await http.ResolveForActivityAsync(db, id, ct);
             return Results.Ok(await svc.GetAsync(participant, ct));
         });
 
@@ -23,8 +22,7 @@ internal static class WordGameEndpoints
             int id, SubmitWordRequest req, AppDbContext db, WordGameService svc,
             ScoreboardNotifier notifier, HttpContext http, CancellationToken ct) =>
         {
-            var participant = await http.ResolveAsync(db, ct);
-            EnsureSameActivity(participant.ActivityId, id);
+            var participant = await http.ResolveForActivityAsync(db, id, ct);
 
             var activity = await db.Activities.FirstOrDefaultAsync(a => a.Id == id, ct)
                 ?? throw new RuleViolationException("Activity not found.", StatusCodes.Status404NotFound);
@@ -37,14 +35,5 @@ internal static class WordGameEndpoints
             await notifier.PushScoreboardAsync(id, ct);
             return Results.Ok(dto);
         });
-    }
-
-    private static void EnsureSameActivity(int participantActivityId, int routeActivityId)
-    {
-        if (participantActivityId != routeActivityId)
-        {
-            throw new RuleViolationException(
-                "Your session belongs to a different activity.", StatusCodes.Status403Forbidden);
-        }
     }
 }

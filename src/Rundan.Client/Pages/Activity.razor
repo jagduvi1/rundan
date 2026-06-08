@@ -30,7 +30,7 @@ else
             <StatusBadge Status="_activity.Status" />
         </div>
         <div class="row muted" style="font-size:.85rem">
-            <span>@TypeLabel(_activity.Type)</span>
+            <span>@Fmt.TypeLabel(_activity.Type)</span>
             <span>·</span>
             <span>code @_activity.JoinCode</span>
             @if (_reconnecting)
@@ -310,13 +310,7 @@ else
 
     private async Task OnJoinedAsync(JoinResultDto result)
     {
-        _session = new PlayerSession
-        {
-            Token = result.Token,
-            ParticipantId = result.Participant.Id,
-            DisplayName = result.Participant.DisplayName,
-            IsAdmin = result.Participant.IsAdmin,
-        };
+        _session = PlayerSession.FromJoin(result);
         await State.SaveSessionAsync(Id, _session);
 
         _activity = result.Activity;
@@ -340,13 +334,4 @@ else
 
     public async ValueTask DisposeAsync() => await TeardownConnectionAsync();
 
-    private static string TypeLabel(ActivityType type) => type switch
-    {
-        ActivityType.Quiz => "Quiz",
-        ActivityType.Tipspromenad => "Tipspromenad",
-        ActivityType.Boule => "Boule",
-        ActivityType.ScoreGame => "Score game",
-        ActivityType.WordGame => "Word game",
-        _ => type.ToString(),
-    };
 }

@@ -172,10 +172,13 @@ public sealed class GameService(AppDbContext db, TimeProvider clock)
             throw new RuleViolationException("That value is out of range.");
         }
 
-        // Time / length are single measurements per team — a new reading replaces the old.
+        // Time / length are single measurements — a new reading replaces the old. In per-player
+        // mode each player keeps their own reading, so only replace this player's (not the team's).
         if (activity.Measurement is Measurement.TimeSeconds or Measurement.Millimetres)
         {
-            var previous = db.ScoreEntries.Where(s => s.ActivityId == activity.Id && s.ParticipantId == target.Id);
+            var previous = db.ScoreEntries.Where(s =>
+                s.ActivityId == activity.Id && s.ParticipantId == target.Id
+                && (activity.ScoreEntryMode != ScoreEntryMode.PerPlayer || s.UserId == scoredByUserId));
             db.ScoreEntries.RemoveRange(previous);
         }
 

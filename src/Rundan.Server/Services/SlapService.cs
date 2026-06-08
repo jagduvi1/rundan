@@ -180,15 +180,15 @@ public sealed class SlapService(AppDbContext db, ScoreboardService scoreboard, E
     /// <summary>Half the slapped player's lead over the next-lower player in the current standings.</summary>
     private async Task<double> PenaltyForAsync(int eventId, int slappedUserId, CancellationToken ct)
     {
-        var name = (await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == slappedUserId, ct))?.Name;
         var board = await standings.BuildAsync(eventId, ct);
-        if (name is null || board is null)
+        if (board is null)
         {
             return 0;
         }
 
+        // Match by user id, not display name — two roster players can share a name.
         var entries = board.Entries;
-        var idx = entries.FindIndex(e => e.DisplayName == name);
+        var idx = entries.FindIndex(e => e.UserId == slappedUserId);
         if (idx < 0)
         {
             return 0;
@@ -199,21 +199,26 @@ public sealed class SlapService(AppDbContext db, ScoreboardService scoreboard, E
         return following is null ? 0 : Math.Max(0d, (total - following.TotalPoints) / 2d);
     }
 
-    /// <summary>The winning team (rank 1) of an activity and its roster member ids, or null.</summary>
+    /// <summary>The winning team(s) (rank 1) of an activity and their roster member ids, or null.</summary>
     private async Task<(string Name, List<int> MemberIds)?> WinnerAsync(int activityId, CancellationToken ct)
     {
         var board = await scoreboard.BuildAsync(activityId, ct);
-        var top = board?.Entries.FirstOrDefault(e => e.Rank == 1);
-        if (top is null)
+        var top = board?.Entries.Where(e => e.Rank == 1).ToList() ?? new();
+        if (top.Count == 0)
         {
             return null;
         }
 
+        // On a first-place tie, every member of every tied team is eligible to slap
+        // (the first to act still takes the single slap).
+        var topIds = top.Select(e => e.ParticipantId).ToList();
         var memberIds = await db.ParticipantMembers.AsNoTracking()
-            .Where(pm => pm.ParticipantId == top.ParticipantId)
+            .Where(pm => topIds.Contains(pm.ParticipantId))
             .Select(pm => pm.UserId)
+            .Distinct()
             .ToListAsync(ct);
 
-        return memberIds.Count == 0 ? null : (top.DisplayName, memberIds);
+        var name = string.Join(" & ", top.Select(e => e.DisplayName));
+        return memberIds.Count == 0 ? null : (name, memberIds);
     }
 }

@@ -68,6 +68,9 @@ public sealed class EventStandingsService(AppDbContext db, TimeProvider clock)
                 return;
             }
 
+            // "Played" means the team actually has answer/score rows for the activity — not
+            // merely that the net points are non-zero (all-wrong or canceling entries net to 0).
+            var participated = pointsByParticipant.ContainsKey(participantId);
             foreach (var uid in users)
             {
                 if (!totals.ContainsKey(uid))
@@ -76,7 +79,7 @@ public sealed class EventStandingsService(AppDbContext db, TimeProvider clock)
                 }
 
                 totals[uid] += points;
-                if (points != 0)
+                if (participated)
                 {
                     played[uid].Add(activityId);
                 }
@@ -113,6 +116,7 @@ public sealed class EventStandingsService(AppDbContext db, TimeProvider clock)
 
         return roster.Select(u => new EventStandingEntryDto
         {
+            UserId = u.UserId,
             DisplayName = u.Name,
             TotalPoints = totals[u.UserId],
             ActivitiesPlayed = played[u.UserId].Count,
@@ -146,7 +150,7 @@ public sealed class EventStandingsService(AppDbContext db, TimeProvider clock)
             }
 
             totals[name] = totals.GetValueOrDefault(name) + points;
-            if (points != 0)
+            if (pointsByParticipant.ContainsKey(participantId)) // actually has rows for this activity
             {
                 played[name].Add(activityId);
             }
@@ -223,28 +227,33 @@ public sealed class EventStandingsService(AppDbContext db, TimeProvider clock)
 
             var n = group.Count();
             var (mode, target) = modeByActivity.GetValueOrDefault(group.Key, (ScoringMode.HigherWins, 0));
-            double Key(double score) => mode switch
-            {
-                ScoringMode.LowerWins => score,
-                ScoringMode.ClosestToTarget => Math.Abs(score - target),
-                _ => -score,
-            };
+            var pushUnscoredLast = ScoringHelper.PushesUnscoredLast(mode);
+
             var ordered = group
-                .Select(p => new { p.ParticipantId, Score = pointsByParticipant.GetValueOrDefault(p.ParticipantId) })
-                .OrderBy(x => Key(x.Score))
+                .Select(p => new
+                {
+                    p.ParticipantId,
+                    Score = pointsByParticipant.GetValueOrDefault(p.ParticipantId),
+                    // A team that recorded nothing must not win a lowest/closest game with its seeded 0.
+                    Unscored = pushUnscoredLast && !pointsByParticipant.ContainsKey(p.ParticipantId),
+                })
+                .OrderBy(x => x.Unscored)
+                .ThenBy(x => ScoringHelper.RankKey(mode, x.Score, target))
                 .ToList();
 
             var position = 0;
             double? previousKey = null;
+            bool? previousUnscored = null;
             var seen = 0;
             foreach (var entry in ordered)
             {
                 seen++;
-                var key = Key(entry.Score);
-                if (previousKey is null || key != previousKey)
+                var key = ScoringHelper.RankKey(mode, entry.Score, target);
+                if (previousKey is null || key != previousKey || entry.Unscored != previousUnscored)
                 {
                     position = seen; // competition ranking: ties share the higher position
                     previousKey = key;
+                    previousUnscored = entry.Unscored;
                 }
 
                 credit(entry.ParticipantId, n - position + 1, group.Key);
