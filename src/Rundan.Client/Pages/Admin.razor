@@ -3,7 +3,7 @@
 @inject AppState State
 @inject NavigationManager Nav
 
-<PageTitle>Events · Host · Rundan</PageTitle>
+<PageTitle>Host dashboard · Rundan</PageTitle>
 
 @if (!_ready)
 {
@@ -22,45 +22,122 @@ else
         <div class="alert error">@_error</div>
     }
 
+    @* ---- Widgets: at-a-glance overview ---- *@
+    <div class="dash-stats" style="margin-bottom:1rem">
+        <div class="stat">
+            <div class="stat__num">@_events.Count</div>
+            <div class="stat__label">Event@(_events.Count == 1 ? "" : "s")</div>
+            @if (LiveCount > 0)
+            {
+                <div class="stat__sub">@LiveCount live now</div>
+            }
+        </div>
+        <div class="stat">
+            <div class="stat__num">@TotalActivities</div>
+            <div class="stat__label">Activities</div>
+            <div class="stat__sub">@_standalone.Count standalone</div>
+        </div>
+        <a class="stat" href="admin/users">
+            <div class="stat__num">@_peopleCount</div>
+            <div class="stat__label">People in roster</div>
+            <div class="stat__sub">Manage →</div>
+        </a>
+        <div class="stat">
+            <div class="stat__num">@_libraryAvailable</div>
+            <div class="stat__label">Library questions</div>
+            @if (_libraryTopics > 0)
+            {
+                <div class="stat__sub">@_libraryTopics topics</div>
+            }
+        </div>
+    </div>
+
+    @if (PendingSlaps > 0)
+    {
+        <div class="alert" style="background:var(--coral-50);color:var(--coral-700);border:1px solid var(--coral-100)">
+            @PendingSlaps slap@(PendingSlaps == 1 ? "" : "s") waiting to be resolved before the next activity can start.
+        </div>
+    }
+
+    @* ---- Events: each card shows the host-editable settings at a glance ---- *@
     <div class="card stack">
-        <h1>New event</h1>
-        <p class="muted">An event is a series of activities (tipspromenad, quiz, boule…) played in order.</p>
+        <div class="row">
+            <h2 class="grow">Events</h2>
+            <button class="btn ghost small" @onclick="LoadAsync" disabled="@_busy">Refresh</button>
+        </div>
+
+        @if (_events.Count == 0)
+        {
+            <p class="muted">No events yet — create one below.</p>
+        }
+        else
+        {
+            @foreach (var ev in _events)
+            {
+                <div style="border:1px solid var(--line);border-radius:var(--radius-md);padding:.75rem;display:flex;flex-direction:column;gap:.5rem">
+                    <div class="row">
+                        <span class="grow"><b>@ev.Name</b> <span class="muted" style="font-size:.8rem">· code @ev.JoinCode</span></span>
+                        @if (ev.PendingSlap is not null)
+                        {
+                            <span class="badge admin">slap pending</span>
+                        }
+                        @if (ev.IsComplete)
+                        {
+                            <span class="badge finished">complete</span>
+                        }
+                    </div>
+
+                    <div class="dash-chips">
+                        <span class="chip">@ScoringLabel(ev.Scoring)</span>
+                        <span class="chip @(ev.SlapMode == SlapMode.Off ? "" : "warn")">@SlapLabel(ev.SlapMode)</span>
+                        <span class="chip">Teams of @ev.TeamSize</span>
+                        <span class="chip">@ev.Members.Count player@(ev.Members.Count == 1 ? "" : "s")</span>
+                        @if (ev.Viewers.Count > 0)
+                        {
+                            <span class="chip">@ev.Viewers.Count watching</span>
+                        }
+                        @if (ev.EstimatedMeters is { } m && m > 0)
+                        {
+                            <span class="chip">@(m >= 1000 ? $"{m / 1000.0:0.#} km" : $"{m} m") route</span>
+                        }
+                    </div>
+
+                    <div class="muted" style="font-size:.82rem">@StatusSummary(ev)</div>
+
+                    <a class="btn small block" href="@($"e/{ev.Id}")">Open &amp; edit</a>
+                </div>
+            }
+        }
+
+        <h3 style="margin-top:.4rem">New event</h3>
+        <p class="muted" style="font-size:.85rem">A series of activities (tipspromenad, quiz, boule…) played in order.</p>
         <input @bind="_eventName" placeholder="e.g. Midsommarfesten" maxlength="200" />
         <button class="btn block success" @onclick="CreateEventAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_eventName))">
             Create event
         </button>
     </div>
 
-    <div class="card">
-        <div class="row">
-            <h2 class="grow">Events</h2>
-            <button class="btn ghost small" @onclick="LoadAsync" disabled="@_busy">Refresh</button>
-        </div>
-        @if (_events.Count == 0)
-        {
-            <p class="muted">No events yet.</p>
-        }
-        else
+    @* ---- Standalone activities (library sources / one-offs) ---- *@
+    <div class="card stack">
+        <h2>Standalone activities</h2>
+        <p class="muted" style="font-size:.85rem">One-off games, not part of an event. Mark one <b>public</b> (on its manage page) to reuse it as a library activity.</p>
+
+        @if (_standalone.Count > 0)
         {
             <ul class="list">
-                @foreach (var ev in _events)
+                @foreach (var a in _standalone)
                 {
                     <li>
-                        <a class="activity-link grow" href="@($"e/{ev.Id}")">
-                            <b>@ev.Name</b>
-                            <div class="muted" style="font-size:.8rem">
-                                code @ev.JoinCode · @ev.Members.Count player(s) · @ev.Activities.Count activit@(ev.Activities.Count == 1 ? "y" : "ies")
-                            </div>
+                        <a class="activity-link grow" href="@($"manage/{a.Id}")">
+                            <b>@a.Title</b>
+                            <div class="muted" style="font-size:.8rem">@Fmt.TypeLabel(a.Type) · code @a.JoinCode · @a.ParticipantCount player(s)</div>
                         </a>
+                        <StatusBadge Status="a.Status" />
                     </li>
                 }
             </ul>
         }
-    </div>
 
-    <div class="card stack">
-        <h2>Standalone activity</h2>
-        <p class="muted">A one-off game, not part of an event.</p>
         <div class="field">
             <label>Title</label>
             <input @bind="_title" placeholder="e.g. Lunchquiz" maxlength="200" />
@@ -78,22 +155,6 @@ else
         <button class="btn block secondary" @onclick="CreateActivityAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_title))">
             Create standalone activity
         </button>
-
-        @if (_standalone.Count > 0)
-        {
-            <ul class="list">
-                @foreach (var a in _standalone)
-                {
-                    <li>
-                        <a class="activity-link grow" href="@($"manage/{a.Id}")">
-                            <b>@a.Title</b>
-                            <div class="muted" style="font-size:.8rem">code @a.JoinCode · @a.ParticipantCount player(s)</div>
-                        </a>
-                        <StatusBadge Status="a.Status" />
-                    </li>
-                }
-            </ul>
-        }
     </div>
 }
 
@@ -109,6 +170,13 @@ else
 
     private List<EventDto> _events = new();
     private List<ActivityDto> _standalone = new();
+    private int _peopleCount;
+    private int _libraryAvailable;
+    private int _libraryTopics;
+
+    private int TotalActivities => _events.Sum(e => e.Activities.Count) + _standalone.Count;
+    private int LiveCount => _events.SelectMany(e => e.Activities).Count(a => a.Status == ActivityStatus.Live);
+    private int PendingSlaps => _events.Count(e => e.PendingSlap is not null);
 
     protected override async Task OnInitializedAsync()
     {
@@ -148,6 +216,15 @@ else
             var activities = await Api.ListActivitiesAsync();
             _standalone = activities.Where(a => a.EventId is null).ToList();
             _needAdmin = false;
+
+            // Widget data (best-effort — never block the dashboard on these).
+            try { _peopleCount = (await Api.ListUsersAsync()).Count; } catch (ApiException) { }
+            try
+            {
+                _libraryAvailable = await Api.GetLibraryAvailableAsync(new());
+                _libraryTopics = (await Api.GetLibraryTagsAsync()).Count(t => t.StartsWith("topic:", StringComparison.Ordinal));
+            }
+            catch (ApiException) { }
         }
         catch (ApiException ex) when (ex.IsForbidden || ex.IsUnauthorized)
         {
@@ -199,5 +276,40 @@ else
         {
             _busy = false;
         }
+    }
+
+    private static string ScoringLabel(EventScoring s) => s == EventScoring.Placement ? "Placement scoring" : "Cumulative scoring";
+
+    private static string SlapLabel(SlapMode m) => m switch
+    {
+        SlapMode.Off => "Slaps off",
+        SlapMode.Vanish => "Slaps: vanish",
+        SlapMode.SendToPlayer => "Slaps: send",
+        SlapMode.Random => "Slaps: random",
+        _ => "Slaps",
+    };
+
+    private static string StatusSummary(EventDto ev)
+    {
+        if (ev.Activities.Count == 0)
+        {
+            return "No activities yet.";
+        }
+
+        var parts = new List<string>();
+        void Add(ActivityStatus s, string label)
+        {
+            var n = ev.Activities.Count(a => a.Status == s);
+            if (n > 0)
+            {
+                parts.Add($"{n} {label}");
+            }
+        }
+
+        Add(ActivityStatus.Live, "live");
+        Add(ActivityStatus.Open, "open");
+        Add(ActivityStatus.Draft, "draft");
+        Add(ActivityStatus.Finished, "done");
+        return string.Join(" · ", parts);
     }
 }

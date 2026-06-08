@@ -127,6 +127,46 @@ button { font-family: inherit; }
 }
 .app-header .spacer { flex: 1; }
 
+/* Host dashboard: at-a-glance stat widgets and event detail chips. */
+.dash-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: .6rem;
+}
+.stat {
+    display: block;
+    text-align: left;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    padding: .7rem .85rem;
+    text-decoration: none;
+    color: inherit;
+    box-shadow: var(--shadow-sm, 0 1px 2px rgba(0,0,0,.05));
+}
+a.stat:hover { border-color: var(--sea-300); }
+.stat__num {
+    font-family: var(--font-display);
+    font-size: 1.7rem;
+    font-weight: 800;
+    line-height: 1;
+    color: var(--sea-700);
+    font-variant-numeric: tabular-nums lining-nums;
+}
+.stat__label { font-size: .78rem; color: var(--muted); margin-top: .25rem; }
+.stat__sub { font-size: .72rem; color: var(--sea-600); margin-top: .15rem; }
+.dash-chips { display: flex; flex-wrap: wrap; gap: .35rem; }
+.chip {
+    font-size: .75rem;
+    background: var(--sea-50);
+    color: var(--sea-700);
+    border: 1px solid var(--sea-100);
+    border-radius: var(--radius-pill);
+    padding: .12rem .55rem;
+    white-space: nowrap;
+}
+.chip.warn { background: var(--coral-50); color: var(--coral-700); border-color: var(--coral-100); }
+
 /* Banner shown while a host is "playing for" another player (their phone died). */
 .proxy-bar {
     position: sticky;
