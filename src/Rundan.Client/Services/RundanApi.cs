@@ -74,7 +74,7 @@ public sealed class RundanApi(HttpClient http, AppState state)
 
         if (state.IsHost)
         {
-            req.Headers.TryAddWithoutValidation("X-Rundan-Admin", state.AdminCode);
+            req.Headers.TryAddWithoutValidation("X-Rundan-Admin", state.AdminCode ?? string.Empty);
         }
 
         if (state.ActiveMemberToken is { } memberToken)
@@ -345,7 +345,8 @@ public sealed class RundanApi(HttpClient http, AppState state)
 
         if (admin && state.IsHost)
         {
-            req.Headers.TryAddWithoutValidation("X-Rundan-Admin", state.AdminCode);
+            // In open-admin mode there's no stored code; the server accepts an empty header.
+            req.Headers.TryAddWithoutValidation("X-Rundan-Admin", state.AdminCode ?? string.Empty);
         }
 
         if (participantToken is { } token)

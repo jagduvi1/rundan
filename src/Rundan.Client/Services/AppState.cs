@@ -26,11 +26,20 @@ public sealed class AppState(IJSRuntime js)
 
     public bool HasAdminCode => !string.IsNullOrEmpty(AdminCode);
 
+    /// <summary>
+    /// True when the server runs "open admin" (no admin code configured — dev/trial), so any
+    /// device may administer. In production an admin code is set, and only entering it grants host.
+    /// </summary>
+    public bool AdminOpen => Bootstrap is { RequiresAdminCode: false };
+
     /// <summary>When true, a host is previewing the app as an ordinary player (host UI hidden).</summary>
     public bool PreviewAsPlayer { get; private set; }
 
-    /// <summary>True only when the device is the host AND not currently previewing as a player.</summary>
-    public bool IsHost => HasAdminCode && !PreviewAsPlayer;
+    /// <summary>
+    /// True when this device may use host controls — it holds the admin code, or admin is open —
+    /// and isn't currently previewing as a player.
+    /// </summary>
+    public bool IsHost => (HasAdminCode || AdminOpen) && !PreviewAsPlayer;
 
     /// <summary>The roster player a host is currently "playing as" (their phone died), or null.</summary>
     public ProxyIdentity? Proxy { get; private set; }
