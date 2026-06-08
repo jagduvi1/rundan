@@ -3,10 +3,11 @@ using Rundan.Shared.Realtime;
 
 namespace Rundan.Server.Hubs;
 
-/// <summary>Helpers for the per-activity SignalR group naming.</summary>
+/// <summary>Helpers for the SignalR group naming.</summary>
 public static class ScoreboardGroups
 {
     public static string For(int activityId) => $"activity-{activityId}";
+    public static string ForEvent(int eventId) => $"event-{eventId}";
 }
 
 /// <summary>
@@ -24,4 +25,12 @@ public sealed class ScoreboardHub : Hub<IScoreboardClient>
     /// <summary>Stop receiving updates for one activity.</summary>
     public Task LeaveActivity(int activityId)
         => Groups.RemoveFromGroupAsync(Context.ConnectionId, ScoreboardGroups.For(activityId));
+
+    /// <summary>Subscribe to event-level updates (e.g. who is watching).</summary>
+    public Task JoinEvent(int eventId)
+        => Groups.AddToGroupAsync(Context.ConnectionId, ScoreboardGroups.ForEvent(eventId));
+
+    /// <summary>Stop receiving event-level updates.</summary>
+    public Task LeaveEvent(int eventId)
+        => Groups.RemoveFromGroupAsync(Context.ConnectionId, ScoreboardGroups.ForEvent(eventId));
 }

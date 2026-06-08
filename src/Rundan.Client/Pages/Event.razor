@@ -571,13 +571,27 @@ else
         _conn = new ScoreboardConnection(Nav, State);
         _conn.ScoreboardUpdated += OnRealtimeScore;
         _conn.StatusChanged += OnRealtimeStatus;
+        _conn.ViewersChanged += OnRealtimeViewers;
         _conn.ConnectionStateChanged += OnConnectionStateChanged;
-        try { await _conn.StartAsync(_event.Activities.Select(a => a.Id)); }
+        try
+        {
+            await _conn.StartAsync(_event.Activities.Select(a => a.Id));
+            await _conn.JoinEventAsync(Id);
+        }
         catch { /* live updates unavailable */ }
     }
 
     private void OnRealtimeScore(ScoreboardDto _) => RefreshSoon();
     private void OnRealtimeStatus(ActivityStatusChangedDto _) => RefreshSoon();
+
+    private void OnRealtimeViewers(EventViewersDto v) => _ = InvokeAsync(() =>
+    {
+        if (_event is not null && v.EventId == Id)
+        {
+            _event.Viewers = v.Viewers;
+            StateHasChanged();
+        }
+    });
     private void RefreshSoon() => _ = InvokeAsync(RefreshAsync);
 
     private async Task RefreshAsync()
@@ -933,6 +947,7 @@ else
         {
             _conn.ScoreboardUpdated -= OnRealtimeScore;
             _conn.StatusChanged -= OnRealtimeStatus;
+            _conn.ViewersChanged -= OnRealtimeViewers;
             _conn.ConnectionStateChanged -= OnConnectionStateChanged;
             await _conn.DisposeAsync();
             _conn = null;

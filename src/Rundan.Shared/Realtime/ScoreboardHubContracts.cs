@@ -17,6 +17,7 @@ public static class ScoreboardMessages
     public const string ScoreboardUpdated = nameof(IScoreboardClient.ScoreboardUpdated);
     public const string ParticipantJoined = nameof(IScoreboardClient.ParticipantJoined);
     public const string ActivityStatusChanged = nameof(IScoreboardClient.ActivityStatusChanged);
+    public const string ViewersChanged = nameof(IScoreboardClient.ViewersChanged);
 }
 
 /// <summary>Client → server method names (hub invocations).</summary>
@@ -24,6 +25,8 @@ public static class ScoreboardHubMethods
 {
     public const string JoinActivity = "JoinActivity";
     public const string LeaveActivity = "LeaveActivity";
+    public const string JoinEvent = "JoinEvent";
+    public const string LeaveEvent = "LeaveEvent";
 }
 
 /// <summary>
@@ -40,4 +43,7 @@ public interface IScoreboardClient
 
     /// <summary>The activity moved between lifecycle states (e.g. started or finished).</summary>
     Task ActivityStatusChanged(ActivityStatusChangedDto status);
+
+    /// <summary>The set of people watching an event changed.</summary>
+    Task ViewersChanged(EventViewersDto viewers);
 }
