@@ -335,7 +335,7 @@ internal static class EventEndpoints
                 ActivityId = id,
                 ParticipantId = t.Id,
                 Name = t.DisplayName,
-                MemberNames = t.Members.Select(m => m.User!.Name).ToList(),
+                Members = t.Members.Select(m => new UserDto { Id = m.UserId, Name = m.User!.Name }).ToList(),
             }).ToList();
             return Results.Ok(dto);
         });

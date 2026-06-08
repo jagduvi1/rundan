@@ -129,6 +129,10 @@ internal static class ActivityEndpoints
             activity.Title = req.Title.Trim();
             activity.Description = string.IsNullOrWhiteSpace(req.Description) ? null : req.Description.Trim();
             activity.ImageUrl = string.IsNullOrWhiteSpace(req.ImageUrl) ? null : req.ImageUrl.Trim();
+            activity.ScoreEntryMode = req.ScoreEntryMode;
+            activity.Latitude = req.Latitude;
+            activity.Longitude = req.Longitude;
+            activity.RadiusMeters = req.RadiusMeters;
             await db.SaveChangesAsync(ct);
             return Results.Ok(await LoadDtoAsync(db, id, ct));
         }).AddEndpointFilter<ActivityManagerFilter>();

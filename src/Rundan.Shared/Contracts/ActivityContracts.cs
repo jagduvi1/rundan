@@ -17,6 +17,16 @@ public class ActivityDto
     public string? ImageUrl { get; set; }
     public ActivityStatus Status { get; set; }
 
+    /// <summary>Score-game point entry mode (team total vs per player).</summary>
+    public ScoreEntryMode ScoreEntryMode { get; set; }
+
+    /// <summary>Optional GPS geofence for the activity.</summary>
+    public double? Latitude { get; set; }
+    public double? Longitude { get; set; }
+    public int? RadiusMeters { get; set; }
+
+    public bool HasLocation => Latitude.HasValue && Longitude.HasValue;
+
     /// <summary>Short human-friendly code people type in to join (e.g. "FOX-417").</summary>
     public string JoinCode { get; set; } = string.Empty;
 
@@ -50,12 +60,16 @@ public class CreateActivityRequest
     public int? EventId { get; set; }
 }
 
-/// <summary>Admin request to update an activity's details (title / rules / picture).</summary>
+/// <summary>Admin request to update an activity's details (title / rules / picture / scoring / geofence).</summary>
 public class UpdateActivityRequest
 {
     public string Title { get; set; } = string.Empty;
     public string? Description { get; set; }
     public string? ImageUrl { get; set; }
+    public ScoreEntryMode ScoreEntryMode { get; set; } = ScoreEntryMode.Team;
+    public double? Latitude { get; set; }
+    public double? Longitude { get; set; }
+    public int? RadiusMeters { get; set; }
 }
 
 /// <summary>Admin request to change activity status (open / start / finish / reset).</summary>

@@ -1,0 +1,132 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<div class="stack">
+    <div id="@_mapId" class="map" style="height:38vh;min-height:240px"></div>
+    <div class="row wrap">
+        <button class="btn ghost small" @onclick="UseMyLocationAsync" disabled="@_busy">
+            @(_busy ? "Locating…" : "Use my location")
+        </button>
+        <span class="muted grow" style="font-size:.85rem">@StatusText</span>
+        @if (Lat.HasValue)
+        {
+            <button class="btn ghost small" @onclick="ClearAsync">Clear</button>
+        }
+    </div>
+    <div class="field">
+        <label>Radius (metres)</label>
+        <input type="number" min="5" max="500" value="@Radius" @onchange="OnRadiusChangedAsync" style="width:120px" />
+    </div>
+    @if (_error is not null)
+    {
+        <div class="alert error">@_error</div>
+    }
+</div>
+
+@code {
+    [Parameter] public double? Lat { get; set; }
+    [Parameter] public double? Lng { get; set; }
+    [Parameter] public int Radius { get; set; } = 25;
+    [Parameter] public EventCallback<(double? Lat, double? Lng, int Radius)> Changed { get; set; }
+
+    private readonly string _mapId = "picker-" + Guid.NewGuid().ToString("N");
+    private LeafletInterop? _map;
+    private GeolocationInterop? _geo;
+    private DotNetObjectReference<LocationPicker>? _selfRef;
+    private bool _needInit = true;
+    private bool _busy;
+    private string? _error;
+
+    private string StatusText => Lat.HasValue
+        ? $"Pin set ({Lat:0.0000}, {Lng:0.0000}). Tap the map or drag the pin to move it."
+        : "Tap the map to drop a pin (or use your location).";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_needInit)
+        {
+            _needInit = false;
+            _map = new LeafletInterop(JS);
+            _geo = new GeolocationInterop(JS);
+            _selfRef = DotNetObjectReference.Create(this);
+            await _map.InitPickerAsync(_mapId, Lat, Lng, Radius, _selfRef);
+        }
+    }
+
+    [JSInvokable]
+    public async Task OnPicked(double lat, double lng)
+    {
+        Lat = Math.Round(lat, 6);
+        Lng = Math.Round(lng, 6);
+        await Changed.InvokeAsync((Lat, Lng, Radius));
+        StateHasChanged();
+    }
+
+    private async Task OnRadiusChangedAsync(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var r))
+        {
+            Radius = Math.Clamp(r, 5, 500);
+            if (_map is not null)
+            {
+                await _map.PickerSetRadiusAsync(Radius);
+            }
+
+            await Changed.InvokeAsync((Lat, Lng, Radius));
+        }
+    }
+
+    private async Task UseMyLocationAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            _geo ??= new GeolocationInterop(JS);
+            var pos = await _geo.GetCurrentAsync();
+            Lat = Math.Round(pos.Latitude, 6);
+            Lng = Math.Round(pos.Longitude, 6);
+            if (_map is not null)
+            {
+                await _map.PickerSetCenterAsync(Lat.Value, Lng.Value);
+            }
+
+            await Changed.InvokeAsync((Lat, Lng, Radius));
+        }
+        catch (Exception)
+        {
+            _error = "Couldn't read your location — tap the map instead.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ClearAsync()
+    {
+        Lat = null;
+        Lng = null;
+        if (_map is not null)
+        {
+            await _map.PickerClearAsync();
+        }
+
+        await Changed.InvokeAsync((Lat, Lng, Radius));
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_map is not null)
+        {
+            await _map.DisposeAsync();
+        }
+
+        if (_geo is not null)
+        {
+            await _geo.DisposeAsync();
+        }
+
+        _selfRef?.Dispose();
+    }
+}

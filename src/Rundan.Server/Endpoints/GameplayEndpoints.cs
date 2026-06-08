@@ -66,6 +66,7 @@ internal static class GameplayEndpoints
         {
             var entries = await db.ScoreEntries.AsNoTracking()
                 .Include(s => s.Participant)
+                .Include(s => s.User)
                 .Where(s => s.ActivityId == id)
                 .OrderBy(s => s.Round)
                 .ThenBy(s => s.Id) // SQLite can't ORDER BY DateTimeOffset; Id ≈ recorded order
