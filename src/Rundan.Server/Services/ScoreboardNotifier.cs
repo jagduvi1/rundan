@@ -30,4 +30,9 @@ public sealed class ScoreboardNotifier(
 
     public Task PushParticipantJoinedAsync(int activityId, ParticipantDto participant)
         => hub.Clients.Group(ScoreboardGroups.For(activityId)).ParticipantJoined(participant);
+
+    /// <summary>Broadcast the current viewer list to everyone watching an event.</summary>
+    public Task PushViewersAsync(int eventId, List<string> viewers)
+        => hub.Clients.Group(ScoreboardGroups.ForEvent(eventId))
+            .ViewersChanged(new EventViewersDto { EventId = eventId, Viewers = viewers });
 }

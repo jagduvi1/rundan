@@ -47,6 +47,13 @@ public class ViewerDto
     public string Name { get; set; } = string.Empty;
 }
 
+/// <summary>Pushed over SignalR when an event's viewer list changes.</summary>
+public class EventViewersDto
+{
+    public int EventId { get; set; }
+    public List<string> Viewers { get; set; } = new();
+}
+
 /// <summary>Admin request to create an event.</summary>
 public class CreateEventRequest
 {

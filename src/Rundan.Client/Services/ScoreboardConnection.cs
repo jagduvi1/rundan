@@ -13,10 +13,12 @@ public sealed class ScoreboardConnection(NavigationManager nav, AppState state) 
 {
     private HubConnection? _connection;
     private readonly List<int> _activityIds = new();
+    private readonly List<int> _eventIds = new();
 
     public event Action<ScoreboardDto>? ScoreboardUpdated;
     public event Action<ParticipantDto>? ParticipantJoined;
     public event Action<ActivityStatusChangedDto>? StatusChanged;
+    public event Action<EventViewersDto>? ViewersChanged;
     public event Action? ConnectionStateChanged;
 
     public bool IsConnected => _connection?.State == HubConnectionState.Connected;
@@ -44,6 +46,7 @@ public sealed class ScoreboardConnection(NavigationManager nav, AppState state) 
         _connection.On<ParticipantDto>(ScoreboardMessages.ParticipantJoined, p => ParticipantJoined?.Invoke(p));
         _connection.On<ActivityStatusChangedDto>(ScoreboardMessages.ActivityStatusChanged,
             s => StatusChanged?.Invoke(s));
+        _connection.On<EventViewersDto>(ScoreboardMessages.ViewersChanged, v => ViewersChanged?.Invoke(v));
 
         _connection.Reconnecting += _ => { ConnectionStateChanged?.Invoke(); return Task.CompletedTask; };
         _connection.Reconnected += async _ =>
@@ -59,6 +62,11 @@ public sealed class ScoreboardConnection(NavigationManager nav, AppState state) 
                     foreach (var id in _activityIds)
                     {
                         await connection.InvokeAsync(ScoreboardHubMethods.JoinActivity, id);
+                    }
+
+                    foreach (var eventId in _eventIds)
+                    {
+                        await connection.InvokeAsync(ScoreboardHubMethods.JoinEvent, eventId);
                     }
                 }
                 catch
@@ -98,6 +106,27 @@ public sealed class ScoreboardConnection(NavigationManager nav, AppState state) 
             catch
             {
                 /* will be re-joined on next reconnect */
+            }
+        }
+    }
+
+    /// <summary>Subscribe to event-level updates (e.g. who is watching).</summary>
+    public async Task JoinEventAsync(int eventId)
+    {
+        if (!_eventIds.Contains(eventId))
+        {
+            _eventIds.Add(eventId);
+        }
+
+        if (_connection is { State: HubConnectionState.Connected } connection)
+        {
+            try
+            {
+                await connection.InvokeAsync(ScoreboardHubMethods.JoinEvent, eventId);
+            }
+            catch
+            {
+                /* re-joined on next reconnect */
             }
         }
     }
