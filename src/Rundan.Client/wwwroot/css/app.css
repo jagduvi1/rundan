@@ -496,6 +496,18 @@ input:focus, select:focus, textarea:focus { outline: 3px solid var(--focus-ring)
 .bk-team.empty { color: var(--slate-500, #889); }
 .bk-court { font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--sea-700, #06769f); background: var(--sea-50, #eef7fb); padding: .15rem .5rem; border-bottom: 1px solid var(--border); }
 
+/* Final results podium */
+.final-badge { display: inline-block; background: var(--sun-300, #F2A40C); color: var(--slate-900, #0c2e40); font-weight: 700; text-transform: uppercase; letter-spacing: .05em; font-size: .72rem; padding: .22rem .7rem; border-radius: 999px; }
+.podium { display: flex; gap: .6rem; justify-content: center; align-items: flex-end; flex-wrap: wrap; margin-top: .4rem; }
+.podium-spot { display: flex; flex-direction: column; align-items: center; gap: .2rem; background: var(--card-2, var(--card)); border: 1px solid var(--border); border-radius: 14px; padding: .65rem .85rem; min-width: 92px; }
+.podium-spot .medal { width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; color: #fff; background: var(--slate-400, #9aa3ad); }
+.podium-spot .who { font-weight: 700; }
+.podium-spot .pts { font-size: .8rem; color: var(--slate-500, #778); }
+.podium-spot.p1 { transform: scale(1.06); border-color: #E6B800; }
+.podium-spot.p1 .medal { background: #E6B800; }
+.podium-spot.p2 .medal { background: #B6BAC2; }
+.podium-spot.p3 .medal { background: #C8843C; }
+
 /* Word game tiles */
 .tiles { display: grid; grid-template-columns: repeat(5, 1fr); gap: .5rem; }
 .tile { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; font-family: var(--font-display); font-size: 1.5rem; font-weight: 700; border-radius: 12px; border: 2px solid var(--border); background: var(--card-2, var(--card)); color: var(--slate-500, #889); cursor: pointer; }
