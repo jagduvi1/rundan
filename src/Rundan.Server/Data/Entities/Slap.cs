@@ -24,8 +24,8 @@ public class Slap
     /// <summary>For a "send" slap: who receives the points. Null = vanished.</summary>
     public int? RecipientUserId { get; set; }
 
-    /// <summary>Points removed from the slapped player (half their lead over the next player).</summary>
-    public int Penalty { get; set; }
+    /// <summary>Points removed from the slapped player (exactly half their lead over the next player).</summary>
+    public double Penalty { get; set; }
 
     /// <summary>The host moved on without a slap.</summary>
     public bool Skipped { get; set; }

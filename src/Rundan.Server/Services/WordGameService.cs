@@ -45,7 +45,7 @@ public sealed class WordGameService(AppDbContext db, TimeProvider clock)
             MaxOpen = MaxOpen,
             Seconds = Seconds,
             SubmittedWord = latest?.Note,
-            SubmittedScore = latest is null ? null : latest.Points,
+            SubmittedScore = latest is null ? null : (int)latest.Points,
         };
     }
 

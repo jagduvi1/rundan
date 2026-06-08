@@ -167,7 +167,7 @@ public sealed class GameService(AppDbContext db, TimeProvider clock)
 
         // The UI clamps points, but the API must reject out-of-range/forged values too.
         // The range is generous so it also covers seconds and millimetres measurements.
-        if (req.Points is < -100000 or > 100000)
+        if (req.Points < -100000 || req.Points > 100000)
         {
             throw new RuleViolationException("That value is out of range.");
         }
