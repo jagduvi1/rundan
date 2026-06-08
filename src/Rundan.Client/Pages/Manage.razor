@@ -73,6 +73,24 @@ else
             <label>Picture / map</label>
             <ImageUploader Value="_editImage" ValueChanged="v => _editImage = v" />
         </div>
+
+        @if (_activity.UsesRounds)
+        {
+            <div class="field">
+                <label>Score entry</label>
+                <select @bind="_editScoreEntryMode">
+                    <option value="@ScoreEntryMode.Team">One score per team, per round</option>
+                    <option value="@ScoreEntryMode.PerPlayer">Per player, per round (summed to the team)</option>
+                </select>
+            </div>
+        }
+
+        <div class="field">
+            <label>Location geofence (optional)</label>
+            <p class="muted" style="font-size:.85rem">Set a GPS point + radius. The activity unlocks on a player's phone when they enter the radius.</p>
+            <LocationPicker @key="_activity.Id" Lat="_editLat" Lng="_editLng" Radius="_editRadius" Changed="OnLocationChanged" />
+        </div>
+
         <button class="btn block success" @onclick="SaveDetailsAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_editTitle))">
             Save details
         </button>
@@ -107,6 +125,10 @@ else
     private string _editTitle = string.Empty;
     private string? _editDescription;
     private string? _editImage;
+    private ScoreEntryMode _editScoreEntryMode = ScoreEntryMode.Team;
+    private double? _editLat;
+    private double? _editLng;
+    private int _editRadius = 25;
 
     protected override async Task OnInitializedAsync()
     {
@@ -117,6 +139,10 @@ else
             _editTitle = _activity.Title;
             _editDescription = _activity.Description;
             _editImage = _activity.ImageUrl;
+            _editScoreEntryMode = _activity.ScoreEntryMode;
+            _editLat = _activity.Latitude;
+            _editLng = _activity.Longitude;
+            _editRadius = _activity.RadiusMeters ?? 25;
 
             // Carry the event-admin token so a co-host can manage this activity.
             if (_activity.EventId is { } evId)
@@ -132,6 +158,13 @@ else
         _loading = false;
     }
 
+    private void OnLocationChanged((double? Lat, double? Lng, int Radius) loc)
+    {
+        _editLat = loc.Lat;
+        _editLng = loc.Lng;
+        _editRadius = loc.Radius;
+    }
+
     private async Task SaveDetailsAsync()
     {
         _busy = true;
@@ -143,6 +176,10 @@ else
                 Title = _editTitle.Trim(),
                 Description = _editDescription,
                 ImageUrl = _editImage,
+                ScoreEntryMode = _editScoreEntryMode,
+                Latitude = _editLat,
+                Longitude = _editLng,
+                RadiusMeters = _editLat.HasValue ? _editRadius : null,
             });
         }
         catch (ApiException ex)

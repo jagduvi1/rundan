@@ -3,6 +3,7 @@
 @inject RundanApi Api
 @inject AppState State
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 
 <PageTitle>@(_event?.Name ?? "Event") · Rundan</PageTitle>
 
@@ -125,7 +126,11 @@ else
                             }
                         </span>
                         <StatusBadge Status="a.Status" />
-                        @if (a.Status is ActivityStatus.Live or ActivityStatus.Open or ActivityStatus.Finished)
+                        @if (a.Status == ActivityStatus.Live && a.HasLocation && !WithinRadius(a))
+                        {
+                            <span class="muted" style="font-size:.82rem">@LockText(a)</span>
+                        }
+                        else if (a.Status is ActivityStatus.Live or ActivityStatus.Open or ActivityStatus.Finished)
                         {
                             <a class="btn small @(a.Status == ActivityStatus.Live ? "" : "secondary")" href="@($"a/{a.Id}")">
                                 @ActionLabel(a.Status)
@@ -262,6 +267,12 @@ else
     private bool _loading = true;
     private bool _reconnecting;
 
+    private GeolocationInterop? _geo;
+    private VibrationInterop? _vibe;
+    private GeoPosition? _pos;
+    private readonly Dictionary<int, double> _distances = new();
+    private readonly HashSet<int> _arrived = new();
+
     private string _joinName = string.Empty;
     private string? _joinError;
     private bool _busy;
@@ -341,10 +352,50 @@ else
 
             _standings = await Api.GetEventStandingsAsync(Id);
             await StartConnectionAsync();
+            await StartGeoAsync();
         }
 
         _loading = false;
     }
+
+    private async Task StartGeoAsync()
+    {
+        if (_event is null || _geo is not null || !_event.Activities.Any(a => a.HasLocation))
+        {
+            return;
+        }
+
+        _geo = new GeolocationInterop(JS);
+        _vibe = new VibrationInterop(JS);
+        _geo.PositionChanged += OnGeo;
+        try { await _geo.StartAsync(); } catch { /* geolocation unavailable */ }
+    }
+
+    private void OnGeo(GeoPosition p) => _ = InvokeAsync(() =>
+    {
+        _pos = p;
+        if (_event is not null)
+        {
+            foreach (var a in _event.Activities.Where(a => a.HasLocation))
+            {
+                var d = GeolocationInterop.DistanceMeters(p.Latitude, p.Longitude, a.Latitude!.Value, a.Longitude!.Value);
+                _distances[a.Id] = d;
+                if (a.Status == ActivityStatus.Live && d <= RadiusOf(a) && _arrived.Add(a.Id))
+                {
+                    _ = _vibe?.PatternAsync(90, 50, 140);
+                }
+            }
+        }
+
+        StateHasChanged();
+        return Task.CompletedTask;
+    });
+
+    private static int RadiusOf(ActivityDto a) => a.RadiusMeters is > 0 ? a.RadiusMeters.Value : 25;
+    private bool WithinRadius(ActivityDto a) => _distances.TryGetValue(a.Id, out var d) && d <= RadiusOf(a);
+    private string LockText(ActivityDto a) => _distances.TryGetValue(a.Id, out var d)
+        ? $"Walk closer · {(int)Math.Round(d)} m"
+        : "Walk to the spot";
 
     private void SyncEditFields()
     {
@@ -663,6 +714,18 @@ else
             await _conn.DisposeAsync();
             _conn = null;
         }
+
+        if (_geo is not null)
+        {
+            _geo.PositionChanged -= OnGeo;
+            await _geo.DisposeAsync();
+            _geo = null;
+        }
+
+        _vibe = null;
+        _distances.Clear();
+        _arrived.Clear();
+        _pos = null;
     }
 
     public async ValueTask DisposeAsync() => await TeardownAsync();

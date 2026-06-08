@@ -73,6 +73,7 @@ public sealed class DataSeeder(AppDbContext db, TimeProvider clock)
 
         var boule = NewActivity(ev.Id, 3, ActivityType.Boule, "Boulekulan", "BOULE", now,
             "Bäst av flera omgångar. Närmast lillen vinner omgången.", ActivityStatus.Live);
+        boule.ScoreEntryMode = ScoreEntryMode.PerPlayer; // scorekeeper enters points per player; team total = sum
 
         db.Activities.AddRange(walk, quiz, boule);
         await db.SaveChangesAsync(ct);

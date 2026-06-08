@@ -71,7 +71,7 @@ public class TeamDto
     public int ActivityId { get; set; }
     public int ParticipantId { get; set; }
     public string Name { get; set; } = string.Empty;
-    public List<string> MemberNames { get; set; } = new();
+    public List<UserDto> Members { get; set; } = new();
 }
 
 /// <summary>Admin request to set the running order of an event's activities.</summary>

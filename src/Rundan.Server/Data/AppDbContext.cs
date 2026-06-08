@@ -147,6 +147,12 @@ public class AppDbContext : DbContext
                 .WithMany(p => p.ScoreEntries)
                 .HasForeignKey(x => x.ParticipantId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // Per-player attribution (team scoring). Keep the entry if the user is removed.
+            e.HasOne(x => x.User)
+                .WithMany()
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
     }
 }

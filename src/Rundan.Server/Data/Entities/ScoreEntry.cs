@@ -14,6 +14,10 @@ public class ScoreEntry
     public int ParticipantId { get; set; }
     public Participant? Participant { get; set; }
 
+    /// <summary>For per-player scoring on a team: which player scored these points. Null = team-level entry.</summary>
+    public int? UserId { get; set; }
+    public User? User { get; set; }
+
     public int Round { get; set; } = 1;
     public int Points { get; set; }
     public string? Note { get; set; }

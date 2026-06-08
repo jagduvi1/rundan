@@ -140,7 +140,25 @@ public sealed class GameService(AppDbContext db, TimeProvider clock)
 
         var target = await db.Participants
             .FirstOrDefaultAsync(p => p.Id == req.ParticipantId && p.ActivityId == activity.Id, ct)
-            ?? throw new RuleViolationException("That player is not in this activity.");
+            ?? throw new RuleViolationException("That team is not in this activity.");
+
+        // Per-player mode: the points belong to one player on the team; the team total is the sum.
+        int? scoredByUserId = null;
+        if (activity.ScoreEntryMode == ScoreEntryMode.PerPlayer && target.IsTeam)
+        {
+            if (req.UserId is not { } uid)
+            {
+                throw new RuleViolationException("Pick which player scored.");
+            }
+
+            var onTeam = await db.ParticipantMembers.AnyAsync(pm => pm.ParticipantId == target.Id && pm.UserId == uid, ct);
+            if (!onTeam)
+            {
+                throw new RuleViolationException("That player isn't on this team.");
+            }
+
+            scoredByUserId = uid;
+        }
 
         if (req.Round is < 1 or > 1000)
         {
@@ -157,6 +175,7 @@ public sealed class GameService(AppDbContext db, TimeProvider clock)
         {
             ActivityId = activity.Id,
             ParticipantId = target.Id,
+            UserId = scoredByUserId,
             Round = req.Round,
             Points = req.Points,
             Note = string.IsNullOrWhiteSpace(req.Note) ? null : req.Note.Trim(),
@@ -166,6 +185,11 @@ public sealed class GameService(AppDbContext db, TimeProvider clock)
         await db.SaveChangesAsync(ct);
 
         entry.Participant = target;
+        if (scoredByUserId is { } scorer)
+        {
+            entry.User = await db.Users.FirstOrDefaultAsync(u => u.Id == scorer, ct);
+        }
+
         return entry.ToDto();
     }
 }

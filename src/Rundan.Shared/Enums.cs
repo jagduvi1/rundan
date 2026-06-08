@@ -64,6 +64,19 @@ public enum EventScoring
     Placement = 1,
 }
 
+/// <summary>
+/// For score-game activities (boule etc.): how points are entered. Question activities
+/// (quiz / tipspromenad) are always team-collaborative and ignore this.
+/// </summary>
+public enum ScoreEntryMode
+{
+    /// <summary>One score per team per round (the team plays as a unit).</summary>
+    Team = 0,
+
+    /// <summary>A score per player per round; the team's total is the sum of its players' points.</summary>
+    PerPlayer = 1,
+}
+
 /// <summary>For score games: which direction wins, used only for ranking.</summary>
 public enum ScoringMode
 {

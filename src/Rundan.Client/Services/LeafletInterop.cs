@@ -17,6 +17,7 @@ public sealed class LeafletInterop(IJSRuntime js) : IAsyncDisposable
 {
     private IJSObjectReference? _module;
     private IJSObjectReference? _handle;
+    private IJSObjectReference? _picker;
 
     public async Task InitAsync(string elementId, double lat, double lng, int zoom = 16)
     {
@@ -48,10 +49,51 @@ public sealed class LeafletInterop(IJSRuntime js) : IAsyncDisposable
         }
     }
 
+    // ---- Location picker ----
+    public async Task InitPickerAsync(string elementId, double? lat, double? lng, int radius, object dotNetRef)
+    {
+        _module ??= await js.InvokeAsync<IJSObjectReference>("import", "./js/leaflet.js");
+        _picker = await _module.InvokeAsync<IJSObjectReference>("createPicker", elementId, lat, lng, radius, dotNetRef);
+    }
+
+    public async Task PickerSetRadiusAsync(int radius)
+    {
+        if (_module is not null && _picker is not null)
+        {
+            await _module.InvokeVoidAsync("pickerSetRadius", _picker, radius);
+        }
+    }
+
+    public async Task PickerSetCenterAsync(double lat, double lng)
+    {
+        if (_module is not null && _picker is not null)
+        {
+            await _module.InvokeVoidAsync("pickerSetCenter", _picker, lat, lng);
+        }
+    }
+
+    public async Task PickerClearAsync()
+    {
+        if (_module is not null && _picker is not null)
+        {
+            await _module.InvokeVoidAsync("pickerClear", _picker);
+        }
+    }
+
     public async ValueTask DisposeAsync()
     {
         try
         {
+            if (_module is not null && _picker is not null)
+            {
+                await _module.InvokeVoidAsync("disposePicker", _picker);
+            }
+
+            if (_picker is not null)
+            {
+                await _picker.DisposeAsync();
+            }
+
             if (_module is not null && _handle is not null)
             {
                 await _module.InvokeVoidAsync("dispose", _handle);
@@ -73,6 +115,7 @@ public sealed class LeafletInterop(IJSRuntime js) : IAsyncDisposable
             // Null out so the not-null guards in the Set*/Fit* methods turn any late
             // call (e.g. an in-flight geolocation callback) into a no-op.
             _handle = null;
+            _picker = null;
             _module = null;
         }
     }

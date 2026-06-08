@@ -30,6 +30,14 @@ public class Activity
 
     public ScoringMode ScoringMode { get; set; } = ScoringMode.HigherWins;
 
+    /// <summary>Score-game point entry: one score per team, or per player (summed to the team).</summary>
+    public ScoreEntryMode ScoreEntryMode { get; set; } = ScoreEntryMode.Team;
+
+    /// <summary>Optional GPS geofence — when set, the activity unlocks on a player's phone within this radius.</summary>
+    public double? Latitude { get; set; }
+    public double? Longitude { get; set; }
+    public int? RadiusMeters { get; set; }
+
     public DateTimeOffset CreatedUtc { get; set; }
     public DateTimeOffset? StartedUtc { get; set; }
     public DateTimeOffset? FinishedUtc { get; set; }
