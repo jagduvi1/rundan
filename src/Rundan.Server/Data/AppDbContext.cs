@@ -26,6 +26,10 @@ public class AppDbContext : DbContext
     public DbSet<Court> Courts => Set<Court>();
     public DbSet<EventViewer> EventViewers => Set<EventViewer>();
     public DbSet<Slap> Slaps => Set<Slap>();
+    public DbSet<QuestionTemplate> QuestionTemplates => Set<QuestionTemplate>();
+    public DbSet<QuestionTemplateOption> QuestionTemplateOptions => Set<QuestionTemplateOption>();
+    public DbSet<QuestionTemplateTag> QuestionTemplateTags => Set<QuestionTemplateTag>();
+    public DbSet<QuestionTemplateUsage> QuestionTemplateUsages => Set<QuestionTemplateUsage>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -168,6 +172,32 @@ public class AppDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(x => x.EventId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<QuestionTemplate>(e =>
+        {
+            e.Property(x => x.Text).HasMaxLength(1000).IsRequired();
+            e.Property(x => x.AcceptedFreeTextAnswer).HasMaxLength(200);
+        });
+
+        b.Entity<QuestionTemplateOption>(e =>
+        {
+            e.Property(x => x.Text).HasMaxLength(300).IsRequired();
+            e.HasOne(x => x.QuestionTemplate).WithMany(t => t.Options)
+                .HasForeignKey(x => x.QuestionTemplateId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<QuestionTemplateTag>(e =>
+        {
+            e.Property(x => x.Tag).HasMaxLength(60).IsRequired();
+            e.HasIndex(x => x.Tag);
+            e.HasOne(x => x.QuestionTemplate).WithMany(t => t.Tags)
+                .HasForeignKey(x => x.QuestionTemplateId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<QuestionTemplateUsage>(e =>
+        {
+            e.HasIndex(x => x.QuestionTemplateId).IsUnique();
         });
 
         b.Entity<Slap>(e =>

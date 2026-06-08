@@ -38,6 +38,8 @@ builder.Services.AddScoped<WordGameService>();
 builder.Services.AddScoped<ActivityLibraryService>();
 builder.Services.AddScoped<SimulationService>();
 builder.Services.AddScoped<SlapService>();
+builder.Services.AddScoped<QuestionLibraryService>();
+builder.Services.AddScoped<LibrarySeeder>();
 builder.Services.AddScoped<ScoreboardNotifier>();
 builder.Services.AddScoped<DataSeeder>();
 
@@ -72,6 +74,9 @@ using (var scope = app.Services.CreateScope())
     db.Database.Migrate();
     // WAL improves read concurrency (scoreboard reads while a write is in flight).
     db.Database.ExecuteSqlRaw("PRAGMA journal_mode=WAL;");
+
+    // The question library is reference data — seed it whenever it's empty (also in production).
+    await scope.ServiceProvider.GetRequiredService<LibrarySeeder>().SeedAsync();
 
     if (options.SeedOnStartup)
     {
@@ -118,6 +123,7 @@ app.MapGameplayEndpoints();
 app.MapBracketEndpoints();
 app.MapWordGameEndpoints();
 app.MapSimulationEndpoints();
+app.MapQuestionLibraryEndpoints();
 
 app.MapHub<ScoreboardHub>(HubRoutes.Scoreboard);
 

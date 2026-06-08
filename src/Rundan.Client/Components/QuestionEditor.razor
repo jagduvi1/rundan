@@ -29,6 +29,37 @@
 </div>
 
 <div class="card stack">
+    <h2>From the question library</h2>
+    <p class="muted" style="font-size:.85rem">Pull random questions you didn't write (great when the host plays too). Pick tags, choose how many — they're marked used so they won't repeat.</p>
+
+    @if (_libError is not null)
+    {
+        <div class="alert error">@_libError</div>
+    }
+
+    @if (_tags.Count > 0)
+    {
+        <div class="row wrap" style="gap:.4rem">
+            @foreach (var tag in _tags)
+            {
+                <button class="btn small @(_selectedTags.Contains(tag) ? "" : "ghost")" @onclick="() => ToggleTagAsync(tag)">@Pretty(tag)</button>
+            }
+        </div>
+    }
+
+    <div class="row">
+        <div class="field" style="width:96px">
+            <label>How many</label>
+            <input type="number" min="1" max="50" @bind="_libCount" />
+        </div>
+        <span class="muted grow" style="align-self:flex-end;padding-bottom:.6rem">@_libAvailable available</span>
+        <button class="btn success" style="align-self:flex-end" @onclick="GenerateAsync" disabled="@(_libBusy || _libAvailable == 0)">
+            Add random
+        </button>
+    </div>
+</div>
+
+<div class="card stack">
     <h2>Add a question</h2>
 
     @if (_error is not null)
@@ -136,7 +167,62 @@
     private string? _error;
     private GeolocationInterop? _geo;
 
-    protected override async Task OnInitializedAsync() => await ReloadAsync();
+    // Question library
+    private List<string> _tags = new();
+    private readonly HashSet<string> _selectedTags = new();
+    private int _libCount = 10;
+    private int _libAvailable;
+    private bool _libBusy;
+    private string? _libError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ReloadAsync();
+        try { _tags = await Api.GetLibraryTagsAsync(); } catch (ApiException) { }
+        await RefreshAvailableAsync();
+    }
+
+    private async Task ToggleTagAsync(string tag)
+    {
+        if (!_selectedTags.Add(tag))
+        {
+            _selectedTags.Remove(tag);
+        }
+
+        await RefreshAvailableAsync();
+    }
+
+    private async Task RefreshAvailableAsync()
+    {
+        try { _libAvailable = await Api.GetLibraryAvailableAsync(_selectedTags.ToList()); }
+        catch (ApiException) { _libAvailable = 0; }
+    }
+
+    private async Task GenerateAsync()
+    {
+        _libBusy = true;
+        _libError = null;
+        try
+        {
+            var result = await Api.GenerateFromLibraryAsync(Activity.Id, _libCount, _selectedTags.ToList());
+            _libAvailable = result.Available;
+            await ReloadAsync();
+            if (result.Added == 0)
+            {
+                _libError = "No matching questions left for those tags.";
+            }
+        }
+        catch (ApiException ex)
+        {
+            _libError = ex.Message;
+        }
+        finally
+        {
+            _libBusy = false;
+        }
+    }
+
+    private static string Pretty(string tag) => tag.Replace(":", ": ");
 
     private async Task ReloadAsync()
     {
