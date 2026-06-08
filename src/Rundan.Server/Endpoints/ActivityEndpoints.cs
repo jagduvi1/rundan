@@ -47,8 +47,8 @@ internal static class ActivityEndpoints
                 Order = order,
                 Type = req.Type,
                 Title = req.Title.Trim(),
-                Description = string.IsNullOrWhiteSpace(req.Description) ? null : req.Description.Trim(),
-                ImageUrl = string.IsNullOrWhiteSpace(req.ImageUrl) ? null : req.ImageUrl.Trim(),
+                Description = TextHelpers.Clean(req.Description),
+                ImageUrl = TextHelpers.Clean(req.ImageUrl),
                 ScoringMode = req.ScoringMode,
                 Measurement = req.Measurement,
                 TargetValue = req.TargetValue,
@@ -165,8 +165,8 @@ internal static class ActivityEndpoints
             }
 
             activity.Title = req.Title.Trim();
-            activity.Description = string.IsNullOrWhiteSpace(req.Description) ? null : req.Description.Trim();
-            activity.ImageUrl = string.IsNullOrWhiteSpace(req.ImageUrl) ? null : req.ImageUrl.Trim();
+            activity.Description = TextHelpers.Clean(req.Description);
+            activity.ImageUrl = TextHelpers.Clean(req.ImageUrl);
             activity.ScoringMode = req.ScoringMode;
             activity.Measurement = req.Measurement;
             activity.TargetValue = req.Measurement == Measurement.TimeSeconds || req.ScoringMode == ScoringMode.ClosestToTarget
@@ -237,6 +237,10 @@ internal static class ActivityEndpoints
             {
                 return Results.NotFound();
             }
+
+            // Slaps reference the activity by a loose int (no FK), so the event cascade won't
+            // clean them — remove them here or a deleted activity's penalty haunts the standings.
+            await db.Slaps.Where(s => s.ActivityId == id).ExecuteDeleteAsync(ct);
 
             db.Activities.Remove(activity);
             await db.SaveChangesAsync(ct);

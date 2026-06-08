@@ -27,4 +27,21 @@ public static class ParticipantContext
             ?? throw new RuleViolationException(
                 "Your session is no longer valid — re-join the activity.", StatusCodes.Status401Unauthorized);
     }
+
+    /// <summary>
+    /// Resolves the calling participant and verifies their session belongs to <paramref name="activityId"/>.
+    /// Throws 401 if unknown, 403 if it belongs to a different activity.
+    /// </summary>
+    public static async Task<Participant> ResolveForActivityAsync(
+        this HttpContext context, AppDbContext db, int activityId, CancellationToken ct = default)
+    {
+        var participant = await context.ResolveAsync(db, ct);
+        if (participant.ActivityId != activityId)
+        {
+            throw new RuleViolationException(
+                "Your session belongs to a different activity.", StatusCodes.Status403Forbidden);
+        }
+
+        return participant;
+    }
 }

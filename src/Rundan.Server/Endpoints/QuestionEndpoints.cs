@@ -92,12 +92,12 @@ internal static class QuestionEndpoints
             question.Text = req.Text.Trim();
             question.Kind = req.Kind;
             question.Points = Math.Max(0, req.Points);
-            question.ImageUrl = Clean(req.ImageUrl);
+            question.ImageUrl = TextHelpers.Clean(req.ImageUrl);
             question.Latitude = req.Latitude;
             question.Longitude = req.Longitude;
             question.RadiusMeters = req.RadiusMeters;
             question.AcceptedFreeTextAnswer =
-                req.Kind == QuestionKind.FreeText ? Clean(req.AcceptedFreeTextAnswer) : null;
+                req.Kind == QuestionKind.FreeText ? TextHelpers.Clean(req.AcceptedFreeTextAnswer) : null;
 
             db.AnswerOptions.RemoveRange(question.Options);
             question.Options.Clear();
@@ -191,11 +191,11 @@ internal static class QuestionEndpoints
             Text = req.Text.Trim(),
             Kind = req.Kind,
             Points = Math.Max(0, req.Points),
-            ImageUrl = Clean(req.ImageUrl),
+            ImageUrl = TextHelpers.Clean(req.ImageUrl),
             Latitude = req.Latitude,
             Longitude = req.Longitude,
             RadiusMeters = req.RadiusMeters,
-            AcceptedFreeTextAnswer = req.Kind == QuestionKind.FreeText ? Clean(req.AcceptedFreeTextAnswer) : null,
+            AcceptedFreeTextAnswer = req.Kind == QuestionKind.FreeText ? TextHelpers.Clean(req.AcceptedFreeTextAnswer) : null,
         };
         AddOptions(question, req);
         return question;
@@ -219,6 +219,4 @@ internal static class QuestionEndpoints
             });
         }
     }
-
-    private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

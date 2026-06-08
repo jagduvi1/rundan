@@ -72,6 +72,8 @@ public sealed class AppState(IJSRuntime js)
         {
             await RemoveItemAsync(PreviewKey);
         }
+
+        Changed?.Invoke();
     }
 
     /// <summary>Loads persisted codes and the public bootstrap info. Safe to call repeatedly.</summary>

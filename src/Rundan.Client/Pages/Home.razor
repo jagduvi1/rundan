@@ -117,7 +117,7 @@ else
                     <li>
                         <span class="grow">
                             <b>@a.Order.</b> @a.Title
-                            <span class="muted" style="font-size:.8rem"> · @TypeLabel(a.Type)</span>
+                            <span class="muted" style="font-size:.8rem"> · @Fmt.TypeLabel(a.Type)</span>
                         </span>
                         <StatusBadge Status="a.Status" />
                     </li>
@@ -221,13 +221,4 @@ else
         Nav.NavigateTo($"a/{activity.Id}");
     }
 
-    private static string TypeLabel(ActivityType type) => type switch
-    {
-        ActivityType.Quiz => "Quiz",
-        ActivityType.Tipspromenad => "Tipspromenad",
-        ActivityType.Boule => "Boule",
-        ActivityType.ScoreGame => "Score game",
-        ActivityType.WordGame => "Word game",
-        _ => type.ToString(),
-    };
 }

@@ -91,9 +91,11 @@ internal static class PartnerMixer
             return Pairs(members, activityOrder);
         }
 
-        // General case: rotate the roster per activity, then chunk into teams.
+        // General case: rotate the roster per activity, then chunk into teams. Rotate by the round
+        // itself (not a multiple of teamSize, which would shift whole chunks and reproduce the same
+        // teams every activity).
         var round = Math.Max(0, activityOrder - 1);
-        var rotated = Rotate(members.ToList(), (round * teamSize) % members.Count);
+        var rotated = Rotate(members.ToList(), round % members.Count);
         return Chunk(rotated, teamSize);
     }
 

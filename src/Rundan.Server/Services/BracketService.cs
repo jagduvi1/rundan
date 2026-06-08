@@ -50,6 +50,12 @@ public sealed class BracketService(AppDbContext db, TimeProvider clock)
             throw new RuleViolationException("That match is a walkover.");
         }
 
+        // Re-recording can't safely re-seed already-built later rounds, so a decided match is final.
+        if (match.WinnerParticipantId.HasValue)
+        {
+            throw new RuleViolationException("That match result is already recorded.", StatusCodes.Status409Conflict);
+        }
+
         if (winnerId != match.ParticipantAId && winnerId != match.ParticipantBId)
         {
             throw new RuleViolationException("The winner must be one of the two teams in the match.");
@@ -173,7 +179,9 @@ public sealed class BracketService(AppDbContext db, TimeProvider clock)
                     var losers = w1.Where(m => !m.IsBye).OrderBy(m => m.Slot)
                         .Select(m => m.WinnerParticipantId == m.ParticipantAId ? m.ParticipantBId!.Value : m.ParticipantAId!.Value)
                         .ToList();
-                    if (losers.Count >= 1)
+                    // Need at least two losers for a real losers'-side match; a lone loser would
+                    // just get a pointless walkover round.
+                    if (losers.Count >= 2)
                     {
                         CreateRound(activityId, BracketSide.Losers, 1, losers, courtIds);
                         await db.SaveChangesAsync(ct);

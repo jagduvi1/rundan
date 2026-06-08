@@ -25,7 +25,7 @@ else
             <h1 class="grow">@_activity.Title</h1>
             <StatusBadge Status="_activity.Status" />
         </div>
-        <div class="muted">@TypeLabel(_activity.Type) · @_activity.ParticipantCount player(s)</div>
+        <div class="muted">@Fmt.TypeLabel(_activity.Type) · @_activity.ParticipantCount player(s)</div>
 
         <div class="row wrap" style="align-items:center">
             <span class="join-code">@_activity.JoinCode</span>
@@ -200,9 +200,25 @@ else
     private double? _editLat;
     private double? _editLng;
     private int _editRadius = 25;
+    private int _loadedId = -1;
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnParametersSetAsync()
     {
+        // Reload when the route id changes (Blazor reuses this component instance across /manage/{id}).
+        if (_loadedId == Id)
+        {
+            return;
+        }
+
+        _loadedId = Id;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+
         await State.EnsureInitializedAsync(Api);
         _activity = await Api.GetActivityAsync(Id);
         if (_activity is not null)
@@ -376,20 +392,13 @@ else
         {
             await JS.InvokeVoidAsync("navigator.clipboard.writeText", _activity.JoinCode);
             _copied = true;
+            StateHasChanged();
+            await Task.Delay(2000);
+            _copied = false; // restore the affordance so it can be used again
         }
         catch
         {
             /* clipboard not available — the code is visible anyway */
         }
     }
-
-    private static string TypeLabel(ActivityType type) => type switch
-    {
-        ActivityType.Quiz => "Quiz",
-        ActivityType.Tipspromenad => "Tipspromenad",
-        ActivityType.Boule => "Boule",
-        ActivityType.ScoreGame => "Score game",
-        ActivityType.WordGame => "Word game",
-        _ => type.ToString(),
-    };
 }

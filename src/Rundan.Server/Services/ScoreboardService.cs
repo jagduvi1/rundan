@@ -74,16 +74,10 @@ public sealed class ScoreboardService(AppDbContext db, TimeProvider clock)
 
         // Rank key: higher-is-better → -total; lower-is-better → total; closest → |total - target|.
         var target = activity.TargetValue ?? 0;
-        double Key(ScoreboardEntryDto e) => activity.ScoringMode switch
-        {
-            ScoringMode.LowerWins => e.TotalPoints,
-            ScoringMode.ClosestToTarget => Math.Abs(e.TotalPoints - target),
-            _ => -e.TotalPoints,
-        };
+        double Key(ScoreboardEntryDto e) => ScoringHelper.RankKey(activity.ScoringMode, e.TotalPoints, target);
         // In lowest/closest games, players who haven't scored yet must not outrank real
         // results with their seeded 0 — push them to the bottom.
-        bool Unscored(ScoreboardEntryDto e) =>
-            activity.ScoringMode is ScoringMode.LowerWins or ScoringMode.ClosestToTarget && e.Entries == 0;
+        bool Unscored(ScoreboardEntryDto e) => ScoringHelper.PushesUnscoredLast(activity.ScoringMode) && e.Entries == 0;
 
         var ordered = participants
             .Select(p => new ScoreboardEntryDto

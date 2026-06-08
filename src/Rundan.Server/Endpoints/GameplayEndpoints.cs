@@ -16,8 +16,7 @@ internal static class GameplayEndpoints
             int id, SubmitAnswerRequest req, AppDbContext db, GameService game,
             ScoreboardNotifier notifier, HttpContext http, CancellationToken ct) =>
         {
-            var participant = await http.ResolveAsync(db, ct);
-            EnsureSameActivity(participant.ActivityId, id);
+            var participant = await http.ResolveForActivityAsync(db, id, ct);
 
             var result = await game.SubmitAnswerAsync(participant, req, ct);
             await notifier.PushScoreboardAsync(id, ct);
@@ -27,8 +26,7 @@ internal static class GameplayEndpoints
         app.MapGet("/api/activities/{id:int}/my-answers", async (
             int id, AppDbContext db, HttpContext http, CancellationToken ct) =>
         {
-            var participant = await http.ResolveAsync(db, ct);
-            EnsureSameActivity(participant.ActivityId, id);
+            var participant = await http.ResolveForActivityAsync(db, id, ct);
 
             var answers = await db.Answers.AsNoTracking()
                 .Where(a => a.ParticipantId == participant.Id)
@@ -51,8 +49,7 @@ internal static class GameplayEndpoints
             int id, RecordScoreRequest req, AppDbContext db, GameService game,
             ScoreboardNotifier notifier, HttpContext http, CancellationToken ct) =>
         {
-            var participant = await http.ResolveAsync(db, ct);
-            EnsureSameActivity(participant.ActivityId, id);
+            await http.ResolveForActivityAsync(db, id, ct); // must be a participant of this activity
 
             var activity = await db.Activities.FirstOrDefaultAsync(a => a.Id == id, ct)
                 ?? throw new RuleViolationException("Activity not found.", StatusCodes.Status404NotFound);
@@ -97,14 +94,5 @@ internal static class GameplayEndpoints
             var board = await scoreboard.BuildAsync(id, ct);
             return board is null ? Results.NotFound() : Results.Ok(board);
         });
-    }
-
-    private static void EnsureSameActivity(int participantActivityId, int routeActivityId)
-    {
-        if (participantActivityId != routeActivityId)
-        {
-            throw new RuleViolationException(
-                "Your session belongs to a different activity.", StatusCodes.Status403Forbidden);
-        }
     }
 }
