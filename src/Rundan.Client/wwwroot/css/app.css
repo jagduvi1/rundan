@@ -127,6 +127,29 @@ button { font-family: inherit; }
 }
 .app-header .spacer { flex: 1; }
 
+/* Rich-text editor (host "Rules / info"). */
+.rte { border: 1px solid var(--line); border-radius: var(--radius-md); overflow: hidden; background: #fff; }
+.rte__toolbar {
+    display: flex; align-items: center; gap: .25rem; flex-wrap: wrap;
+    padding: .35rem .45rem; background: var(--sea-50); border-bottom: 1px solid var(--line);
+}
+.rte__btn {
+    min-width: 2rem; padding: .2rem .5rem; border: 1px solid var(--line); background: #fff;
+    border-radius: var(--radius-sm); cursor: pointer; font-size: .9rem; color: var(--text-strong, #0B3F58);
+}
+.rte__btn:hover { background: var(--sea-100); }
+.rte__sep { width: 1px; align-self: stretch; background: var(--line); margin: .1rem .2rem; }
+.rte__area { min-height: 7rem; padding: .65rem .75rem; outline: none; line-height: 1.5; }
+.rte__area:focus { box-shadow: inset 0 0 0 2px var(--focus-ring); }
+.rte__area:empty::before { content: attr(data-placeholder); color: var(--muted); }
+.rte__area ul, .rte__area ol { margin: .3rem 0; padding-left: 1.4rem; }
+
+/* Rendered rich text where the rules/info are shown to everyone. */
+.rte-content ul, .rte-content ol { margin: .4rem 0; padding-left: 1.4rem; }
+.rte-content li { margin: .15rem 0; }
+.rte-content p { margin: .4rem 0; }
+.rte-content a { color: var(--text-link); }
+
 /* Host dashboard: at-a-glance stat widgets and event detail chips. */
 .dash-stats {
     display: grid;
