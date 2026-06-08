@@ -94,7 +94,7 @@ else
         }
         @if (!string.IsNullOrWhiteSpace(ev.Description))
         {
-            <p class="muted" style="white-space:pre-wrap">@ev.Description</p>
+            <div class="rte-content muted">@((MarkupString)Fmt.RichHtml(ev.Description))</div>
         }
         <div class="row wrap muted" style="font-size:.85rem;gap:.5rem">
             <span>@ev.Activities.Count activit@(ev.Activities.Count == 1 ? "y" : "ies")</span>

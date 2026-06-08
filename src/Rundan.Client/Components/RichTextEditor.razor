@@ -1,0 +1,48 @@
+@inject IJSRuntime JS
+
+<div class="rte">
+    <div class="rte__toolbar">
+        <button type="button" class="rte__btn" title="Bold" @onmousedown:preventDefault @onclick='() => CmdAsync("bold")'><b>B</b></button>
+        <button type="button" class="rte__btn" title="Italic" @onmousedown:preventDefault @onclick='() => CmdAsync("italic")'><i>I</i></button>
+        <button type="button" class="rte__btn" title="Underline" @onmousedown:preventDefault @onclick='() => CmdAsync("underline")'><u>U</u></button>
+        <span class="rte__sep"></span>
+        <button type="button" class="rte__btn" title="Bullet list" @onmousedown:preventDefault @onclick='() => CmdAsync("insertUnorderedList")'>• List</button>
+        <button type="button" class="rte__btn" title="Numbered list" @onmousedown:preventDefault @onclick='() => CmdAsync("insertOrderedList")'>1. List</button>
+    </div>
+    <div @ref="_editor" class="rte__area" contenteditable="true" data-placeholder="@Placeholder"
+         @onblur="PushAsync"></div>
+</div>
+
+@code {
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string?> ValueChanged { get; set; }
+    [Parameter] public string Placeholder { get; set; } = string.Empty;
+
+    private ElementReference _editor;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Seed the editable once; afterwards the DOM owns the content (we read it back on
+        // change), so we don't re-write innerHTML and disturb the caret on every render.
+        if (firstRender)
+        {
+            await JS.InvokeVoidAsync("rundanRichText.setHtml", _editor, Value ?? string.Empty);
+        }
+    }
+
+    private async Task CmdAsync(string command)
+    {
+        await JS.InvokeVoidAsync("rundanRichText.format", _editor, command);
+        await PushAsync();
+    }
+
+    private async Task PushAsync()
+    {
+        var html = await JS.InvokeAsync<string>("rundanRichText.getClean", _editor);
+        if (html != Value)
+        {
+            Value = html;
+            await ValueChanged.InvokeAsync(html);
+        }
+    }
+}

@@ -35,7 +35,7 @@ else
         }
         @if (!string.IsNullOrWhiteSpace(_event.Description))
         {
-            <p style="white-space:pre-wrap">@_event.Description</p>
+            <div class="rte-content">@((MarkupString)Fmt.RichHtml(_event.Description))</div>
         }
         <div class="row muted" style="font-size:.85rem">
             <span>Event code @_event.JoinCode</span>
@@ -390,7 +390,8 @@ else
             </div>
             <div class="field">
                 <label>Rules / info</label>
-                <textarea @bind="_editDescription" placeholder="Explain how the event works"></textarea>
+                <RichTextEditor @key="_event.Id" Value="_editDescription" ValueChanged="v => _editDescription = v"
+                                Placeholder="Explain how the event works — use the toolbar for bullet lists" />
             </div>
             <div class="field">
                 <label>Players per team</label>
