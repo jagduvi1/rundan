@@ -39,6 +39,12 @@ public class Activity
     /// <summary>For question activities: serve the questions in a random order per player.</summary>
     public bool RandomizeQuestions { get; set; }
 
+    /// <summary>What the playing surfaces are called (Court / Field / Track / Lane).</summary>
+    public string CourtLabel { get; set; } = "Court";
+
+    /// <summary>The playing surfaces for this activity.</summary>
+    public List<Court> Courts { get; set; } = new();
+
     /// <summary>Score-game point entry: one score per team, or per player (summed to the team).</summary>
     public ScoreEntryMode ScoreEntryMode { get; set; } = ScoreEntryMode.Team;
 

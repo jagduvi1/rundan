@@ -26,6 +26,9 @@ public class BracketMatchDto
     public int? WinnerParticipantId { get; set; }
     public bool IsBye { get; set; }
 
+    /// <summary>The court/lane this match is played on, if assigned.</summary>
+    public string? CourtName { get; set; }
+
     public bool Ready => AId.HasValue && BId.HasValue && !IsBye;
     public bool Decided => WinnerParticipantId.HasValue;
 }

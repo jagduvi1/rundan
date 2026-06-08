@@ -26,4 +26,8 @@ public class BracketMatch
 
     /// <summary>A walkover (only one team) — auto-advances and scores no win.</summary>
     public bool IsBye { get; set; }
+
+    /// <summary>The court this match is played on, if assigned.</summary>
+    public int? CourtId { get; set; }
+    public Court? Court { get; set; }
 }

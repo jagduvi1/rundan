@@ -189,6 +189,10 @@ public sealed class RundanApi(HttpClient http, AppState state)
         (await SendAsync<ScoreEntryDto>(
             HttpMethod.Post, $"api/activities/{id}/scores", body: request, participantToken: token))!;
 
+    public async Task<ActivityDto> SetCourtsAsync(int id, string label, List<string> names) =>
+        (await SendAsync<ActivityDto>(HttpMethod.Put, $"api/activities/{id}/courts",
+            body: new SetCourtsRequest { Label = label, Names = names }, admin: true))!;
+
     // ---- Knockout bracket --------------------------------------------------
     public Task<BracketDto?> GetBracketAsync(int id) =>
         TryGetAsync<BracketDto>($"api/activities/{id}/bracket");

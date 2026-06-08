@@ -90,6 +90,9 @@ public sealed class DataSeeder(AppDbContext db, TimeProvider clock)
             "Lagen möts i en utslagstävling. Appen lottar matcherna. Vinnarna går vidare till nästa omgång "
             + "och en final; förlorarna lottas in i ett förlorarträd. Placeringen avgör poängen.",
             ActivityStatus.Open);
+        boule.CourtLabel = "Bana";
+        boule.Courts.Add(new Court { Order = 1, Name = "Bana 1" });
+        boule.Courts.Add(new Court { Order = 2, Name = "Bana 2" });
 
         // 5 — Bygga högst torn: tallest (mm) wins.
         var tower = NewActivity(ev.Id, 5, ActivityType.ScoreGame, "Bygga högst torn", "TORN", now,

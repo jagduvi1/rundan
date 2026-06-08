@@ -31,8 +31,9 @@ public sealed class BracketService(AppDbContext db, TimeProvider clock)
             throw new RuleViolationException("Need at least two teams to draw a bracket.");
         }
 
+        var courtIds = await CourtIdsAsync(activityId, ct);
         var drawn = teams.OrderBy(_ => Random.Shared.Next()).ToList();
-        CreateRound(activityId, BracketSide.Winners, 1, drawn);
+        CreateRound(activityId, BracketSide.Winners, 1, drawn, courtIds);
         await db.SaveChangesAsync(ct);
 
         await AdvanceAsync(activityId, ct); // resolves any first-round byes
@@ -84,7 +85,12 @@ public sealed class BracketService(AppDbContext db, TimeProvider clock)
             .Where(p => p.ActivityId == activityId)
             .ToDictionaryAsync(p => p.Id, p => p.DisplayName, ct);
 
+        var courtNames = await db.Courts.AsNoTracking()
+            .Where(c => c.ActivityId == activityId)
+            .ToDictionaryAsync(c => c.Id, c => c.Name, ct);
+
         string? Name(int? id) => id.HasValue && names.TryGetValue(id.Value, out var n) ? n : null;
+        string? Court(int? id) => id.HasValue && courtNames.TryGetValue(id.Value, out var n) ? n : null;
 
         var dto = new BracketDto
         {
@@ -102,6 +108,7 @@ public sealed class BracketService(AppDbContext db, TimeProvider clock)
                 BName = Name(m.ParticipantBId),
                 WinnerParticipantId = m.WinnerParticipantId,
                 IsBye = m.IsBye,
+                CourtName = Court(m.CourtId),
             }).ToList(),
         };
 
@@ -121,7 +128,7 @@ public sealed class BracketService(AppDbContext db, TimeProvider clock)
         return dto;
     }
 
-    private void CreateRound(int activityId, BracketSide side, int round, List<int> teamIds)
+    private void CreateRound(int activityId, BracketSide side, int round, List<int> teamIds, List<int> courtIds)
     {
         var slot = 0;
         for (var i = 0; i < teamIds.Count; i += 2)
@@ -132,18 +139,25 @@ public sealed class BracketService(AppDbContext db, TimeProvider clock)
                 ActivityId = activityId,
                 Side = side,
                 Round = round,
-                Slot = slot++,
+                Slot = slot,
                 ParticipantAId = teamIds[i],
                 ParticipantBId = bTeam,
                 IsBye = bTeam is null,
                 WinnerParticipantId = bTeam is null ? teamIds[i] : null, // a bye auto-advances
+                CourtId = courtIds.Count > 0 ? courtIds[slot % courtIds.Count] : null,
             });
+            slot++;
         }
     }
+
+    private async Task<List<int>> CourtIdsAsync(int activityId, CancellationToken ct) =>
+        await db.Courts.Where(c => c.ActivityId == activityId).OrderBy(c => c.Order)
+            .Select(c => c.Id).ToListAsync(ct);
 
     /// <summary>Builds follow-on rounds as results come in (and seeds the losers' side once).</summary>
     private async Task AdvanceAsync(int activityId, CancellationToken ct)
     {
+        var courtIds = await CourtIdsAsync(activityId, ct);
         var changed = true;
         while (changed)
         {
@@ -161,7 +175,7 @@ public sealed class BracketService(AppDbContext db, TimeProvider clock)
                         .ToList();
                     if (losers.Count >= 1)
                     {
-                        CreateRound(activityId, BracketSide.Losers, 1, losers);
+                        CreateRound(activityId, BracketSide.Losers, 1, losers, courtIds);
                         await db.SaveChangesAsync(ct);
                         changed = true;
                         continue;
@@ -190,7 +204,7 @@ public sealed class BracketService(AppDbContext db, TimeProvider clock)
                     var survivors = round.Select(m => m.WinnerParticipantId!.Value).ToList();
                     if (survivors.Count >= 2 && !sideMatches.Any(m => m.Round == r + 1))
                     {
-                        CreateRound(activityId, side, r + 1, survivors);
+                        CreateRound(activityId, side, r + 1, survivors, courtIds);
                         await db.SaveChangesAsync(ct);
                         changed = true;
                         break;

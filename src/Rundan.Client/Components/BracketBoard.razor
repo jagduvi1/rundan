@@ -63,6 +63,28 @@
             </div>
         }
 
+        <h3>Order of play</h3>
+        <ul class="list">
+            @foreach (var m in OrderOfPlay())
+            {
+                <li>
+                    @if (!string.IsNullOrEmpty(m.CourtName))
+                    {
+                        <span class="badge">@m.CourtName</span>
+                    }
+                    <span class="grow">@(m.AName ?? "—") vs @(m.IsBye ? "(walkover)" : m.BName ?? "—")</span>
+                    @if (m.Decided)
+                    {
+                        <span class="muted" style="font-size:.85rem">@WinnerName(m)</span>
+                    }
+                    else if (!m.IsBye)
+                    {
+                        <span class="muted" style="font-size:.85rem">@(m.Side == BracketSide.Winners ? "W" : "L")@m.Round</span>
+                    }
+                </li>
+            }
+        </ul>
+
         <p class="muted" style="font-size:.8rem">Points: 3 per winners'-side win, 1 per losers'-side win — fed into the scoreboard above.</p>
     }
 </div>
@@ -79,6 +101,10 @@
 
     private RenderFragment RenderMatch(BracketMatchDto m) =>
     @<div class="match">
+        @if (!string.IsNullOrEmpty(m.CourtName))
+        {
+            <div class="bk-court">@m.CourtName</div>
+        }
         @RenderTeam(m, m.AId, m.AName)
         @RenderTeam(m, m.BId, m.BName)
     </div>;
@@ -113,6 +139,12 @@
 
     private IEnumerable<BracketMatchDto> Matches(BracketSide side, int round) => _bracket!.Matches
         .Where(m => m.Side == side && m.Round == round).OrderBy(m => m.Slot);
+
+    private IEnumerable<BracketMatchDto> OrderOfPlay() => _bracket!.Matches
+        .OrderBy(m => m.Round).ThenBy(m => m.Side).ThenBy(m => m.Slot);
+
+    private string WinnerName(BracketMatchDto m) =>
+        (m.WinnerParticipantId == m.AId ? m.AName : m.BName) ?? "—";
 
     protected override async Task OnParametersSetAsync()
     {

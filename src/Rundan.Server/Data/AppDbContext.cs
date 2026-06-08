@@ -23,6 +23,7 @@ public class AppDbContext : DbContext
     public DbSet<Answer> Answers => Set<Answer>();
     public DbSet<ScoreEntry> ScoreEntries => Set<ScoreEntry>();
     public DbSet<BracketMatch> BracketMatches => Set<BracketMatch>();
+    public DbSet<Court> Courts => Set<Court>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -156,6 +157,16 @@ public class AppDbContext : DbContext
                 .OnDelete(DeleteBehavior.SetNull);
         });
 
+        b.Entity<Court>(e =>
+        {
+            e.Property(x => x.Name).HasMaxLength(60).IsRequired();
+            e.HasIndex(x => new { x.ActivityId, x.Order });
+            e.HasOne(x => x.Activity)
+                .WithMany(a => a.Courts)
+                .HasForeignKey(x => x.ActivityId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
         b.Entity<BracketMatch>(e =>
         {
             e.HasIndex(x => new { x.ActivityId, x.Side, x.Round, x.Slot });
@@ -163,6 +174,12 @@ public class AppDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(x => x.ActivityId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // Court assignment — cleared manually before a court is removed (avoids a 2nd cascade path).
+            e.HasOne(x => x.Court)
+                .WithMany()
+                .HasForeignKey(x => x.CourtId)
+                .OnDelete(DeleteBehavior.NoAction);
         });
     }
 }
