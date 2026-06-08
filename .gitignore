@@ -21,3 +21,6 @@ App_Data/
 # Publish output
 publish/
 *.zip
+
+# Temp question-library generation batches
+.qlib/

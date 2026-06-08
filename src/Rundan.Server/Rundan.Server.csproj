@@ -21,4 +21,9 @@
     <ProjectReference Include="..\Rundan.Shared\Rundan.Shared.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Pre-generated question library (no runtime AI); loaded by LibrarySeeder. -->
+    <EmbeddedResource Include="Data\question-library.json" LogicalName="Rundan.Server.Data.question-library.json" />
+  </ItemGroup>
+
 </Project>
