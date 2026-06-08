@@ -1,0 +1,289 @@
+@page "/a/{Id:int}"
+@implements IAsyncDisposable
+@inject RundanApi Api
+@inject AppState State
+@inject NavigationManager Nav
+
+<PageTitle>@(_activity?.Title ?? "Activity") · Rundan</PageTitle>
+
+@if (_loading)
+{
+    <div class="card center muted"><div class="spinner" style="margin:1rem auto"></div></div>
+}
+else if (_activity is null)
+{
+    <div class="card">
+        <h1>Not found</h1>
+        <p class="muted">No activity with that code or id.</p>
+        <a class="btn" href="">Back to start</a>
+    </div>
+}
+else
+{
+    <div class="card stack">
+        @if (_activity.EventId is { } eventId)
+        {
+            <a class="activity-link muted" href="@($"e/{eventId}")" style="font-size:.85rem">‹ Back to the event</a>
+        }
+        <div class="row">
+            <h1 class="grow">@_activity.Title</h1>
+            <StatusBadge Status="_activity.Status" />
+        </div>
+        <div class="row muted" style="font-size:.85rem">
+            <span>@TypeLabel(_activity.Type)</span>
+            <span>·</span>
+            <span>code @_activity.JoinCode</span>
+            @if (_reconnecting)
+            {
+                <span class="grow"></span>
+                <span class="badge">Reconnecting…</span>
+            }
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_activity.ImageUrl) || !string.IsNullOrWhiteSpace(_activity.Description))
+    {
+        <div class="card stack">
+            @if (!string.IsNullOrEmpty(_activity.ImageUrl))
+            {
+                <img src="@_activity.ImageUrl" alt="" style="width:100%;border-radius:var(--radius-md)" />
+            }
+            @if (!string.IsNullOrWhiteSpace(_activity.Description))
+            {
+                <p style="white-space:pre-wrap">@_activity.Description</p>
+            }
+        </div>
+    }
+
+    <div class="card">
+        <h2>Scoreboard</h2>
+        <Scoreboard Board="_board" MyParticipantId="_session?.ParticipantId" />
+    </div>
+
+    @if (_activity.Status == ActivityStatus.Draft)
+    {
+        <div class="card muted">This activity hasn't opened yet. The host is still setting it up.</div>
+    }
+    else if (_session is null)
+    {
+        @if (_activity.Status is ActivityStatus.Open or ActivityStatus.Live)
+        {
+            <JoinPanel Activity="_activity" OnJoined="OnJoinedAsync" />
+        }
+        else if (_activity.Status == ActivityStatus.Finished && _activity.UsesQuestions)
+        {
+            <ResultsView Activity="_activity" />
+        }
+        else
+        {
+            <div class="card muted">This activity has finished.</div>
+        }
+    }
+    else if (_activity.Status == ActivityStatus.Open)
+    {
+        <div class="card stack">
+            <h2>Waiting for the host to start…</h2>
+            <p class="muted">You're in as <b>@_session.DisplayName</b>.</p>
+        </div>
+        <div class="card">
+            <h2>Players (@_participants.Count)</h2>
+            <ul class="list">
+                @foreach (var p in _participants)
+                {
+                    <li>
+                        <span class="grow">@p.DisplayName</span>
+                        @if (p.IsAdmin)
+                        {
+                            <span class="badge admin">host</span>
+                        }
+                    </li>
+                }
+            </ul>
+        </div>
+    }
+    else if (_activity.Status == ActivityStatus.Live)
+    {
+        @switch (_activity.Type)
+        {
+            case ActivityType.Quiz:
+                <QuizPlay @key="_activity.Id" Activity="_activity" Session="_session" />
+                break;
+            case ActivityType.Tipspromenad:
+                <TipspromenadPlay @key="_activity.Id" Activity="_activity" Session="_session" />
+                break;
+            default:
+                <BouleBoard @key="_activity.Id" Activity="_activity" Session="_session"
+                            Participants="_participants" RefreshKey="_scoreVersion" />
+                break;
+        }
+    }
+    else // Finished
+    {
+        @if (_activity.UsesQuestions)
+        {
+            <ResultsView Activity="_activity" Session="_session" />
+        }
+        else
+        {
+            <div class="card success center">
+                <h2>Final results 🎉</h2>
+                <p class="muted">See the scoreboard above.</p>
+            </div>
+        }
+    }
+
+    @if (State.IsHost)
+    {
+        <div class="card center muted">
+            <a href="@($"manage/{_activity.Id}")">Manage this activity (host)</a>
+        </div>
+    }
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private ActivityDto? _activity;
+    private ScoreboardDto? _board;
+    private PlayerSession? _session;
+    private List<ParticipantDto> _participants = new();
+
+    private ScoreboardConnection? _conn;
+    private int _loadedId = -1;
+    private int _scoreVersion;
+    private bool _loading = true;
+    private bool _reconnecting;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedId == Id)
+        {
+            return;
+        }
+
+        _loadedId = Id;
+        await TeardownConnectionAsync();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        await State.EnsureInitializedAsync(Api);
+        _activity = await Api.GetActivityAsync(Id);
+
+        if (_activity is not null)
+        {
+            _session = await State.GetSessionAsync(Id);
+            _board = await Api.GetScoreboardAsync(Id);
+            _participants = await Api.GetParticipantsAsync(Id);
+            await StartConnectionAsync();
+        }
+
+        _loading = false;
+    }
+
+    private async Task StartConnectionAsync()
+    {
+        _conn = new ScoreboardConnection(Nav, State);
+        _conn.ScoreboardUpdated += OnScoreboard;
+        _conn.StatusChanged += OnStatusChanged;
+        _conn.ParticipantJoined += OnParticipantJoined;
+        _conn.ConnectionStateChanged += OnConnectionStateChanged;
+
+        try
+        {
+            await _conn.StartAsync(Id);
+        }
+        catch
+        {
+            // Live updates unavailable (e.g. WebSockets blocked); the page still works via refresh.
+        }
+    }
+
+    private void OnScoreboard(ScoreboardDto board)
+    {
+        _board = board;
+        _scoreVersion++;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OnStatusChanged(ActivityStatusChangedDto status)
+        => _ = InvokeAsync(async () =>
+        {
+            _activity = await Api.GetActivityAsync(Id);
+            _participants = await Api.GetParticipantsAsync(Id);
+            StateHasChanged();
+        });
+
+    private void OnParticipantJoined(ParticipantDto participant)
+        => _ = InvokeAsync(async () =>
+        {
+            _participants = await Api.GetParticipantsAsync(Id);
+            StateHasChanged();
+        });
+
+    private void OnConnectionStateChanged()
+    {
+        var wasReconnecting = _reconnecting;
+        _reconnecting = _conn?.IsReconnecting ?? false;
+
+        // Self-heal: when we come back from a drop, refetch in case a push was missed
+        // during the outage (the rejoin alone can't recover messages sent while offline).
+        if (wasReconnecting && _conn?.IsConnected == true)
+        {
+            _ = InvokeAsync(async () =>
+            {
+                _board = await Api.GetScoreboardAsync(Id);
+                _activity = await Api.GetActivityAsync(Id) ?? _activity;
+                _participants = await Api.GetParticipantsAsync(Id);
+                StateHasChanged();
+            });
+        }
+
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task OnJoinedAsync(JoinResultDto result)
+    {
+        _session = new PlayerSession
+        {
+            Token = result.Token,
+            ParticipantId = result.Participant.Id,
+            DisplayName = result.Participant.DisplayName,
+            IsAdmin = result.Participant.IsAdmin,
+        };
+        await State.SaveSessionAsync(Id, _session);
+
+        _activity = result.Activity;
+        _participants = await Api.GetParticipantsAsync(Id);
+        _board = await Api.GetScoreboardAsync(Id);
+        StateHasChanged();
+    }
+
+    private async Task TeardownConnectionAsync()
+    {
+        if (_conn is not null)
+        {
+            _conn.ScoreboardUpdated -= OnScoreboard;
+            _conn.StatusChanged -= OnStatusChanged;
+            _conn.ParticipantJoined -= OnParticipantJoined;
+            _conn.ConnectionStateChanged -= OnConnectionStateChanged;
+            await _conn.DisposeAsync();
+            _conn = null;
+        }
+    }
+
+    public async ValueTask DisposeAsync() => await TeardownConnectionAsync();
+
+    private static string TypeLabel(ActivityType type) => type switch
+    {
+        ActivityType.Quiz => "Quiz",
+        ActivityType.Tipspromenad => "Tipspromenad",
+        ActivityType.Boule => "Boule",
+        ActivityType.ScoreGame => "Score game",
+        _ => type.ToString(),
+    };
+}

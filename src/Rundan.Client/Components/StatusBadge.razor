@@ -1,0 +1,27 @@
+<span class="badge @CssClass">
+    @if (Status == ActivityStatus.Live)
+    {
+        <span class="dot"></span>
+    }
+    @Text
+</span>
+
+@code {
+    [Parameter] public ActivityStatus Status { get; set; }
+
+    private string CssClass => Status switch
+    {
+        ActivityStatus.Live => "live",
+        ActivityStatus.Open => "open",
+        ActivityStatus.Finished => "finished",
+        _ => "draft",
+    };
+
+    private string Text => Status switch
+    {
+        ActivityStatus.Live => "Live",
+        ActivityStatus.Open => "Open",
+        ActivityStatus.Finished => "Finished",
+        _ => "Draft",
+    };
+}

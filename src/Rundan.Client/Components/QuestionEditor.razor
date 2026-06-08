@@ -1,0 +1,288 @@
+@implements IAsyncDisposable
+@inject RundanApi Api
+@inject IJSRuntime JS
+
+<div class="card">
+    <h2>Questions (@_questions.Count)</h2>
+    @if (_questions.Count == 0)
+    {
+        <p class="muted">No questions yet — add the first one below.</p>
+    }
+    else
+    {
+        <ul class="list">
+            @foreach (var q in _questions)
+            {
+                <li>
+                    <span class="grow">
+                        <b>@q.Order.</b> @q.Text
+                        <span class="muted" style="font-size:.78rem">
+                            · @KindLabel(q.Kind) · @q.Points pt@(q.Points == 1 ? "" : "s")
+                            @if (q.Latitude.HasValue) { <span> · 📍</span> }
+                        </span>
+                    </span>
+                    <button class="btn ghost small danger" @onclick="() => DeleteAsync(q.Id)" disabled="@_busy">✕</button>
+                </li>
+            }
+        </ul>
+    }
+</div>
+
+<div class="card stack">
+    <h2>Add a question</h2>
+
+    @if (_error is not null)
+    {
+        <div class="alert error">@_error</div>
+    }
+
+    <div class="field">
+        <label>Question</label>
+        <textarea @bind="_text" placeholder="What's the question?"></textarea>
+    </div>
+
+    <div class="row">
+        <div class="field grow">
+            <label>Type</label>
+            <select @bind="_kind">
+                <option value="@QuestionKind.MultipleChoice">Multiple choice</option>
+                <option value="@QuestionKind.TrueFalse">True / false</option>
+                <option value="@QuestionKind.FreeText">Free text</option>
+            </select>
+        </div>
+        <div class="field" style="width:90px">
+            <label>Points</label>
+            <input type="number" min="0" max="100" @bind="_points" />
+        </div>
+    </div>
+
+    @if (_kind == QuestionKind.MultipleChoice)
+    {
+        <div class="field">
+            <label>Options (tap the circle to mark the correct one)</label>
+            @for (var i = 0; i < _options.Count; i++)
+            {
+                var index = i;
+                <div class="row" style="margin-bottom:.4rem">
+                    <input type="radio" name="correct" style="width:auto;min-height:auto"
+                           checked="@(_correctIndex == index)" @onchange="() => _correctIndex = index" />
+                    <input class="grow" placeholder="@($"Option {index + 1}")" value="@_options[index]"
+                           @oninput="e => _options[index] = e.Value?.ToString() ?? string.Empty" />
+                    @if (_options.Count > 2)
+                    {
+                        <button class="btn ghost small" @onclick="() => RemoveOption(index)">✕</button>
+                    }
+                </div>
+            }
+            <button class="btn ghost small" @onclick="AddOption">+ Add option</button>
+        </div>
+    }
+    else if (_kind == QuestionKind.TrueFalse)
+    {
+        <div class="field">
+            <label>Correct answer</label>
+            <select @bind="_trueIsCorrect">
+                <option value="true">True</option>
+                <option value="false">False</option>
+            </select>
+        </div>
+    }
+    else
+    {
+        <div class="field">
+            <label>Accepted answer (case-insensitive)</label>
+            <input @bind="_acceptedAnswer" placeholder="The correct text" />
+        </div>
+    }
+
+    @if (Activity.UsesMap)
+    {
+        <div class="field">
+            <label>Location</label>
+            <div class="row wrap">
+                <input class="grow" style="min-width:120px" type="number" step="any" placeholder="Latitude" @bind="_lat" />
+                <input class="grow" style="min-width:120px" type="number" step="any" placeholder="Longitude" @bind="_lng" />
+                <input style="width:110px" type="number" min="5" max="500" placeholder="Radius m" @bind="_radius" />
+            </div>
+            <button class="btn ghost small" style="margin-top:.4rem" @onclick="UseMyLocationAsync" disabled="@_locating">
+                @(_locating ? "Getting location…" : "📍 Use my current location")
+            </button>
+        </div>
+    }
+
+    <button class="btn block success" @onclick="AddAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_text))">
+        Add question
+    </button>
+</div>
+
+@code {
+    [Parameter] public ActivityDto Activity { get; set; } = default!;
+
+    private List<QuestionAdminDto> _questions = new();
+
+    private string _text = string.Empty;
+    private QuestionKind _kind = QuestionKind.MultipleChoice;
+    private int _points = 1;
+    private List<string> _options = new() { string.Empty, string.Empty };
+    private int _correctIndex;
+    private bool _trueIsCorrect = true;
+    private string _acceptedAnswer = string.Empty;
+    private double? _lat;
+    private double? _lng;
+    private int _radius = 25;
+
+    private bool _busy;
+    private bool _locating;
+    private string? _error;
+    private GeolocationInterop? _geo;
+
+    protected override async Task OnInitializedAsync() => await ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        try
+        {
+            _questions = await Api.GetAdminQuestionsAsync(Activity.Id);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private void AddOption() => _options.Add(string.Empty);
+
+    private void RemoveOption(int index)
+    {
+        _options.RemoveAt(index);
+        if (_correctIndex >= _options.Count)
+        {
+            _correctIndex = _options.Count - 1;
+        }
+    }
+
+    private async Task UseMyLocationAsync()
+    {
+        _locating = true;
+        _error = null;
+        try
+        {
+            _geo ??= new GeolocationInterop(JS);
+            var pos = await _geo.GetCurrentAsync();
+            _lat = Math.Round(pos.Latitude, 6);
+            _lng = Math.Round(pos.Longitude, 6);
+        }
+        catch (Exception)
+        {
+            _error = "Couldn't read your location. Enter it manually.";
+        }
+        finally
+        {
+            _locating = false;
+        }
+    }
+
+    private async Task AddAsync()
+    {
+        _busy = true;
+        _error = null;
+
+        var request = new QuestionUpsertRequest
+        {
+            Text = _text.Trim(),
+            Kind = _kind,
+            Points = _points,
+        };
+
+        if (Activity.UsesMap)
+        {
+            request.Latitude = _lat;
+            request.Longitude = _lng;
+            request.RadiusMeters = _radius;
+        }
+
+        switch (_kind)
+        {
+            case QuestionKind.MultipleChoice:
+                request.Options = _options
+                    .Select((t, i) => new AnswerOptionUpsert { Text = t.Trim(), IsCorrect = i == _correctIndex })
+                    .Where(o => o.Text.Length > 0)
+                    .ToList();
+                break;
+            case QuestionKind.TrueFalse:
+                request.Options = new()
+                {
+                    new AnswerOptionUpsert { Text = "True", IsCorrect = _trueIsCorrect },
+                    new AnswerOptionUpsert { Text = "False", IsCorrect = !_trueIsCorrect },
+                };
+                break;
+            case QuestionKind.FreeText:
+                request.AcceptedFreeTextAnswer = _acceptedAnswer.Trim();
+                break;
+        }
+
+        try
+        {
+            await Api.AddQuestionAsync(Activity.Id, request);
+            ResetForm();
+            await ReloadAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void ResetForm()
+    {
+        _text = string.Empty;
+        _points = 1;
+        _options = new() { string.Empty, string.Empty };
+        _correctIndex = 0;
+        _trueIsCorrect = true;
+        _acceptedAnswer = string.Empty;
+        // keep _lat/_lng cleared so each placed question gets its own spot
+        _lat = null;
+        _lng = null;
+        _radius = 25;
+    }
+
+    private async Task DeleteAsync(int questionId)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            await Api.DeleteQuestionAsync(Activity.Id, questionId);
+            await ReloadAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string KindLabel(QuestionKind kind) => kind switch
+    {
+        QuestionKind.MultipleChoice => "Multiple choice",
+        QuestionKind.TrueFalse => "True/false",
+        QuestionKind.FreeText => "Free text",
+        _ => kind.ToString(),
+    };
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_geo is not null)
+        {
+            await _geo.DisposeAsync();
+        }
+    }
+}

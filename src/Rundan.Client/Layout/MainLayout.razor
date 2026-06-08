@@ -1,0 +1,95 @@
+@inherits LayoutComponentBase
+@inject AppState State
+@inject RundanApi Api
+
+<div class="app-shell">
+    <header class="app-header">
+        <a href="" class="brand">
+            <img src="img/rundan-mark.svg" alt="" />
+            <span class="wordmark">@AppName</span>
+        </a>
+        <span class="spacer"></span>
+        @if (State.PreviewAsPlayer)
+        {
+            <button class="badge admin" style="border:none;cursor:pointer" @onclick="ExitPreviewAsync">Player preview · Exit</button>
+        }
+        else
+        {
+            <a href="admin" class="badge admin">Host</a>
+        }
+    </header>
+
+    <main class="app-main">
+        @if (!_ready)
+        {
+            <div class="card center muted">
+                <div class="spinner" style="margin:1rem auto"></div>
+                Loading…
+            </div>
+        }
+        else if (_unreachable)
+        {
+            <div class="card stack center">
+                <h1>Can't reach the server</h1>
+                <p class="muted">Check your connection and try again.</p>
+                <button class="btn" @onclick="RetryAsync">Retry</button>
+            </div>
+        }
+        else if (_needAccess)
+        {
+            <AccessGate OnUnlocked="OnUnlocked" />
+        }
+        else
+        {
+            @Body
+        }
+    </main>
+</div>
+
+@code {
+    private bool _ready;
+    private bool _needAccess;
+    private bool _unreachable;
+
+    private string AppName => State.Bootstrap?.AppName ?? "Rundan";
+
+    protected override Task OnInitializedAsync() => InitAsync();
+
+    private async Task InitAsync()
+    {
+        _ready = false;
+        _unreachable = false;
+        _needAccess = false;
+
+        await State.EnsureInitializedAsync(Api);
+
+        if (State.Bootstrap is null)
+        {
+            _unreachable = true;
+            _ready = true;
+            return;
+        }
+
+        if (State.Bootstrap.RequiresAccessCode)
+        {
+            _needAccess = string.IsNullOrEmpty(State.AccessCode)
+                          || !await Api.VerifyAccessCodeAsync(State.AccessCode!);
+        }
+
+        _ready = true;
+    }
+
+    private async Task RetryAsync() => await InitAsync();
+
+    private void OnUnlocked()
+    {
+        _needAccess = false;
+        StateHasChanged();
+    }
+
+    private async Task ExitPreviewAsync()
+    {
+        await State.SetPreviewAsync(false);
+        StateHasChanged();
+    }
+}

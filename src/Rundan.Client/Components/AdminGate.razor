@@ -1,0 +1,56 @@
+@inject AppState State
+@inject RundanApi Api
+
+<div class="card stack center">
+    <img src="img/rundan-mark.svg" width="56" height="56" alt="" style="margin:0 auto" />
+    <h1>Host panel</h1>
+    <p class="muted">Enter the admin code to manage events and people.</p>
+    @if (_error is not null)
+    {
+        <div class="alert error">@_error</div>
+    }
+    <input class="code-input" type="text" autocomplete="off" placeholder="ADMIN CODE"
+           @bind="_code" @bind:event="oninput" @onkeydown="OnKeyDown" />
+    <button class="btn block" @onclick="UnlockAsync" disabled="@_busy">@(_busy ? "Checking…" : "Unlock")</button>
+</div>
+
+@code {
+    [Parameter] public EventCallback OnUnlocked { get; set; }
+
+    private string _code = string.Empty;
+    private string? _error;
+    private bool _busy;
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await UnlockAsync();
+        }
+    }
+
+    private async Task UnlockAsync()
+    {
+        var code = _code.Trim().ToUpperInvariant();
+        if (code.Length == 0 || _busy)
+        {
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        await State.SetAdminCodeAsync(code);
+
+        if (await Api.VerifyAdminAsync())
+        {
+            await OnUnlocked.InvokeAsync();
+        }
+        else
+        {
+            await State.SetAdminCodeAsync(null);
+            _error = "That admin code didn't work.";
+        }
+
+        _busy = false;
+    }
+}

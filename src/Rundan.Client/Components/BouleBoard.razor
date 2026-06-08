@@ -1,0 +1,183 @@
+@inject RundanApi Api
+@inject AppState State
+
+<div class="card stack">
+    <div class="row">
+        <h2 class="grow">Record scores</h2>
+        <div class="row" style="gap:.4rem">
+            <span class="muted">Round</span>
+            <div class="stepper" style="width:auto">
+                <button @onclick="() => SetRound(_round - 1)" disabled="@(_round <= 1)">−</button>
+                <span class="value" style="min-width:2ch;font-size:1.3rem">@_round</span>
+                <button @onclick="() => SetRound(_round + 1)">+</button>
+            </div>
+        </div>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error">@_error</div>
+    }
+
+    @if (Participants.Count == 0)
+    {
+        <p class="muted">No players have joined yet.</p>
+    }
+
+    @foreach (var p in Participants)
+    {
+        var pending = _pending.GetValueOrDefault(p.Id, 0);
+        <div class="row" style="border-bottom:1px solid var(--line);padding:.5rem 0">
+            <span class="grow"><b>@p.DisplayName</b></span>
+            <div class="stepper" style="width:auto">
+                <button @onclick="() => Adjust(p.Id, -1)" disabled="@(pending <= 0)">−</button>
+                <span class="value" style="min-width:2ch;font-size:1.3rem">@pending</span>
+                <button @onclick="() => Adjust(p.Id, 1)">+</button>
+            </div>
+            <button class="btn small success" @onclick="() => RecordAsync(p)" disabled="@(_busy || pending == 0)">
+                Add
+            </button>
+        </div>
+    }
+</div>
+
+<div class="card">
+    <h2>History</h2>
+    @if (_history.Count == 0)
+    {
+        <p class="muted">No scores recorded yet.</p>
+    }
+    else
+    {
+        <ul class="list">
+            @foreach (var s in _history.OrderByDescending(s => s.RecordedUtc))
+            {
+                <li>
+                    <span class="badge">R@(s.Round)</span>
+                    <span class="grow">@s.ParticipantName</span>
+                    <b style="font-variant-numeric:tabular-nums">@(s.Points >= 0 ? "+" : "")@s.Points</b>
+                    @if (State.IsHost)
+                    {
+                        <button class="btn ghost small danger" @onclick="() => DeleteAsync(s.Id)" disabled="@_busy">✕</button>
+                    }
+                </li>
+            }
+        </ul>
+    }
+</div>
+
+@code {
+    [Parameter] public ActivityDto Activity { get; set; } = default!;
+    [Parameter] public PlayerSession Session { get; set; } = default!;
+    [Parameter] public List<ParticipantDto> Participants { get; set; } = new();
+
+    /// <summary>Bumped by the parent on every live scoreboard push, so history reloads too.</summary>
+    [Parameter] public int RefreshKey { get; set; }
+
+    private int _round = 1;
+    private readonly Dictionary<int, int> _pending = new();
+    private List<ScoreEntryDto> _history = new();
+    private bool _busy;
+    private string? _error;
+    private int _lastRefreshKey = -1;
+    private int _loadedActivityId = -1;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Reset per-activity state if reused for a different activity (belt-and-braces; the
+        // parent also keys this component by activity id).
+        if (Activity.Id != _loadedActivityId)
+        {
+            _loadedActivityId = Activity.Id;
+            _pending.Clear();
+            _round = 1;
+            _lastRefreshKey = RefreshKey;
+            await LoadHistoryAsync();
+            return;
+        }
+
+        if (RefreshKey != _lastRefreshKey)
+        {
+            _lastRefreshKey = RefreshKey;
+            await LoadHistoryAsync();
+        }
+    }
+
+    private async Task LoadHistoryAsync()
+    {
+        try
+        {
+            _history = await Api.GetScoresAsync(Activity.Id);
+            // Keep the round selector ahead of what's already been recorded.
+            if (_history.Count > 0)
+            {
+                _round = Math.Max(_round, _history.Max(s => s.Round));
+            }
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private void SetRound(int value) => _round = Math.Max(1, value);
+
+    private void Adjust(int participantId, int delta)
+    {
+        var value = _pending.GetValueOrDefault(participantId, 0) + delta;
+        _pending[participantId] = Math.Clamp(value, 0, 99);
+    }
+
+    private async Task RecordAsync(ParticipantDto p)
+    {
+        var points = _pending.GetValueOrDefault(p.Id, 0);
+        if (points == 0)
+        {
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+
+        try
+        {
+            await Api.RecordScoreAsync(Activity.Id, new RecordScoreRequest
+            {
+                ParticipantId = p.Id,
+                Round = _round,
+                Points = points,
+            }, Session.Token);
+
+            _pending[p.Id] = 0;
+            await LoadHistoryAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DeleteAsync(int scoreId)
+    {
+        _busy = true;
+        _error = null;
+
+        try
+        {
+            await Api.DeleteScoreAsync(Activity.Id, scoreId);
+            await LoadHistoryAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

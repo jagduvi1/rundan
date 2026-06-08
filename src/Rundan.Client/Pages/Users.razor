@@ -1,0 +1,152 @@
+@page "/admin/users"
+@inject RundanApi Api
+@inject AppState State
+
+<PageTitle>People · Host · Rundan</PageTitle>
+
+@if (!_ready)
+{
+    <div class="card center muted"><div class="spinner" style="margin:1rem auto"></div></div>
+}
+else if (_needAdmin)
+{
+    <AdminGate OnUnlocked="OnUnlockedAsync" />
+}
+else
+{
+    <AdminNav Active="people" />
+
+    @if (_error is not null)
+    {
+        <div class="alert error">@_error</div>
+    }
+
+    <div class="card stack">
+        <h1>People</h1>
+        <p class="muted">Pre-register everyone once. You then pick them into each event.</p>
+        <div class="row">
+            <input class="grow" @bind="_newUserName" placeholder="Add a person" maxlength="60" />
+            <button class="btn small success" @onclick="AddUserAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_newUserName))">Add</button>
+        </div>
+        @if (_users.Count == 0)
+        {
+            <p class="muted">No people yet.</p>
+        }
+        else
+        {
+            <ul class="list">
+                @foreach (var u in _users)
+                {
+                    <li>
+                        <span class="grow">@u.Name</span>
+                        <button class="btn ghost small danger" @onclick="() => DeleteUserAsync(u.Id)" disabled="@_busy">✕</button>
+                    </li>
+                }
+            </ul>
+        }
+    </div>
+}
+
+@code {
+    private bool _ready;
+    private bool _needAdmin;
+    private bool _busy;
+    private string? _error;
+    private string _newUserName = string.Empty;
+    private List<UserDto> _users = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await State.EnsureInitializedAsync(Api);
+
+        if (State.PreviewAsPlayer)
+        {
+            await State.SetPreviewAsync(false);
+        }
+
+        if (State.Bootstrap?.RequiresAdminCode == true && !State.HasAdminCode)
+        {
+            _needAdmin = true;
+            _ready = true;
+            return;
+        }
+
+        await LoadAsync();
+        _ready = true;
+    }
+
+    private async Task OnUnlockedAsync()
+    {
+        _needAdmin = false;
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            _users = await Api.ListUsersAsync();
+            _needAdmin = false;
+        }
+        catch (ApiException ex) when (ex.IsForbidden || ex.IsUnauthorized)
+        {
+            _needAdmin = true;
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task AddUserAsync()
+    {
+        var name = _newUserName.Trim();
+        if (name.Length == 0)
+        {
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            await Api.CreateUserAsync(name);
+            _newUserName = string.Empty;
+            _users = await Api.ListUsersAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DeleteUserAsync(int id)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            await Api.DeleteUserAsync(id);
+            _users = await Api.ListUsersAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

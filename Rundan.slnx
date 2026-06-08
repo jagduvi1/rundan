@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Rundan.Client/Rundan.Client.csproj" />
+    <Project Path="src/Rundan.Server/Rundan.Server.csproj" />
+    <Project Path="src/Rundan.Shared/Rundan.Shared.csproj" />
+  </Folder>
+</Solution>

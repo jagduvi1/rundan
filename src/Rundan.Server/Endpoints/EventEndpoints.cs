@@ -1,0 +1,365 @@
+using Microsoft.EntityFrameworkCore;
+using Rundan.Server.Data;
+using Rundan.Server.Data.Entities;
+using Rundan.Server.Security;
+using Rundan.Server.Services;
+using Rundan.Shared;
+using Rundan.Shared.Contracts;
+
+namespace Rundan.Server.Endpoints;
+
+internal static class EventEndpoints
+{
+    public static void MapEventEndpoints(this IEndpointRouteBuilder app)
+    {
+        // --- Admin: create / list / manage --------------------------------------
+
+        app.MapPost("/api/events", async (
+            CreateEventRequest req, AppDbContext db, JoinCodeGenerator codes, TimeProvider clock, CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(req.Name))
+            {
+                throw new RuleViolationException("Give the event a name.");
+            }
+
+            var ev = new Event
+            {
+                Name = req.Name.Trim(),
+                Description = Clean(req.Description),
+                ImageUrl = Clean(req.ImageUrl),
+                TeamSize = Math.Clamp(req.TeamSize, 1, 20),
+                JoinCode = await codes.NextAsync(db, ct),
+                CreatedUtc = clock.GetUtcNow(),
+            };
+            db.Events.Add(ev);
+            await db.SaveChangesAsync(ct);
+            return Results.Created($"/api/events/{ev.Id}", ev.ToDto(new(), new()));
+        }).AddEndpointFilter<AdminEndpointFilter>();
+
+        app.MapGet("/api/events", async (AppDbContext db, CancellationToken ct) =>
+        {
+            // SQLite can't ORDER BY a DateTimeOffset; Id is monotonic with creation.
+            var events = await db.Events.AsNoTracking().OrderByDescending(e => e.Id).ToListAsync(ct);
+            var result = new List<EventDto>();
+            foreach (var ev in events)
+            {
+                result.Add(await LoadEventDtoAsync(db, ev, ct));
+            }
+
+            return Results.Ok(result);
+        }).AddEndpointFilter<AdminEndpointFilter>();
+
+        app.MapPut("/api/events/{id:int}/reorder", async (
+            int id, ReorderActivitiesRequest req, AppDbContext db, CancellationToken ct) =>
+        {
+            var activities = await db.Activities.Where(a => a.EventId == id).ToListAsync(ct);
+            var order = 1;
+            foreach (var activityId in req.ActivityIds)
+            {
+                var match = activities.FirstOrDefault(a => a.Id == activityId);
+                if (match is not null)
+                {
+                    match.Order = order++;
+                }
+            }
+
+            await db.SaveChangesAsync(ct);
+            return Results.NoContent();
+        }).AddEndpointFilter<EventManagerFilter>();
+
+        app.MapDelete("/api/events/{id:int}", async (int id, AppDbContext db, CancellationToken ct) =>
+        {
+            var ev = await db.Events.FindAsync([id], ct);
+            if (ev is null)
+            {
+                return Results.NotFound();
+            }
+
+            db.Events.Remove(ev);
+            await db.SaveChangesAsync(ct);
+            return Results.NoContent();
+        }).AddEndpointFilter<AdminEndpointFilter>();
+
+        app.MapPut("/api/events/{id:int}", async (int id, UpdateEventRequest req, AppDbContext db, CancellationToken ct) =>
+        {
+            var ev = await db.Events.FirstOrDefaultAsync(e => e.Id == id, ct)
+                ?? throw new RuleViolationException("Event not found.", StatusCodes.Status404NotFound);
+            if (string.IsNullOrWhiteSpace(req.Name))
+            {
+                throw new RuleViolationException("Give the event a name.");
+            }
+
+            ev.Name = req.Name.Trim();
+            ev.Description = Clean(req.Description);
+            ev.ImageUrl = Clean(req.ImageUrl);
+            ev.TeamSize = Math.Clamp(req.TeamSize, 1, 20);
+            await db.SaveChangesAsync(ct);
+            return Results.Ok(await LoadEventDtoAsync(db, ev, ct));
+        }).AddEndpointFilter<EventManagerFilter>();
+
+        app.MapPut("/api/events/{id:int}/members", async (
+            int id, SetEventMembersRequest req, AppDbContext db, TimeProvider clock, CancellationToken ct) =>
+        {
+            var ev = await db.Events.FirstOrDefaultAsync(e => e.Id == id, ct)
+                ?? throw new RuleViolationException("Event not found.", StatusCodes.Status404NotFound);
+
+            var wanted = (await db.Users.Where(u => req.UserIds.Contains(u.Id)).Select(u => u.Id).ToListAsync(ct))
+                .ToHashSet();
+            var admins = req.AdminUserIds.ToHashSet();
+            var current = await db.EventMembers.Where(m => m.EventId == id).ToListAsync(ct);
+            var currentIds = current.Select(m => m.UserId).ToHashSet();
+
+            foreach (var m in current.Where(m => !wanted.Contains(m.UserId)))
+            {
+                db.EventMembers.Remove(m);
+            }
+
+            // Update the admin flag on members we're keeping.
+            foreach (var m in current.Where(m => wanted.Contains(m.UserId)))
+            {
+                m.IsAdmin = admins.Contains(m.UserId);
+            }
+
+            foreach (var uid in wanted.Where(uid => !currentIds.Contains(uid)))
+            {
+                db.EventMembers.Add(new EventMember
+                {
+                    EventId = id, UserId = uid, Token = Guid.NewGuid(),
+                    IsAdmin = admins.Contains(uid), AddedUtc = clock.GetUtcNow(),
+                });
+            }
+
+            await db.SaveChangesAsync(ct);
+            return Results.Ok(await LoadEventDtoAsync(db, ev, ct));
+        }).AddEndpointFilter<AdminEndpointFilter>();
+
+        app.MapPut("/api/events/{id:int}/code", async (
+            int id, SetEventCodeRequest req, AppDbContext db, JoinCodeGenerator codes, CancellationToken ct) =>
+        {
+            var ev = await db.Events.FirstOrDefaultAsync(e => e.Id == id, ct)
+                ?? throw new RuleViolationException("Event not found.", StatusCodes.Status404NotFound);
+
+            var code = (req.Code ?? string.Empty).Trim().ToUpperInvariant();
+            if (code.Length == 0)
+            {
+                ev.JoinCode = await codes.NextAsync(db, ct);
+            }
+            else
+            {
+                if (code.Length is < 3 or > 16 || !code.All(c => char.IsLetterOrDigit(c) || c == '-'))
+                {
+                    throw new RuleViolationException("A code must be 3–16 letters, numbers or dashes.");
+                }
+
+                var taken = await db.Events.AnyAsync(e => e.JoinCode == code && e.Id != id, ct)
+                            || await db.Activities.AnyAsync(a => a.JoinCode == code, ct);
+                if (taken)
+                {
+                    throw new RuleViolationException("That code is already in use.", StatusCodes.Status409Conflict);
+                }
+
+                ev.JoinCode = code;
+            }
+
+            await db.SaveChangesAsync(ct);
+            return Results.Ok(await LoadEventDtoAsync(db, ev, ct));
+        }).AddEndpointFilter<EventManagerFilter>();
+
+        // --- Players: look up + standings ---------------------------------------
+
+        app.MapGet("/api/events/{id:int}", async (int id, AppDbContext db, CancellationToken ct) =>
+        {
+            var ev = await db.Events.AsNoTracking().FirstOrDefaultAsync(e => e.Id == id, ct);
+            return ev is null ? Results.NotFound() : Results.Ok(await LoadEventDtoAsync(db, ev, ct));
+        });
+
+        app.MapGet("/api/events/by-code/{code}", async (string code, AppDbContext db, CancellationToken ct) =>
+        {
+            var normalized = code.Trim().ToUpperInvariant();
+            var ev = await db.Events.AsNoTracking().FirstOrDefaultAsync(e => e.JoinCode == normalized, ct);
+            return ev is null ? Results.NotFound() : Results.Ok(await LoadEventDtoAsync(db, ev, ct));
+        });
+
+        app.MapGet("/api/events/{id:int}/standings", async (
+            int id, EventStandingsService standings, CancellationToken ct) =>
+        {
+            var dto = await standings.BuildAsync(id, ct);
+            return dto is null ? Results.NotFound() : Results.Ok(dto);
+        });
+
+        // --- Players: join the whole event with one name ------------------------
+        // Additive: joins every currently-joinable activity the name isn't already in.
+        // Call again (e.g. when the host opens the next activity) to pick up new ones.
+
+        app.MapPost("/api/events/by-code/{code}/join", async (
+            string code, EventJoinRequest req, AppDbContext db, ScoreboardNotifier notifier,
+            RundanOptions options, TimeProvider clock, HttpContext http, CancellationToken ct) =>
+        {
+            var normalized = code.Trim().ToUpperInvariant();
+            var ev = await db.Events.Include(e => e.Activities)
+                .FirstOrDefaultAsync(e => e.JoinCode == normalized, ct)
+                ?? throw new RuleViolationException("No event with that code.", StatusCodes.Status404NotFound);
+
+            var name = (req.DisplayName ?? string.Empty).Trim();
+            if (name.Length == 0)
+            {
+                throw new RuleViolationException("Enter a name to join with.");
+            }
+
+            if (name.Length > 60)
+            {
+                name = name[..60];
+            }
+
+            var isAdmin = options.RequiresAdminCode && SecurityHelpers.FixedEquals(
+                http.Request.Headers[AdminEndpointFilter.HeaderName].ToString(), options.AdminCode);
+
+            var joinable = ev.Activities
+                .Where(a => a.Status is ActivityStatus.Open or ActivityStatus.Live)
+                .OrderBy(a => a.Order)
+                .ToList();
+
+            var created = new List<(int ActivityId, Participant Participant)>();
+            foreach (var act in joinable)
+            {
+                var taken = await db.Participants.AnyAsync(p => p.ActivityId == act.Id && p.DisplayName == name, ct);
+                if (taken)
+                {
+                    continue; // already in this activity (this device re-joining, or name reused)
+                }
+
+                var participant = new Participant
+                {
+                    ActivityId = act.Id,
+                    DisplayName = name,
+                    Token = Guid.NewGuid(),
+                    IsAdmin = isAdmin,
+                    JoinedUtc = clock.GetUtcNow(),
+                };
+                db.Participants.Add(participant);
+                created.Add((act.Id, participant));
+            }
+
+            if (created.Count > 0)
+            {
+                try
+                {
+                    await db.SaveChangesAsync(ct);
+                }
+                catch (DbUpdateException)
+                {
+                    throw new RuleViolationException("That name was just taken — pick another.",
+                        StatusCodes.Status409Conflict);
+                }
+
+                foreach (var (activityId, participant) in created)
+                {
+                    await notifier.PushParticipantJoinedAsync(activityId, participant.ToDto());
+                    await notifier.PushScoreboardAsync(activityId, ct);
+                }
+            }
+
+            return Results.Ok(new EventJoinResultDto
+            {
+                EventId = ev.Id,
+                DisplayName = name,
+                Slots = created.Select(c => new EventJoinSlotDto
+                {
+                    ActivityId = c.ActivityId,
+                    ParticipantId = c.Participant.Id,
+                    Token = c.Participant.Token,
+                }).ToList(),
+            });
+        });
+
+        // --- Roster events: claim your pre-registered identity ------------------
+        // Returns your TEAM session for each joinable activity (generating teams as needed).
+        // Idempotent — call again when the host opens the next activity.
+        app.MapPost("/api/events/by-code/{code}/claim", async (
+            string code, ClaimRequest req, AppDbContext db, TeamService teams,
+            ScoreboardNotifier notifier, CancellationToken ct) =>
+        {
+            var normalized = code.Trim().ToUpperInvariant();
+            var ev = await db.Events.Include(e => e.Activities)
+                .FirstOrDefaultAsync(e => e.JoinCode == normalized, ct)
+                ?? throw new RuleViolationException("No event with that code.", StatusCodes.Status404NotFound);
+
+            var member = await db.EventMembers.Include(m => m.User)
+                .FirstOrDefaultAsync(m => m.EventId == ev.Id && m.UserId == req.UserId, ct)
+                ?? throw new RuleViolationException("That player isn't on this event's roster.",
+                    StatusCodes.Status404NotFound);
+
+            var slots = new List<EventJoinSlotDto>();
+            foreach (var act in ev.Activities
+                         .Where(a => a.Status is ActivityStatus.Open or ActivityStatus.Live)
+                         .OrderBy(a => a.Order))
+            {
+                var generated = await teams.EnsureTeamsAsync(act, ct);
+                var myTeam = generated.FirstOrDefault(t => t.Members.Any(m => m.UserId == req.UserId));
+                if (myTeam is not null)
+                {
+                    slots.Add(new EventJoinSlotDto
+                    {
+                        ActivityId = act.Id,
+                        ParticipantId = myTeam.Id,
+                        Token = myTeam.Token,
+                        TeamName = myTeam.DisplayName,
+                    });
+                    await notifier.PushScoreboardAsync(act.Id, ct);
+                }
+            }
+
+            return Results.Ok(new ClaimResultDto
+            {
+                EventId = ev.Id,
+                UserId = req.UserId,
+                DisplayName = member.User!.Name,
+                MemberToken = member.Token,
+                IsEventAdmin = member.IsAdmin,
+                Slots = slots,
+            });
+        });
+
+        // The teams (partner mixer output) for one activity.
+        app.MapGet("/api/activities/{id:int}/teams", async (int id, AppDbContext db, CancellationToken ct) =>
+        {
+            var teamList = await db.Participants.AsNoTracking()
+                .Include(p => p.Members).ThenInclude(m => m.User)
+                .Where(p => p.ActivityId == id && p.IsTeam)
+                .OrderBy(p => p.Id)
+                .ToListAsync(ct);
+
+            var dto = teamList.Select(t => new TeamDto
+            {
+                ActivityId = id,
+                ParticipantId = t.Id,
+                Name = t.DisplayName,
+                MemberNames = t.Members.Select(m => m.User!.Name).ToList(),
+            }).ToList();
+            return Results.Ok(dto);
+        });
+    }
+
+    private static async Task<EventDto> LoadEventDtoAsync(AppDbContext db, Event ev, CancellationToken ct)
+    {
+        var rows = await db.Activities.AsNoTracking()
+            .Where(a => a.EventId == ev.Id)
+            .OrderBy(a => a.Order).ThenBy(a => a.Id)
+            .Select(a => new { Activity = a, Pc = a.Participants.Count, Qc = a.Questions.Count })
+            .ToListAsync(ct);
+
+        var memberRows = await db.EventMembers.AsNoTracking()
+            .Where(m => m.EventId == ev.Id)
+            .OrderBy(m => m.User!.Name)
+            .Select(m => new { m.UserId, Name = m.User!.Name, m.IsAdmin })
+            .ToListAsync(ct);
+
+        var members = memberRows.Select(m => new UserDto { Id = m.UserId, Name = m.Name }).ToList();
+        var dtos = rows.Select(r => r.Activity.ToDto(r.Pc, r.Qc)).ToList();
+        var dto = ev.ToDto(dtos, members);
+        dto.AdminUserIds = memberRows.Where(m => m.IsAdmin).Select(m => m.UserId).ToList();
+        return dto;
+    }
+
+    private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+}

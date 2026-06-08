@@ -1,0 +1,62 @@
+@inject AppState State
+@inject RundanApi Api
+
+<div class="card stack center">
+    <img src="img/rundan-mark.svg" width="56" height="56" alt="" style="margin:0 auto" />
+    <h1>Members only</h1>
+    <p class="muted">Pop in the access code your group shared with you.</p>
+
+    @if (_error is not null)
+    {
+        <div class="alert error">@_error</div>
+    }
+
+    <input class="code-input" type="text" inputmode="text" autocomplete="off"
+           placeholder="ACCESS CODE" @bind="_code" @bind:event="oninput"
+           @onkeydown="OnKeyDown" />
+
+    <button class="btn block" @onclick="SubmitAsync" disabled="@_busy">
+        @(_busy ? "Checking…" : "Enter")
+    </button>
+</div>
+
+@code {
+    private string _code = string.Empty;
+    private string? _error;
+    private bool _busy;
+
+    [Parameter] public EventCallback OnUnlocked { get; set; }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await SubmitAsync();
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        // The field displays uppercase; normalize so codes are effectively case-insensitive.
+        var code = _code.Trim().ToUpperInvariant();
+        if (code.Length == 0 || _busy)
+        {
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+
+        if (await Api.VerifyAccessCodeAsync(code))
+        {
+            await State.SetAccessCodeAsync(code);
+            await OnUnlocked.InvokeAsync();
+        }
+        else
+        {
+            _error = "That code didn't work. Try again.";
+        }
+
+        _busy = false;
+    }
+}

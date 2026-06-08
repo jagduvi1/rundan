@@ -1,0 +1,67 @@
+namespace Rundan.Shared.Contracts;
+
+/// <summary>An answer option as shown to players (no correctness leaked).</summary>
+public class AnswerOptionDto
+{
+    public int Id { get; set; }
+    public int Order { get; set; }
+    public string Text { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// A question as delivered to players. Correctness is deliberately omitted while
+/// the activity is live; reveal it with <see cref="QuestionResultDto"/> afterwards.
+/// </summary>
+public class QuestionDto
+{
+    public int Id { get; set; }
+    public int Order { get; set; }
+    public string Text { get; set; } = string.Empty;
+    public QuestionKind Kind { get; set; }
+    public int Points { get; set; } = 1;
+    public string? ImageUrl { get; set; }
+
+    // Geo fields — only set for Tipspromenad questions.
+    public double? Latitude { get; set; }
+    public double? Longitude { get; set; }
+    public int? RadiusMeters { get; set; }
+
+    public List<AnswerOptionDto> Options { get; set; } = new();
+
+    public bool HasLocation => Latitude.HasValue && Longitude.HasValue;
+}
+
+/// <summary>One option in an admin create/update request.</summary>
+public class AnswerOptionUpsert
+{
+    public string Text { get; set; } = string.Empty;
+    public bool IsCorrect { get; set; }
+}
+
+/// <summary>Admin request to create or replace a question.</summary>
+public class QuestionUpsertRequest
+{
+    public int Order { get; set; }
+    public string Text { get; set; } = string.Empty;
+    public QuestionKind Kind { get; set; } = QuestionKind.MultipleChoice;
+    public int Points { get; set; } = 1;
+    public string? ImageUrl { get; set; }
+
+    public double? Latitude { get; set; }
+    public double? Longitude { get; set; }
+    public int? RadiusMeters { get; set; }
+
+    /// <summary>For multiple-choice / true-false questions.</summary>
+    public List<AnswerOptionUpsert> Options { get; set; } = new();
+
+    /// <summary>Accepted answer for free-text questions (compared case-insensitively, trimmed).</summary>
+    public string? AcceptedFreeTextAnswer { get; set; }
+}
+
+/// <summary>Reveals the correct answer for a question (after the activity is finished).</summary>
+public class QuestionResultDto
+{
+    public int QuestionId { get; set; }
+    public int? CorrectOptionId { get; set; }
+    public string? CorrectAnswerText { get; set; }
+}

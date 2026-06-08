@@ -1,0 +1,227 @@
+@inject RundanApi Api
+
+@if (_loading)
+{
+    <div class="card center muted"><div class="spinner" style="margin:1rem auto"></div>Loading questions…</div>
+}
+else if (_questions.Count == 0)
+{
+    <div class="card muted">No questions in this activity.</div>
+}
+else
+{
+    var q = _questions[_index];
+    var mine = _answered.GetValueOrDefault(q.Id);
+
+    <div class="card stack">
+        <div class="q-progress">
+            Question @(_index + 1) of @_questions.Count · @_answered.Count answered · worth @q.Points pt@(q.Points == 1 ? "" : "s")
+        </div>
+        <div class="q-text">@q.Text</div>
+
+        @if (!string.IsNullOrEmpty(q.ImageUrl))
+        {
+            <img class="q-image" src="@q.ImageUrl" alt="" />
+        }
+
+        @if (_error is not null)
+        {
+            <div class="alert error">@_error</div>
+        }
+
+        @if (q.Kind == QuestionKind.FreeText)
+        {
+            @if (mine is null)
+            {
+                <input type="text" placeholder="Type your answer" @bind="_freeText" @bind:event="oninput" />
+                <button class="btn block" @onclick="SubmitFreeTextAsync"
+                        disabled="@(_submitting || string.IsNullOrWhiteSpace(_freeText))">Submit</button>
+            }
+            else
+            {
+                <div class="alert @(mine.IsCorrect ? "success" : "error")">
+                    You answered: <b>@mine.FreeText</b><br />
+                    @(mine.IsCorrect ? $"Correct! +{mine.AwardedPoints}" : "Not correct.")
+                </div>
+            }
+        }
+        else
+        {
+            @for (var i = 0; i < q.Options.Count; i++)
+            {
+                var opt = q.Options[i];
+                var idx = i;
+                <button class="option @OptionClass(mine, opt)" style="--opt-accent:@KeyColor(idx, q.Options.Count)"
+                        disabled="@(mine is not null || _submitting)"
+                        @onclick="() => Select(opt.Id)">
+                    <span class="option__key">@OptionKey(idx, q.Options.Count)</span>
+                    <span class="option__text">@opt.Text</span>
+                    <span class="option__mark">
+                        @if (mine is not null && opt.Id == mine.SelectedOptionId)
+                        {
+                            @(mine.IsCorrect ? "✓" : "✗")
+                        }
+                    </span>
+                </button>
+            }
+
+            @if (mine is null)
+            {
+                <button class="btn block" @onclick="SubmitChoiceAsync"
+                        disabled="@(_selectedOptionId is null || _submitting)">Submit</button>
+            }
+            else
+            {
+                <div class="alert @(mine.IsCorrect ? "success" : "error")">
+                    @(mine.IsCorrect ? $"Correct! +{mine.AwardedPoints}" : "Not this time.")
+                </div>
+            }
+        }
+
+        @if (mine is not null)
+        {
+            @if (_answered.Count < _questions.Count)
+            {
+                <button class="btn block" @onclick="GoNext">Next question →</button>
+            }
+            else
+            {
+                <div class="alert success">All done — nice work! Sit tight for the results.</div>
+            }
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public ActivityDto Activity { get; set; } = default!;
+    [Parameter] public PlayerSession Session { get; set; } = default!;
+
+    private bool _loading = true;
+    private List<QuestionDto> _questions = new();
+    private Dictionary<int, MyAnswerDto> _answered = new();
+    private int _index;
+    private int? _selectedOptionId;
+    private string _freeText = string.Empty;
+    private bool _submitting;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _questions = await Api.GetQuestionsAsync(Activity.Id);
+            var mine = await Api.GetMyAnswersAsync(Activity.Id, Session.Token);
+            _answered = mine.ToDictionary(a => a.QuestionId);
+            _index = FirstUnansweredIndex();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private int FirstUnansweredIndex()
+    {
+        for (var i = 0; i < _questions.Count; i++)
+        {
+            if (!_answered.ContainsKey(_questions[i].Id))
+            {
+                return i;
+            }
+        }
+
+        return Math.Max(0, _questions.Count - 1);
+    }
+
+    private void Select(int optionId)
+    {
+        _selectedOptionId = optionId;
+        _error = null;
+    }
+
+    // Sequential reveal: jump to the first still-unanswered question (no browsing ahead/back).
+    private void GoNext()
+    {
+        _index = FirstUnansweredIndex();
+        _selectedOptionId = null;
+        _freeText = string.Empty;
+        _error = null;
+    }
+
+    private async Task SubmitChoiceAsync()
+    {
+        if (_selectedOptionId is null)
+        {
+            return;
+        }
+
+        await SubmitAsync(new SubmitAnswerRequest
+        {
+            QuestionId = _questions[_index].Id,
+            SelectedOptionId = _selectedOptionId,
+        });
+    }
+
+    private async Task SubmitFreeTextAsync()
+    {
+        await SubmitAsync(new SubmitAnswerRequest
+        {
+            QuestionId = _questions[_index].Id,
+            FreeText = _freeText.Trim(),
+        });
+    }
+
+    private async Task SubmitAsync(SubmitAnswerRequest request)
+    {
+        _submitting = true;
+        _error = null;
+
+        try
+        {
+            var result = await Api.SubmitAnswerAsync(Activity.Id, request, Session.Token);
+            _answered[request.QuestionId] = new MyAnswerDto
+            {
+                QuestionId = request.QuestionId,
+                SelectedOptionId = request.SelectedOptionId,
+                FreeText = request.FreeText,
+                IsCorrect = result.IsCorrect,
+                AwardedPoints = result.AwardedPoints,
+            };
+            _selectedOptionId = null;
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+
+    private string OptionClass(MyAnswerDto? mine, AnswerOptionDto opt)
+    {
+        if (mine is null)
+        {
+            return _selectedOptionId == opt.Id ? "selected" : string.Empty;
+        }
+
+        if (opt.Id == mine.SelectedOptionId)
+        {
+            return mine.IsCorrect ? "correct" : "wrong";
+        }
+
+        return string.Empty;
+    }
+
+    // The Swedish 1 · X · 2 tradition for three-way questions; A/B/C/D otherwise.
+    internal static string OptionKey(int index, int count) =>
+        count == 3 ? new[] { "1", "X", "2" }[index] : ((char)('A' + index)).ToString();
+
+    internal static string KeyColor(int index, int count) =>
+        count == 3 ? new[] { "var(--answer-1)", "var(--answer-x)", "var(--answer-2)" }[index] : "var(--sea-500)";
+}

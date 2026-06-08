@@ -1,0 +1,680 @@
+@page "/e/{Id:int}"
+@implements IAsyncDisposable
+@inject RundanApi Api
+@inject AppState State
+@inject NavigationManager Nav
+
+<PageTitle>@(_event?.Name ?? "Event") · Rundan</PageTitle>
+
+@if (_loading)
+{
+    <div class="card center muted"><div class="spinner" style="margin:1rem auto"></div></div>
+}
+else if (_event is null)
+{
+    <div class="card">
+        <h1>Not found</h1>
+        <p class="muted">No event with that code or id.</p>
+        <a class="btn" href="">Back to start</a>
+    </div>
+}
+else
+{
+    <div class="card stack">
+        <div class="row">
+            <h1 class="grow">@_event.Name</h1>
+            @if (_reconnecting)
+            {
+                <span class="badge">Reconnecting…</span>
+            }
+        </div>
+        @if (!string.IsNullOrEmpty(_event.ImageUrl))
+        {
+            <img src="@_event.ImageUrl" alt="" style="width:100%;border-radius:var(--radius-md)" />
+        }
+        @if (!string.IsNullOrWhiteSpace(_event.Description))
+        {
+            <p style="white-space:pre-wrap">@_event.Description</p>
+        }
+        <div class="row muted" style="font-size:.85rem">
+            <span>Event code @_event.JoinCode</span>
+            <span>·</span>
+            <span>Teams of @_event.TeamSize</span>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Total standings</h2>
+        @if (_standings is null || _standings.Entries.Count == 0)
+        {
+            <p class="muted center">No points yet — they add up across every activity.</p>
+        }
+        else
+        {
+            <div class="score-list">
+                @foreach (var e in _standings.Entries)
+                {
+                    <div class="score-row @(IsMe(e.DisplayName) ? "me" : null) @(e.Rank == 1 ? "lead" : null)">
+                        <div class="score-row__rank">@e.Rank</div>
+                        <div class="score-row__name">
+                            <b>@e.DisplayName @if (IsMe(e.DisplayName)) { <span class="you"> · You</span> }</b>
+                            <span class="sub">@e.ActivitiesPlayed of @_event.Activities.Count activities</span>
+                        </div>
+                        <div class="score-row__score">@e.TotalPoints</div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    @* ---- Identity: claim (roster) or free-name join (rosterless) ---- *@
+    @if (_eventName is null)
+    {
+        @if (_joinError is not null)
+        {
+            <div class="alert error">@_joinError</div>
+        }
+
+        @if (_event.HasRoster)
+        {
+            <div class="card stack">
+                <h2>Who are you?</h2>
+                <p class="muted">Tap your name to join the event.</p>
+                @foreach (var m in _event.Members)
+                {
+                    <button class="btn block secondary" @onclick="() => ClaimAsync(m.Id)" disabled="@_busy">@m.Name</button>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="card stack">
+                <h2>Join “@_event.Name”</h2>
+                <p class="muted">Pick a name — you'll use it for every activity.</p>
+                <input type="text" maxlength="60" placeholder="Your name" @bind="_joinName" @bind:event="oninput" />
+                <button class="btn block" @onclick="JoinFreeNameAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_joinName))">
+                    Join the event
+                </button>
+            </div>
+        }
+    }
+    else
+    {
+        <div class="card center muted">You're playing as <b>@_eventName</b>.</div>
+    }
+
+    <div class="card">
+        <h2>Activities</h2>
+        @if (_event.Activities.Count == 0)
+        {
+            <p class="muted">No activities yet@(CanManage ? " — add the first one below." : ".")</p>
+        }
+        else
+        {
+            <ul class="list">
+                @foreach (var a in _event.Activities)
+                {
+                    <li>
+                        <span class="grow">
+                            <b>@a.Order. @a.Title</b>
+                            <span class="muted" style="font-size:.8rem"> · @TypeLabel(a.Type)</span>
+                            @if (_teamByActivity.TryGetValue(a.Id, out var team) && !string.IsNullOrEmpty(team))
+                            {
+                                <span class="sub" style="display:block;font-size:.8rem;color:var(--sea-600)">Your team: @team</span>
+                            }
+                        </span>
+                        <StatusBadge Status="a.Status" />
+                        @if (a.Status is ActivityStatus.Live or ActivityStatus.Open or ActivityStatus.Finished)
+                        {
+                            <a class="btn small @(a.Status == ActivityStatus.Live ? "" : "secondary")" href="@($"a/{a.Id}")">
+                                @ActionLabel(a.Status)
+                            </a>
+                        }
+                    </li>
+                }
+            </ul>
+        }
+    </div>
+
+    @if (CanManage)
+    {
+        <div class="card stack accent">
+            <h2>Host controls</h2>
+            @if (_adminError is not null)
+            {
+                <div class="alert error">@_adminError</div>
+            }
+
+            @* Run order *@
+            @foreach (var a in _event.Activities)
+            {
+                <div class="row" style="border-bottom:1px solid var(--line);padding:.4rem 0">
+                    <span class="grow"><b>@a.Order. @a.Title</b> <StatusBadge Status="a.Status" /></span>
+                    @foreach (var (label, status) in HostActions(a.Status))
+                    {
+                        <button class="btn small success" @onclick="() => SetStatusAsync(a.Id, status)" disabled="@_busy">@label</button>
+                    }
+                    <a class="btn small ghost" href="@($"manage/{a.Id}")">Edit</a>
+                </div>
+            }
+
+            <h3 style="margin-top:.5rem">Add an activity</h3>
+            <input type="text" placeholder="Activity title" @bind="_newTitle" maxlength="200" />
+            <select @bind="_newType">
+                <option value="@ActivityType.Quiz">Quiz</option>
+                <option value="@ActivityType.Tipspromenad">Tipspromenad (quiz walk)</option>
+                <option value="@ActivityType.Boule">Boule</option>
+                <option value="@ActivityType.ScoreGame">Other score game</option>
+            </select>
+            <button class="btn block success" @onclick="AddActivityAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_newTitle))">
+                Add to event
+            </button>
+        </div>
+    }
+
+    @if (State.IsHost)
+    {
+        <div class="card stack accent">
+            <h3>Players &amp; event admins</h3>
+            <p class="muted">Pick players from your roster, and tick <b>admin</b> to make someone a co-host. Manage the roster under <a href="admin/users">People</a>.</p>
+            @if (_allUsers.Count == 0)
+            {
+                <p class="muted">No people in the roster yet.</p>
+            }
+            else
+            {
+                @foreach (var u in _allUsers)
+                {
+                    <div class="row" style="font-weight:500">
+                        <label class="row grow" style="font-weight:500">
+                            <input type="checkbox" style="width:auto;min-height:auto"
+                                   checked="@_selectedMemberIds.Contains(u.Id)"
+                                   @onchange="e => ToggleMember(u.Id, (bool)e.Value!)" />
+                            <span class="grow">@u.Name</span>
+                        </label>
+                        @if (_selectedMemberIds.Contains(u.Id))
+                        {
+                            <label class="muted" style="font-weight:500;font-size:.85rem">
+                                <input type="checkbox" style="width:auto;min-height:auto"
+                                       checked="@_selectedAdminIds.Contains(u.Id)"
+                                       @onchange="e => ToggleAdmin(u.Id, (bool)e.Value!)" /> admin
+                            </label>
+                        }
+                    </div>
+                }
+                <button class="btn block success" @onclick="SaveMembersAsync" disabled="@_busy">Save players</button>
+            }
+        </div>
+    }
+
+    @if (CanManage)
+    {
+        <div class="card stack accent">
+            <h3>Event details</h3>
+            <div class="field">
+                <label>Event code (players type this to join)</label>
+                <div class="row">
+                    <input class="grow code-input" style="font-size:1.1rem;height:52px;letter-spacing:.15em"
+                           @bind="_editCode" maxlength="16" />
+                    <button class="btn small" @onclick="SaveCodeAsync" disabled="@_busy">Set</button>
+                    <button class="btn small secondary" @onclick="RegenerateCodeAsync" disabled="@_busy">New</button>
+                </div>
+            </div>
+            <div class="field">
+                <label>Name</label>
+                <input @bind="_editName" maxlength="200" />
+            </div>
+            <div class="field">
+                <label>Rules / info</label>
+                <textarea @bind="_editDescription" placeholder="Explain how the event works"></textarea>
+            </div>
+            <div class="field">
+                <label>Players per team</label>
+                <input type="number" min="1" max="20" @bind="_editTeamSize" style="width:120px" />
+            </div>
+            <div class="field">
+                <label>Picture / map</label>
+                <ImageUploader Value="_editImage" ValueChanged="v => _editImage = v" />
+            </div>
+            <button class="btn block success" @onclick="SaveEventAsync" disabled="@_busy">Save event details</button>
+        </div>
+    }
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private EventDto? _event;
+    private EventStandingsDto? _standings;
+    private string? _eventName;
+    private int? _userId;
+    private readonly Dictionary<int, string> _teamByActivity = new();
+    private ScoreboardConnection? _conn;
+    private int _loadedId = -1;
+    private bool _loading = true;
+    private bool _reconnecting;
+
+    private string _joinName = string.Empty;
+    private string? _joinError;
+    private bool _busy;
+
+    private string _newTitle = string.Empty;
+    private ActivityType _newType = ActivityType.Quiz;
+    private string? _adminError;
+
+    private List<UserDto> _allUsers = new();
+    private HashSet<int> _selectedMemberIds = new();
+    private HashSet<int> _selectedAdminIds = new();
+    private bool _isEventAdmin;
+
+    private bool CanManage => State.IsHost || _isEventAdmin;
+
+    private string _editName = string.Empty;
+    private string? _editDescription;
+    private string? _editImage;
+    private int _editTeamSize = 2;
+    private string _editCode = string.Empty;
+
+    private bool IsMe(string name) => string.Equals(name, _eventName, StringComparison.Ordinal);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedId == Id)
+        {
+            return;
+        }
+
+        _loadedId = Id;
+        await TeardownAsync();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        await State.EnsureInitializedAsync(Api);
+        _event = await Api.GetEventAsync(Id);
+
+        if (_event is not null)
+        {
+            SyncEditFields();
+
+            if (_event.HasRoster)
+            {
+                _userId = await State.GetEventUserIdAsync(Id);
+                _eventName = await State.GetEventNameAsync(Id);
+                if (_userId is not null)
+                {
+                    await ReclaimAsync();
+                }
+            }
+            else
+            {
+                _eventName = await State.GetEventNameAsync(Id);
+                if (_eventName is not null)
+                {
+                    await EnsureFreeNameSessionsAsync();
+                }
+            }
+
+            if (State.IsHost)
+            {
+                try { _allUsers = await Api.ListUsersAsync(); } catch (ApiException) { }
+                _selectedMemberIds = _event.Members.Select(m => m.Id).ToHashSet();
+                _selectedAdminIds = _event.AdminUserIds.ToHashSet();
+            }
+
+            _standings = await Api.GetEventStandingsAsync(Id);
+            await StartConnectionAsync();
+        }
+
+        _loading = false;
+    }
+
+    private void SyncEditFields()
+    {
+        if (_event is null) return;
+        _editName = _event.Name;
+        _editDescription = _event.Description;
+        _editImage = _event.ImageUrl;
+        _editTeamSize = _event.TeamSize;
+        _editCode = _event.JoinCode;
+    }
+
+    private async Task SaveCodeAsync()
+    {
+        _busy = true;
+        _adminError = null;
+        try
+        {
+            _event = await Api.SetEventCodeAsync(Id, _editCode.Trim());
+            SyncEditFields();
+        }
+        catch (ApiException ex)
+        {
+            _adminError = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task RegenerateCodeAsync()
+    {
+        _busy = true;
+        _adminError = null;
+        try
+        {
+            _event = await Api.SetEventCodeAsync(Id, null);
+            SyncEditFields();
+        }
+        catch (ApiException ex)
+        {
+            _adminError = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task StartConnectionAsync()
+    {
+        if (_event is null) return;
+        _conn = new ScoreboardConnection(Nav, State);
+        _conn.ScoreboardUpdated += OnRealtimeScore;
+        _conn.StatusChanged += OnRealtimeStatus;
+        _conn.ConnectionStateChanged += OnConnectionStateChanged;
+        try { await _conn.StartAsync(_event.Activities.Select(a => a.Id)); }
+        catch { /* live updates unavailable */ }
+    }
+
+    private void OnRealtimeScore(ScoreboardDto _) => RefreshSoon();
+    private void OnRealtimeStatus(ActivityStatusChangedDto _) => RefreshSoon();
+    private void RefreshSoon() => _ = InvokeAsync(RefreshAsync);
+
+    private async Task RefreshAsync()
+    {
+        _event = await Api.GetEventAsync(Id) ?? _event;
+        _standings = await Api.GetEventStandingsAsync(Id);
+
+        if (_conn is not null && _event is not null)
+        {
+            foreach (var a in _event.Activities)
+            {
+                await _conn.EnsureJoinedAsync(a.Id);
+            }
+        }
+
+        if (_event?.HasRoster == true && _userId is not null)
+        {
+            await ReclaimAsync();
+        }
+        else if (_event?.HasRoster == false && _eventName is not null)
+        {
+            await EnsureFreeNameSessionsAsync();
+        }
+
+        StateHasChanged();
+    }
+
+    private void OnConnectionStateChanged()
+    {
+        _reconnecting = _conn?.IsReconnecting ?? false;
+        InvokeAsync(StateHasChanged);
+    }
+
+    // ---- Roster claim ----
+    private async Task ClaimAsync(int userId)
+    {
+        if (_event is null) return;
+        _busy = true;
+        _joinError = null;
+        try
+        {
+            var res = await Api.ClaimAsync(_event.JoinCode, userId);
+            _userId = userId;
+            _eventName = res.DisplayName;
+            _isEventAdmin = res.IsEventAdmin;
+            State.ActiveMemberToken = res.MemberToken;
+            await State.SaveEventUserIdAsync(Id, userId);
+            await State.SaveEventNameAsync(Id, res.DisplayName);
+            await State.SaveEventMemberTokenAsync(Id, res.MemberToken);
+            await StoreSlotsAsync(res.Slots);
+            _standings = await Api.GetEventStandingsAsync(Id);
+        }
+        catch (ApiException ex)
+        {
+            _joinError = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ReclaimAsync()
+    {
+        if (_event is null || _userId is not int uid) return;
+        try
+        {
+            var res = await Api.ClaimAsync(_event.JoinCode, uid);
+            _eventName = res.DisplayName;
+            _isEventAdmin = res.IsEventAdmin;
+            State.ActiveMemberToken = res.MemberToken;
+            await State.SaveEventMemberTokenAsync(Id, res.MemberToken);
+            await StoreSlotsAsync(res.Slots);
+        }
+        catch (ApiException) { }
+    }
+
+    private async Task StoreSlotsAsync(List<EventJoinSlotDto> slots)
+    {
+        foreach (var slot in slots)
+        {
+            _teamByActivity[slot.ActivityId] = slot.TeamName;
+            await State.SaveSessionAsync(slot.ActivityId, new PlayerSession
+            {
+                Token = slot.Token,
+                ParticipantId = slot.ParticipantId,
+                DisplayName = slot.TeamName,
+            });
+        }
+    }
+
+    // ---- Free-name join (rosterless events) ----
+    private async Task JoinFreeNameAsync()
+    {
+        var name = _joinName.Trim();
+        if (name.Length == 0 || _event is null) return;
+        _busy = true;
+        _joinError = null;
+        try
+        {
+            var result = await Api.JoinEventAsync(_event.JoinCode, name);
+            await State.SaveEventNameAsync(Id, name);
+            _eventName = name;
+            foreach (var slot in result.Slots)
+            {
+                await State.SaveSessionAsync(slot.ActivityId, new PlayerSession
+                {
+                    Token = slot.Token, ParticipantId = slot.ParticipantId, DisplayName = name,
+                });
+            }
+            _standings = await Api.GetEventStandingsAsync(Id);
+        }
+        catch (ApiException ex)
+        {
+            _joinError = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task EnsureFreeNameSessionsAsync()
+    {
+        if (_event is null || _eventName is null) return;
+        try
+        {
+            var result = await Api.JoinEventAsync(_event.JoinCode, _eventName);
+            foreach (var slot in result.Slots)
+            {
+                await State.SaveSessionAsync(slot.ActivityId, new PlayerSession
+                {
+                    Token = slot.Token, ParticipantId = slot.ParticipantId, DisplayName = _eventName,
+                });
+            }
+        }
+        catch (ApiException) { }
+    }
+
+    // ---- Admin actions ----
+    private void ToggleMember(int userId, bool on)
+    {
+        if (on)
+        {
+            _selectedMemberIds.Add(userId);
+        }
+        else
+        {
+            _selectedMemberIds.Remove(userId);
+            _selectedAdminIds.Remove(userId);
+        }
+    }
+
+    private void ToggleAdmin(int userId, bool on)
+    {
+        if (on) _selectedAdminIds.Add(userId);
+        else _selectedAdminIds.Remove(userId);
+    }
+
+    private async Task SaveMembersAsync()
+    {
+        _busy = true;
+        _adminError = null;
+        try
+        {
+            _event = await Api.SetEventMembersAsync(Id, _selectedMemberIds.ToList(), _selectedAdminIds.ToList());
+            _selectedMemberIds = _event.Members.Select(m => m.Id).ToHashSet();
+            _selectedAdminIds = _event.AdminUserIds.ToHashSet();
+            SyncEditFields();
+        }
+        catch (ApiException ex)
+        {
+            _adminError = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task SaveEventAsync()
+    {
+        _busy = true;
+        _adminError = null;
+        try
+        {
+            _event = await Api.UpdateEventAsync(Id, new UpdateEventRequest
+            {
+                Name = _editName.Trim(),
+                Description = _editDescription,
+                ImageUrl = _editImage,
+                TeamSize = _editTeamSize,
+            });
+            SyncEditFields();
+        }
+        catch (ApiException ex)
+        {
+            _adminError = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task SetStatusAsync(int activityId, ActivityStatus status)
+    {
+        _busy = true;
+        _adminError = null;
+        try
+        {
+            await Api.SetStatusAsync(activityId, status);
+            await RefreshAsync();
+        }
+        catch (ApiException ex)
+        {
+            _adminError = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task AddActivityAsync()
+    {
+        _busy = true;
+        _adminError = null;
+        try
+        {
+            await Api.CreateActivityAsync(new CreateActivityRequest { Title = _newTitle.Trim(), Type = _newType, EventId = Id });
+            _newTitle = string.Empty;
+            await RefreshAsync();
+        }
+        catch (ApiException ex)
+        {
+            _adminError = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task TeardownAsync()
+    {
+        if (_conn is not null)
+        {
+            _conn.ScoreboardUpdated -= OnRealtimeScore;
+            _conn.StatusChanged -= OnRealtimeStatus;
+            _conn.ConnectionStateChanged -= OnConnectionStateChanged;
+            await _conn.DisposeAsync();
+            _conn = null;
+        }
+    }
+
+    public async ValueTask DisposeAsync() => await TeardownAsync();
+
+    private static IEnumerable<(string Label, ActivityStatus Status)> HostActions(ActivityStatus status) => status switch
+    {
+        ActivityStatus.Draft => new[] { ("Open lobby", ActivityStatus.Open) },
+        ActivityStatus.Open => new[] { ("Start", ActivityStatus.Live) },
+        ActivityStatus.Live => new[] { ("Finish", ActivityStatus.Finished) },
+        ActivityStatus.Finished => new[] { ("Re-open", ActivityStatus.Live) },
+        _ => Array.Empty<(string, ActivityStatus)>(),
+    };
+
+    private static string ActionLabel(ActivityStatus status) => status switch
+    {
+        ActivityStatus.Live => "Play now",
+        ActivityStatus.Open => "Join lobby",
+        ActivityStatus.Finished => "See results",
+        _ => "Open",
+    };
+
+    private static string TypeLabel(ActivityType type) => type switch
+    {
+        ActivityType.Quiz => "Quiz",
+        ActivityType.Tipspromenad => "Tipspromenad",
+        ActivityType.Boule => "Boule",
+        ActivityType.ScoreGame => "Score game",
+        _ => type.ToString(),
+    };
+}

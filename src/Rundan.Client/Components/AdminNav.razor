@@ -1,0 +1,22 @@
+@inject AppState State
+@inject NavigationManager Nav
+
+<div class="card tight">
+    <div class="row wrap">
+        <a class="btn small @(Active == "events" ? "" : "ghost")" href="admin">Events</a>
+        <a class="btn small @(Active == "people" ? "" : "ghost")" href="admin/users">People</a>
+        <span class="grow"></span>
+        <button class="btn small secondary" @onclick="PreviewAsync">Preview as player</button>
+    </div>
+</div>
+
+@code {
+    /// <summary>"events" or "people" — highlights the active menu item.</summary>
+    [Parameter] public string Active { get; set; } = string.Empty;
+
+    private async Task PreviewAsync()
+    {
+        await State.SetPreviewAsync(true);
+        Nav.NavigateTo("");
+    }
+}

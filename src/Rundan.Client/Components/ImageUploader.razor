@@ -1,0 +1,65 @@
+@inject RundanApi Api
+
+<div class="stack">
+    @if (!string.IsNullOrEmpty(Value))
+    {
+        <img src="@Value" alt="" style="max-height:160px;border-radius:var(--radius-md);border:1px solid var(--line)" />
+    }
+    @if (_error is not null)
+    {
+        <div class="alert error">@_error</div>
+    }
+    <div class="row wrap">
+        <InputFile OnChange="OnFileAsync" accept="image/*" />
+        @if (_busy)
+        {
+            <span class="muted">Uploading…</span>
+        }
+        else if (!string.IsNullOrEmpty(Value))
+        {
+            <button class="btn ghost small" @onclick="ClearAsync">Remove</button>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string?> ValueChanged { get; set; }
+
+    private bool _busy;
+    private string? _error;
+
+    private async Task OnFileAsync(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file is null)
+        {
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            using var ms = new MemoryStream();
+            await file.OpenReadStream(5 * 1024 * 1024).CopyToAsync(ms);
+            ms.Position = 0;
+            var url = await Api.UploadImageAsync(ms, file.Name, string.IsNullOrEmpty(file.ContentType) ? "image/png" : file.ContentType);
+            await ValueChanged.InvokeAsync(url);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        catch (Exception)
+        {
+            _error = "That image couldn't be uploaded (max 5 MB).";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ClearAsync() => await ValueChanged.InvokeAsync(null);
+}

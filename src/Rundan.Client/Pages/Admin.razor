@@ -1,0 +1,202 @@
+@page "/admin"
+@inject RundanApi Api
+@inject AppState State
+@inject NavigationManager Nav
+
+<PageTitle>Events · Host · Rundan</PageTitle>
+
+@if (!_ready)
+{
+    <div class="card center muted"><div class="spinner" style="margin:1rem auto"></div></div>
+}
+else if (_needAdmin)
+{
+    <AdminGate OnUnlocked="OnUnlockedAsync" />
+}
+else
+{
+    <AdminNav Active="events" />
+
+    @if (_error is not null)
+    {
+        <div class="alert error">@_error</div>
+    }
+
+    <div class="card stack">
+        <h1>New event</h1>
+        <p class="muted">An event is a series of activities (tipspromenad, quiz, boule…) played in order.</p>
+        <input @bind="_eventName" placeholder="e.g. Midsommarfesten" maxlength="200" />
+        <button class="btn block success" @onclick="CreateEventAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_eventName))">
+            Create event
+        </button>
+    </div>
+
+    <div class="card">
+        <div class="row">
+            <h2 class="grow">Events</h2>
+            <button class="btn ghost small" @onclick="LoadAsync" disabled="@_busy">Refresh</button>
+        </div>
+        @if (_events.Count == 0)
+        {
+            <p class="muted">No events yet.</p>
+        }
+        else
+        {
+            <ul class="list">
+                @foreach (var ev in _events)
+                {
+                    <li>
+                        <a class="activity-link grow" href="@($"e/{ev.Id}")">
+                            <b>@ev.Name</b>
+                            <div class="muted" style="font-size:.8rem">
+                                code @ev.JoinCode · @ev.Members.Count player(s) · @ev.Activities.Count activit@(ev.Activities.Count == 1 ? "y" : "ies")
+                            </div>
+                        </a>
+                    </li>
+                }
+            </ul>
+        }
+    </div>
+
+    <div class="card stack">
+        <h2>Standalone activity</h2>
+        <p class="muted">A one-off game, not part of an event.</p>
+        <div class="field">
+            <label>Title</label>
+            <input @bind="_title" placeholder="e.g. Lunchquiz" maxlength="200" />
+        </div>
+        <div class="field">
+            <label>Type</label>
+            <select @bind="_type">
+                <option value="@ActivityType.Quiz">Quiz</option>
+                <option value="@ActivityType.Tipspromenad">Tipspromenad (quiz walk)</option>
+                <option value="@ActivityType.Boule">Boule</option>
+                <option value="@ActivityType.ScoreGame">Other score game</option>
+            </select>
+        </div>
+        <button class="btn block secondary" @onclick="CreateActivityAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_title))">
+            Create standalone activity
+        </button>
+
+        @if (_standalone.Count > 0)
+        {
+            <ul class="list">
+                @foreach (var a in _standalone)
+                {
+                    <li>
+                        <a class="activity-link grow" href="@($"manage/{a.Id}")">
+                            <b>@a.Title</b>
+                            <div class="muted" style="font-size:.8rem">code @a.JoinCode · @a.ParticipantCount player(s)</div>
+                        </a>
+                        <StatusBadge Status="a.Status" />
+                    </li>
+                }
+            </ul>
+        }
+    </div>
+}
+
+@code {
+    private bool _ready;
+    private bool _needAdmin;
+    private bool _busy;
+    private string? _error;
+
+    private string _eventName = string.Empty;
+    private string _title = string.Empty;
+    private ActivityType _type = ActivityType.Quiz;
+
+    private List<EventDto> _events = new();
+    private List<ActivityDto> _standalone = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await State.EnsureInitializedAsync(Api);
+
+        // Entering the host panel ends any "preview as player" session.
+        if (State.PreviewAsPlayer)
+        {
+            await State.SetPreviewAsync(false);
+        }
+
+        if (State.Bootstrap?.RequiresAdminCode == true && !State.HasAdminCode)
+        {
+            _needAdmin = true;
+            _ready = true;
+            return;
+        }
+
+        await LoadAsync();
+        _ready = true;
+    }
+
+    private async Task OnUnlockedAsync()
+    {
+        _needAdmin = false;
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            _events = await Api.ListEventsAsync();
+            var activities = await Api.ListActivitiesAsync();
+            _standalone = activities.Where(a => a.EventId is null).ToList();
+            _needAdmin = false;
+        }
+        catch (ApiException ex) when (ex.IsForbidden || ex.IsUnauthorized)
+        {
+            _needAdmin = true;
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task CreateEventAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var ev = await Api.CreateEventAsync(new CreateEventRequest { Name = _eventName.Trim() });
+            Nav.NavigateTo($"e/{ev.Id}");
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task CreateActivityAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var created = await Api.CreateActivityAsync(new CreateActivityRequest { Title = _title.Trim(), Type = _type });
+            Nav.NavigateTo($"manage/{created.Id}");
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

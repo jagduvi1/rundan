@@ -1,0 +1,23 @@
+# .NET build output
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+*.user
+
+# Local SQLite database (created at runtime under /home or App_Data)
+*.db
+*.db-shm
+*.db-wal
+App_Data/
+
+# Runtime data (SQLite db + uploaded files)
+.data/
+
+# Rider / VS
+.idea/
+.vs/
+
+# Publish output
+publish/
+*.zip

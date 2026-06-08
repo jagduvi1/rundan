@@ -1,0 +1,244 @@
+@page "/manage/{Id:int}"
+@inject RundanApi Api
+@inject AppState State
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>Manage · Rundan</PageTitle>
+
+@if (_loading)
+{
+    <div class="card center muted"><div class="spinner" style="margin:1rem auto"></div></div>
+}
+else if (_activity is null)
+{
+    <div class="card">
+        <h1>Not found</h1>
+        <p class="muted">@(_error ?? "That activity doesn't exist.")</p>
+        <a class="btn" href="admin">Back to host panel</a>
+    </div>
+}
+else
+{
+    <div class="card stack">
+        <div class="row">
+            <h1 class="grow">@_activity.Title</h1>
+            <StatusBadge Status="_activity.Status" />
+        </div>
+        <div class="muted">@TypeLabel(_activity.Type) · @_activity.ParticipantCount player(s)</div>
+
+        <div class="row wrap" style="align-items:center">
+            <span class="join-code">@_activity.JoinCode</span>
+            <button class="btn ghost small" @onclick="CopyCodeAsync">@(_copied ? "Copied ✓" : "Copy code")</button>
+            <a class="btn ghost small" href="@($"a/{_activity.Id}")">Open player view</a>
+        </div>
+
+        @if (_error is not null)
+        {
+            <div class="alert error">@_error</div>
+        }
+
+        <div class="row wrap">
+            @foreach (var (label, status, cls) in NextActions())
+            {
+                <button class="btn @cls" @onclick="() => SetStatusAsync(status)" disabled="@_busy">@label</button>
+            }
+        </div>
+
+        <div class="row">
+            @if (!_confirmDelete)
+            {
+                <button class="btn ghost small danger" @onclick="() => _confirmDelete = true">Delete activity</button>
+            }
+            else
+            {
+                <span class="muted grow">Delete for good?</span>
+                <button class="btn danger small" @onclick="DeleteAsync" disabled="@_busy">Yes, delete</button>
+                <button class="btn ghost small" @onclick="() => _confirmDelete = false">Cancel</button>
+            }
+        </div>
+    </div>
+
+    <div class="card stack">
+        <h2>Details</h2>
+        <div class="field">
+            <label>Title</label>
+            <input @bind="_editTitle" maxlength="200" />
+        </div>
+        <div class="field">
+            <label>Rules / info</label>
+            <textarea @bind="_editDescription" placeholder="Explain how this game works"></textarea>
+        </div>
+        <div class="field">
+            <label>Picture / map</label>
+            <ImageUploader Value="_editImage" ValueChanged="v => _editImage = v" />
+        </div>
+        <button class="btn block success" @onclick="SaveDetailsAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_editTitle))">
+            Save details
+        </button>
+    </div>
+
+    @if (_activity.UsesQuestions)
+    {
+        @if (_activity.Status == ActivityStatus.Draft)
+        {
+            <QuestionEditor Activity="_activity" @key="_activity.Id" />
+        }
+        else
+        {
+            <div class="card muted">
+                Questions are locked while the activity is @_activity.Status.
+                Set it back to <b>Draft</b> to edit them.
+            </div>
+        }
+    }
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private ActivityDto? _activity;
+    private bool _loading = true;
+    private bool _busy;
+    private bool _confirmDelete;
+    private bool _copied;
+    private string? _error;
+
+    private string _editTitle = string.Empty;
+    private string? _editDescription;
+    private string? _editImage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await State.EnsureInitializedAsync(Api);
+        _activity = await Api.GetActivityAsync(Id);
+        if (_activity is not null)
+        {
+            _editTitle = _activity.Title;
+            _editDescription = _activity.Description;
+            _editImage = _activity.ImageUrl;
+
+            // Carry the event-admin token so a co-host can manage this activity.
+            if (_activity.EventId is { } evId)
+            {
+                var memberToken = await State.GetEventMemberTokenAsync(evId);
+                if (memberToken is not null)
+                {
+                    State.ActiveMemberToken = memberToken;
+                }
+            }
+        }
+
+        _loading = false;
+    }
+
+    private async Task SaveDetailsAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            _activity = await Api.UpdateActivityAsync(Id, new UpdateActivityRequest
+            {
+                Title = _editTitle.Trim(),
+                Description = _editDescription,
+                ImageUrl = _editImage,
+            });
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private IEnumerable<(string Label, ActivityStatus Status, string Css)> NextActions()
+    {
+        if (_activity is null)
+        {
+            yield break;
+        }
+
+        switch (_activity.Status)
+        {
+            case ActivityStatus.Draft:
+                yield return ("Open lobby", ActivityStatus.Open, "success");
+                break;
+            case ActivityStatus.Open:
+                yield return ("Start", ActivityStatus.Live, "success");
+                yield return ("Back to draft", ActivityStatus.Draft, "secondary");
+                break;
+            case ActivityStatus.Live:
+                yield return ("Finish", ActivityStatus.Finished, "");
+                break;
+            case ActivityStatus.Finished:
+                yield return ("Re-open", ActivityStatus.Live, "secondary");
+                yield return ("Back to lobby", ActivityStatus.Open, "secondary");
+                break;
+        }
+    }
+
+    private async Task SetStatusAsync(ActivityStatus status)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            _activity = await Api.SetStatusAsync(Id, status);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            await Api.DeleteActivityAsync(Id);
+            Nav.NavigateTo("admin");
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+            _busy = false;
+        }
+    }
+
+    private async Task CopyCodeAsync()
+    {
+        if (_activity is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", _activity.JoinCode);
+            _copied = true;
+        }
+        catch
+        {
+            /* clipboard not available — the code is visible anyway */
+        }
+    }
+
+    private static string TypeLabel(ActivityType type) => type switch
+    {
+        ActivityType.Quiz => "Quiz",
+        ActivityType.Tipspromenad => "Tipspromenad",
+        ActivityType.Boule => "Boule",
+        ActivityType.ScoreGame => "Score game",
+        _ => type.ToString(),
+    };
+}

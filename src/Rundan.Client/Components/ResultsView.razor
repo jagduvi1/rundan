@@ -1,0 +1,63 @@
+@inject RundanApi Api
+
+<div class="card stack">
+    <h2>Answers</h2>
+
+    @if (_loading)
+    {
+        <div class="center muted"><div class="spinner" style="margin:1rem auto"></div></div>
+    }
+    else if (_results.Count == 0)
+    {
+        <p class="muted">No questions to reveal.</p>
+    }
+    else
+    {
+        @foreach (var (result, index) in _results.Select((r, i) => (r, i)))
+        {
+            var mine = _myAnswers.GetValueOrDefault(result.QuestionId);
+            <div style="border-bottom:1px solid var(--line);padding:.6rem 0">
+                <div><b>@(index + 1).</b> Correct answer: <b>@(result.CorrectAnswerText ?? "—")</b></div>
+                @if (mine is not null)
+                {
+                    <div class="@(mine.IsCorrect ? "" : "muted")" style="font-size:.9rem">
+                        You: @(DisplayMine(mine)) @(mine.IsCorrect ? "✓" : "✗")
+                    </div>
+                }
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public ActivityDto Activity { get; set; } = default!;
+    [Parameter] public PlayerSession? Session { get; set; }
+
+    private bool _loading = true;
+    private List<QuestionResultDto> _results = new();
+    private Dictionary<int, MyAnswerDto> _myAnswers = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _results = await Api.GetResultsAsync(Activity.Id);
+            if (Session is not null)
+            {
+                var mine = await Api.GetMyAnswersAsync(Activity.Id, Session.Token);
+                _myAnswers = mine.ToDictionary(a => a.QuestionId);
+            }
+        }
+        catch (ApiException)
+        {
+            // results not ready / no access — leave empty
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string DisplayMine(MyAnswerDto mine) =>
+        !string.IsNullOrEmpty(mine.FreeText) ? mine.FreeText : (mine.AwardedPoints > 0 ? "correct option" : "your pick");
+}

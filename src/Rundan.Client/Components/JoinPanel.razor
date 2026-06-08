@@ -1,0 +1,68 @@
+@inject RundanApi Api
+@inject AppState State
+
+<div class="card stack">
+    <h2>Join “@Activity.Title”</h2>
+    <p class="muted">Pick a name your friends will recognise.</p>
+
+    @if (_error is not null)
+    {
+        <div class="alert error">@_error</div>
+    }
+
+    <input type="text" maxlength="60" placeholder="Your name"
+           @bind="_name" @bind:event="oninput" @onkeydown="OnKeyDown" />
+
+    <button class="btn block" @onclick="JoinAsync" disabled="@_busy">
+        @(_busy ? "Joining…" : "Join")
+    </button>
+</div>
+
+@code {
+    [Parameter] public ActivityDto Activity { get; set; } = default!;
+    [Parameter] public EventCallback<JoinResultDto> OnJoined { get; set; }
+
+    private string _name = string.Empty;
+    private string? _error;
+    private bool _busy;
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await JoinAsync();
+        }
+    }
+
+    private async Task JoinAsync()
+    {
+        var name = _name.Trim();
+        if (name.Length == 0)
+        {
+            _error = "Enter a name first.";
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+
+        try
+        {
+            var existing = await State.GetSessionAsync(Activity.Id);
+            var result = await Api.JoinAsync(Activity.JoinCode, new JoinActivityRequest
+            {
+                DisplayName = name,
+                ExistingToken = existing?.Token,
+            });
+            await OnJoined.InvokeAsync(result);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

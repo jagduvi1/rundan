@@ -1,0 +1,504 @@
+@implements IAsyncDisposable
+@inject RundanApi Api
+@inject IJSRuntime JS
+
+@if (_loading)
+{
+    <div class="card center muted"><div class="spinner" style="margin:1rem auto"></div>Loading walk…</div>
+}
+else if (!_anyLocated)
+{
+    @* A quiz-walk with no placed questions behaves like a normal quiz. *@
+    <QuizPlay Activity="Activity" Session="Session" />
+}
+else
+{
+    <div class="card stack">
+        <div class="station-progress">
+            <div class="station-progress__top">
+                <span class="station-progress__label">Stations</span>
+                <span class="station-progress__count">@_answered.Count of @LocatedQuestions.Count()</span>
+            </div>
+            <div class="station-progress__track">
+                @foreach (var q in LocatedQuestions)
+                {
+                    <span class="station-progress__seg @(_answered.ContainsKey(q.Id) ? "done" : (q.Id == _nearestId ? "current" : null))"></span>
+                }
+            </div>
+        </div>
+        <div class="geo-banner @(_atNearest ? "near" : null)">
+            <span>@BannerIcon</span>
+            <span>@BannerText</span>
+        </div>
+        <div id="tipspromenad-map" class="map"></div>
+    </div>
+
+    <div class="card">
+        <h2>Stations</h2>
+        <p class="muted" style="font-size:.85rem">Walk to a station — its question unlocks when you're within range.</p>
+        <ul class="list">
+            @foreach (var q in LocatedQuestions)
+            {
+                var done = _answered.ContainsKey(q.Id);
+                var canOpen = done || WithinRadius(q);
+                <li>
+                    <span class="grow"><b>Station @q.Order</b></span>
+                    @if (done)
+                    {
+                        <span class="badge live">done</span>
+                    }
+                    else if (canOpen)
+                    {
+                        <button class="btn small" @onclick="() => Open(q.Id)">Open</button>
+                    }
+                    else
+                    {
+                        <span class="muted">🔒 @StatusText(q)</span>
+                    }
+                </li>
+            }
+        </ul>
+    </div>
+
+    @if (Selected is { } sel)
+    {
+        var mine = _answered.GetValueOrDefault(sel.Id);
+        <div class="card stack">
+            <div class="row">
+                <h2 class="grow">Question @sel.Order</h2>
+                <button class="btn ghost small" @onclick="() => _selectedId = null">Close</button>
+            </div>
+            <div class="q-text">@sel.Text</div>
+
+            @if (!string.IsNullOrEmpty(sel.ImageUrl))
+            {
+                <img class="q-image" src="@sel.ImageUrl" alt="" />
+            }
+
+            @if (_error is not null)
+            {
+                <div class="alert error">@_error</div>
+            }
+
+            @if (sel.Kind == QuestionKind.FreeText)
+            {
+                @if (mine is null)
+                {
+                    <input type="text" placeholder="Type your answer" @bind="_freeText" @bind:event="oninput" />
+                    <button class="btn block" @onclick="() => SubmitFreeTextAsync(sel)"
+                            disabled="@(_submitting || string.IsNullOrWhiteSpace(_freeText))">Submit</button>
+                }
+                else
+                {
+                    <div class="alert @(mine.IsCorrect ? "success" : "error")">
+                        You answered: <b>@mine.FreeText</b><br />
+                        @(mine.IsCorrect ? $"Correct! +{mine.AwardedPoints}" : "Not correct.")
+                    </div>
+                }
+            }
+            else
+            {
+                @for (var i = 0; i < sel.Options.Count; i++)
+                {
+                    var opt = sel.Options[i];
+                    var idx = i;
+                    <button class="option @OptionClass(sel, mine, opt)"
+                            style="--opt-accent:@QuizPlay.KeyColor(idx, sel.Options.Count)"
+                            disabled="@(mine is not null || _submitting)"
+                            @onclick="() => Select(opt.Id)">
+                        <span class="option__key">@QuizPlay.OptionKey(idx, sel.Options.Count)</span>
+                        <span class="option__text">@opt.Text</span>
+                        <span class="option__mark">
+                            @if (mine is not null && opt.Id == mine.SelectedOptionId)
+                            {
+                                @(mine.IsCorrect ? "✓" : "✗")
+                            }
+                        </span>
+                    </button>
+                }
+
+                @if (mine is null)
+                {
+                    <button class="btn block" @onclick="() => SubmitChoiceAsync(sel)"
+                            disabled="@(_selectedOptionId is null || _submitting)">Submit</button>
+                }
+                else
+                {
+                    <div class="alert @(mine.IsCorrect ? "success" : "error")">
+                        @(mine.IsCorrect ? $"Correct! +{mine.AwardedPoints}" : "Not this time.")
+                    </div>
+                }
+            }
+        </div>
+    }
+
+    @if (_arrivedId is { } arrivedId)
+    {
+        var aq = _questions.FirstOrDefault(x => x.Id == arrivedId);
+        <div class="arrival" @onclick="DismissArrival">
+            @for (var c = 0; c < 14; c++)
+            {
+                <span class="confetti"
+                      style="left:@(((c * 7 + 6) % 96))%;background:@ConfettiColor(c);border-radius:@(c % 2 == 0 ? "50%" : "3px");animation-delay:@((c % 6) * 250)ms"></span>
+            }
+            <div class="arrival__check">✓</div>
+            <div class="arrival__title">You've arrived!</div>
+            <div class="arrival__sub">Question @aq?.Order</div>
+            <div class="arrival__cta">
+                <button class="btn accent block" @onclick="OpenArrived" @onclick:stopPropagation="true">Open the question</button>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    [Parameter] public ActivityDto Activity { get; set; } = default!;
+    [Parameter] public PlayerSession Session { get; set; } = default!;
+
+    private const int DefaultRadiusMeters = 25;
+
+    private GeolocationInterop _geo = default!;
+    private LeafletInterop _map = default!;
+    private VibrationInterop _vibration = default!;
+
+    private bool _loading = true;
+    private bool _needMapInit;
+    private List<QuestionDto> _questions = new();
+    private Dictionary<int, MyAnswerDto> _answered = new();
+    private readonly Dictionary<int, double> _distances = new();
+    private readonly HashSet<int> _notified = new();
+
+    private GeoPosition? _lastPos;
+    private string? _geoError;
+    private string? _mapError;
+    private bool _disposed;
+    private int? _nearestId;
+    private int? _arrivedId;
+
+    private int? _selectedId;
+    private int? _selectedOptionId;
+    private string _freeText = string.Empty;
+    private bool _submitting;
+    private string? _error;
+
+    private bool _anyLocated;
+
+    private IEnumerable<QuestionDto> LocatedQuestions => _questions.Where(q => q.HasLocation).OrderBy(q => q.Order);
+    private QuestionDto? Selected => _selectedId is { } id ? _questions.FirstOrDefault(q => q.Id == id) : null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _geo = new GeolocationInterop(JS);
+        _map = new LeafletInterop(JS);
+        _vibration = new VibrationInterop(JS);
+        _geo.PositionChanged += OnPosition;
+        _geo.ErrorOccurred += OnGeoError;
+
+        try
+        {
+            _questions = await Api.GetQuestionsAsync(Activity.Id);
+            var mine = await Api.GetMyAnswersAsync(Activity.Id, Session.Token);
+            _answered = mine.ToDictionary(a => a.QuestionId);
+            _anyLocated = _questions.Any(q => q.HasLocation);
+            _needMapInit = _anyLocated;
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_needMapInit)
+        {
+            _needMapInit = false;
+            await InitMapAsync();
+        }
+    }
+
+    private async Task InitMapAsync()
+    {
+        var located = LocatedQuestions.ToList();
+        var centerLat = located.Average(q => q.Latitude!.Value);
+        var centerLng = located.Average(q => q.Longitude!.Value);
+
+        try
+        {
+            await _map.InitAsync("tipspromenad-map", centerLat, centerLng);
+            await RefreshMarkersAsync();
+            await _map.FitToMarkersAsync(BuildMarkers());
+        }
+        catch (Exception)
+        {
+            // Leaflet/tiles failed to load (e.g. CDN blocked). Degrade gracefully — the
+            // question list below still works for answering.
+            _mapError = "Map couldn't load — you can still tap a question to answer it.";
+            StateHasChanged();
+            return;
+        }
+
+        try
+        {
+            await _geo.StartAsync();
+        }
+        catch (Exception)
+        {
+            _geoError = "Couldn't start location tracking.";
+            StateHasChanged();
+        }
+    }
+
+    private List<MapMarker> BuildMarkers() => LocatedQuestions.Select(q => new MapMarker
+    {
+        Lat = q.Latitude!.Value,
+        Lng = q.Longitude!.Value,
+        Radius = RadiusOf(q),
+        Label = $"Q{q.Order}",
+        Done = _answered.ContainsKey(q.Id),
+    }).ToList();
+
+    private Task RefreshMarkersAsync() => _map.SetQuestionMarkersAsync(BuildMarkers());
+
+    private void OnPosition(GeoPosition pos) => _ = InvokeAsync(() => HandlePositionAsync(pos));
+
+    private async Task HandlePositionAsync(GeoPosition pos)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _lastPos = pos;
+        _geoError = null;
+
+        try
+        {
+            await _map.SetUserAsync(pos.Latitude, pos.Longitude, pos.AccuracyMeters);
+        }
+        catch (Exception ex) when (ex is JSDisconnectedException or ObjectDisposedException)
+        {
+            return; // component/map torn down mid-callback
+        }
+
+        double? best = null;
+        int? bestId = null;
+        foreach (var q in LocatedQuestions)
+        {
+            if (_answered.ContainsKey(q.Id))
+            {
+                continue;
+            }
+
+            var distance = GeolocationInterop.DistanceMeters(
+                pos.Latitude, pos.Longitude, q.Latitude!.Value, q.Longitude!.Value);
+            _distances[q.Id] = distance;
+
+            if (best is null || distance < best)
+            {
+                best = distance;
+                bestId = q.Id;
+            }
+
+            if (distance <= RadiusOf(q) && _notified.Add(q.Id))
+            {
+                await _vibration.PatternAsync(90, 50, 140);
+                _arrivedId = q.Id; // trigger the "You've arrived!" reveal
+            }
+        }
+
+        if (_disposed)
+        {
+            return;
+        }
+
+        _nearestId = bestId;
+        StateHasChanged();
+    }
+
+    private void OnGeoError(string message)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _geoError = message;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private bool WithinRadius(QuestionDto q) =>
+        _distances.TryGetValue(q.Id, out var d) && d <= RadiusOf(q);
+
+    private void Open(int questionId)
+    {
+        var q = _questions.FirstOrDefault(x => x.Id == questionId);
+        if (q is null)
+        {
+            return;
+        }
+
+        // A station's question only opens once you're within range (or already answered).
+        if (!_answered.ContainsKey(questionId) && !WithinRadius(q))
+        {
+            return;
+        }
+
+        _selectedId = questionId;
+        _selectedOptionId = null;
+        _freeText = string.Empty;
+        _error = null;
+    }
+
+    private void Select(int optionId)
+    {
+        _selectedOptionId = optionId;
+        _error = null;
+    }
+
+    private Task SubmitChoiceAsync(QuestionDto q) =>
+        SubmitAsync(new SubmitAnswerRequest { QuestionId = q.Id, SelectedOptionId = _selectedOptionId });
+
+    private Task SubmitFreeTextAsync(QuestionDto q) =>
+        SubmitAsync(new SubmitAnswerRequest { QuestionId = q.Id, FreeText = _freeText.Trim() });
+
+    private async Task SubmitAsync(SubmitAnswerRequest request)
+    {
+        if (request.SelectedOptionId is null && string.IsNullOrWhiteSpace(request.FreeText))
+        {
+            return;
+        }
+
+        _submitting = true;
+        _error = null;
+
+        try
+        {
+            var result = await Api.SubmitAnswerAsync(Activity.Id, request, Session.Token);
+            _answered[request.QuestionId] = new MyAnswerDto
+            {
+                QuestionId = request.QuestionId,
+                SelectedOptionId = request.SelectedOptionId,
+                FreeText = request.FreeText,
+                IsCorrect = result.IsCorrect,
+                AwardedPoints = result.AwardedPoints,
+            };
+            _selectedOptionId = null;
+            _distances.Remove(request.QuestionId);
+            await RefreshMarkersAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+
+    private string OptionClass(QuestionDto q, MyAnswerDto? mine, AnswerOptionDto opt)
+    {
+        if (mine is null)
+        {
+            return _selectedId == q.Id && _selectedOptionId == opt.Id ? "selected" : string.Empty;
+        }
+
+        if (opt.Id == mine.SelectedOptionId)
+        {
+            return mine.IsCorrect ? "correct" : "wrong";
+        }
+
+        return string.Empty;
+    }
+
+    private void DismissArrival() => _arrivedId = null;
+
+    private void OpenArrived()
+    {
+        _selectedId = _arrivedId;
+        _arrivedId = null;
+        _selectedOptionId = null;
+        _freeText = string.Empty;
+        _error = null;
+    }
+
+    private static string ConfettiColor(int i) =>
+        new[] { "var(--coral-400)", "var(--sun-400)", "var(--green-300)", "#fff", "var(--sea-200)" }[i % 5];
+
+    private static int RadiusOf(QuestionDto q) => q.RadiusMeters is > 0 ? q.RadiusMeters.Value : DefaultRadiusMeters;
+
+    private bool _atNearest => _nearestId is { } id
+                               && _distances.TryGetValue(id, out var d)
+                               && d <= RadiusOf(_questions.First(q => q.Id == id));
+
+    private string BannerIcon => (_mapError ?? _geoError) is not null ? "⚠️" : _atNearest ? "📍" : "🧭";
+
+    private string BannerText
+    {
+        get
+        {
+            if (_mapError is not null)
+            {
+                return _mapError;
+            }
+
+            if (_geoError is not null)
+            {
+                return _geoError + " You can still tap a question to answer it.";
+            }
+
+            if (_lastPos is null)
+            {
+                return "Finding your location…";
+            }
+
+            if (_nearestId is null)
+            {
+                return "All questions answered — nice walk! 🎉";
+            }
+
+            var nearest = _questions.First(q => q.Id == _nearestId);
+            if (_atNearest)
+            {
+                return $"You're at question {nearest.Order} — answer it below!";
+            }
+
+            var metres = _distances.TryGetValue(nearest.Id, out var d) ? (int)Math.Round(d) : 0;
+            return $"Nearest: question {nearest.Order}, about {metres} m away.";
+        }
+    }
+
+    private string StatusText(QuestionDto q)
+    {
+        if (_answered.ContainsKey(q.Id))
+        {
+            return "✓ done";
+        }
+
+        return _distances.TryGetValue(q.Id, out var d) ? $"{(int)Math.Round(d)} m" : "—";
+    }
+
+    private static string Truncate(string text) => text.Length <= 40 ? text : text[..38] + "…";
+
+    public async ValueTask DisposeAsync()
+    {
+        _disposed = true; // short-circuit any queued geolocation callback before teardown
+
+        if (_geo is not null)
+        {
+            _geo.PositionChanged -= OnPosition;
+            _geo.ErrorOccurred -= OnGeoError;
+            await _geo.DisposeAsync();
+        }
+
+        if (_map is not null)
+        {
+            await _map.DisposeAsync();
+        }
+    }
+}

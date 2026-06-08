@@ -1,0 +1,79 @@
+@page "/"
+@inject RundanApi Api
+@inject NavigationManager Nav
+
+<PageTitle>Rundan</PageTitle>
+
+<div class="card hero stack center">
+    <img src="img/rundan-mark.svg" width="64" height="64" alt="" style="margin:0 auto" />
+    <h1>Join the round</h1>
+    <p style="color:rgba(255,255,255,.9)">Quiz walks, quizzes and boule — an afternoon out with your people.</p>
+</div>
+
+<div class="card stack">
+    <h2>Got a code?</h2>
+    <p class="muted">Type the code your host shared with the group.</p>
+
+    @if (_error is not null)
+    {
+        <div class="alert error">@_error</div>
+    }
+
+    <input class="code-input" type="text" inputmode="text" autocomplete="off" maxlength="16"
+           placeholder="CODE" @bind="_code" @bind:event="oninput" @onkeydown="OnKeyDown" />
+
+    <button class="btn block" @onclick="GoAsync" disabled="@_busy">
+        @(_busy ? "Looking…" : "Let's go")
+    </button>
+</div>
+
+<div class="card center muted">
+    Hosting today? <a href="admin">Open the host panel</a>
+</div>
+
+@code {
+    private string _code = string.Empty;
+    private string? _error;
+    private bool _busy;
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await GoAsync();
+        }
+    }
+
+    private async Task GoAsync()
+    {
+        var code = _code.Trim().ToUpperInvariant();
+        if (code.Length == 0)
+        {
+            _error = "Enter a code first.";
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+
+        // A code can be an event (a whole day of activities) or a single activity.
+        var ev = await Api.GetEventByCodeAsync(code);
+        if (ev is not null)
+        {
+            _busy = false;
+            Nav.NavigateTo($"e/{ev.Id}");
+            return;
+        }
+
+        var activity = await Api.GetActivityByCodeAsync(code);
+        _busy = false;
+
+        if (activity is null)
+        {
+            _error = "No event or activity found with that code.";
+            return;
+        }
+
+        Nav.NavigateTo($"a/{activity.Id}");
+    }
+}

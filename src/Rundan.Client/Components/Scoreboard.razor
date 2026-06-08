@@ -1,0 +1,37 @@
+@if (Board is null || Board.Entries.Count == 0)
+{
+    <p class="muted center">No scores yet — first points coming soon.</p>
+}
+else
+{
+    <div class="score-list">
+        @foreach (var entry in Board.Entries)
+        {
+            <div class="score-row @(entry.ParticipantId == MyParticipantId ? "me" : null) @(entry.Rank == 1 ? "lead" : null)">
+                <div class="score-row__rank">@entry.Rank</div>
+                <div class="score-row__name">
+                    <b>
+                        @entry.DisplayName
+                        @if (entry.ParticipantId == MyParticipantId)
+                        {
+                            <span class="you"> · You</span>
+                        }
+                    </b>
+                    @if (IsQuestionGame && Board.TotalQuestions > 0)
+                    {
+                        <span class="sub">@entry.Entries of @Board.TotalQuestions answered</span>
+                    }
+                </div>
+                <div class="score-row__score">@entry.TotalPoints</div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public ScoreboardDto? Board { get; set; }
+    [Parameter] public int? MyParticipantId { get; set; }
+
+    private bool IsQuestionGame =>
+        Board?.Type is ActivityType.Quiz or ActivityType.Tipspromenad;
+}
