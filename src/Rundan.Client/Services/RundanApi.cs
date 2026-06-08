@@ -189,6 +189,32 @@ public sealed class RundanApi(HttpClient http, AppState state)
         (await SendAsync<ScoreEntryDto>(
             HttpMethod.Post, $"api/activities/{id}/scores", body: request, participantToken: token))!;
 
+    public async Task<ActivityDto> SetCourtsAsync(int id, string label, List<string> names) =>
+        (await SendAsync<ActivityDto>(HttpMethod.Put, $"api/activities/{id}/courts",
+            body: new SetCourtsRequest { Label = label, Names = names }, admin: true))!;
+
+    // ---- Knockout bracket --------------------------------------------------
+    public Task<BracketDto?> GetBracketAsync(int id) =>
+        TryGetAsync<BracketDto>($"api/activities/{id}/bracket");
+
+    public async Task<BracketDto> DrawBracketAsync(int id) =>
+        (await SendAsync<BracketDto>(HttpMethod.Post, $"api/activities/{id}/bracket/draw", admin: true))!;
+
+    public async Task<BracketDto> RecordBracketResultAsync(int id, int matchId, int winnerParticipantId) =>
+        (await SendAsync<BracketDto>(HttpMethod.Post, $"api/activities/{id}/bracket/result",
+            body: new RecordBracketResultRequest { MatchId = matchId, WinnerParticipantId = winnerParticipantId }, admin: true))!;
+
+    public async Task<BracketDto> ResetBracketAsync(int id) =>
+        (await SendAsync<BracketDto>(HttpMethod.Post, $"api/activities/{id}/bracket/reset", admin: true))!;
+
+    // ---- Word game ---------------------------------------------------------
+    public async Task<WordGameDto?> GetWordGameAsync(int id, Guid token) =>
+        await SendAsync<WordGameDto>(HttpMethod.Get, $"api/activities/{id}/wordgame", participantToken: token);
+
+    public async Task<WordGameDto> SubmitWordAsync(int id, List<int> openedIndices, string word, Guid token) =>
+        (await SendAsync<WordGameDto>(HttpMethod.Post, $"api/activities/{id}/wordgame",
+            body: new SubmitWordRequest { OpenedIndices = openedIndices, Word = word }, participantToken: token))!;
+
     // ---- Admin -------------------------------------------------------------
     public Task<List<ActivityDto>> ListActivitiesAsync() =>
         GetListAsync<ActivityDto>("api/activities", admin: true);

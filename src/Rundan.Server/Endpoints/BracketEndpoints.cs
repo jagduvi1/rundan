@@ -1,0 +1,43 @@
+using Rundan.Server.Security;
+using Rundan.Server.Services;
+using Rundan.Shared.Contracts;
+
+namespace Rundan.Server.Endpoints;
+
+internal static class BracketEndpoints
+{
+    public static void MapBracketEndpoints(this IEndpointRouteBuilder app)
+    {
+        // Players can see the tree (access-gated by middleware).
+        app.MapGet("/api/activities/{id:int}/bracket", async (int id, BracketService svc, CancellationToken ct) =>
+        {
+            var dto = await svc.BuildAsync(id, ct);
+            return dto is null ? Results.NotFound() : Results.Ok(dto);
+        });
+
+        // Host / event admin: draw, record a result, reset.
+        app.MapPost("/api/activities/{id:int}/bracket/draw", async (
+            int id, BracketService svc, ScoreboardNotifier notifier, CancellationToken ct) =>
+        {
+            await svc.GenerateAsync(id, ct);
+            await notifier.PushScoreboardAsync(id, ct);
+            return Results.Ok(await svc.BuildAsync(id, ct));
+        }).AddEndpointFilter<ActivityManagerFilter>();
+
+        app.MapPost("/api/activities/{id:int}/bracket/result", async (
+            int id, RecordBracketResultRequest req, BracketService svc, ScoreboardNotifier notifier, CancellationToken ct) =>
+        {
+            await svc.RecordResultAsync(id, req.MatchId, req.WinnerParticipantId, ct);
+            await notifier.PushScoreboardAsync(id, ct);
+            return Results.Ok(await svc.BuildAsync(id, ct));
+        }).AddEndpointFilter<ActivityManagerFilter>();
+
+        app.MapPost("/api/activities/{id:int}/bracket/reset", async (
+            int id, BracketService svc, ScoreboardNotifier notifier, CancellationToken ct) =>
+        {
+            await svc.ResetAsync(id, ct);
+            await notifier.PushScoreboardAsync(id, ct);
+            return Results.Ok(await svc.BuildAsync(id, ct));
+        }).AddEndpointFilter<ActivityManagerFilter>();
+    }
+}

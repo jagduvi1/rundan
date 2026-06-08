@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Rundan.Server.Data;
 
@@ -10,9 +11,11 @@ using Rundan.Server.Data;
 namespace Rundan.Server.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260608145149_KnockoutBracket")]
+    partial class KnockoutBracket
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.8");
@@ -22,10 +25,6 @@ namespace Rundan.Server.Data.Migrations
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
-
-                    b.Property<string>("CourtLabel")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
 
                     b.Property<DateTimeOffset>("CreatedUtc")
                         .HasColumnType("TEXT");
@@ -176,9 +175,6 @@ namespace Rundan.Server.Data.Migrations
                     b.Property<int>("ActivityId")
                         .HasColumnType("INTEGER");
 
-                    b.Property<int?>("CourtId")
-                        .HasColumnType("INTEGER");
-
                     b.Property<bool>("IsBye")
                         .HasColumnType("INTEGER");
 
@@ -202,35 +198,9 @@ namespace Rundan.Server.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CourtId");
-
                     b.HasIndex("ActivityId", "Side", "Round", "Slot");
 
                     b.ToTable("BracketMatches");
-                });
-
-            modelBuilder.Entity("Rundan.Server.Data.Entities.Court", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("ActivityId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(60)
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("Order")
-                        .HasColumnType("INTEGER");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ActivityId", "Order");
-
-                    b.ToTable("Courts");
                 });
 
             modelBuilder.Entity("Rundan.Server.Data.Entities.Event", b =>
@@ -530,24 +500,6 @@ namespace Rundan.Server.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("Rundan.Server.Data.Entities.Court", "Court")
-                        .WithMany()
-                        .HasForeignKey("CourtId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.Navigation("Activity");
-
-                    b.Navigation("Court");
-                });
-
-            modelBuilder.Entity("Rundan.Server.Data.Entities.Court", b =>
-                {
-                    b.HasOne("Rundan.Server.Data.Entities.Activity", "Activity")
-                        .WithMany("Courts")
-                        .HasForeignKey("ActivityId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
                     b.Navigation("Activity");
                 });
 
@@ -639,8 +591,6 @@ namespace Rundan.Server.Data.Migrations
 
             modelBuilder.Entity("Rundan.Server.Data.Entities.Activity", b =>
                 {
-                    b.Navigation("Courts");
-
                     b.Navigation("Participants");
 
                     b.Navigation("Questions");

@@ -145,6 +145,54 @@ internal static class ActivityEndpoints
             return Results.Ok(await LoadDtoAsync(db, id, ct));
         }).AddEndpointFilter<ActivityManagerFilter>();
 
+        app.MapPut("/api/activities/{id:int}/courts", async (
+            int id, SetCourtsRequest req, AppDbContext db, CancellationToken ct) =>
+        {
+            var activity = await db.Activities.Include(a => a.Courts).FirstOrDefaultAsync(a => a.Id == id, ct);
+            if (activity is null)
+            {
+                return Results.NotFound();
+            }
+
+            var label = string.IsNullOrWhiteSpace(req.Label) ? "Court" : req.Label.Trim();
+            activity.CourtLabel = label;
+
+            var names = req.Names ?? new List<string>();
+            var count = Math.Clamp(names.Count, 0, 50);
+            var existing = activity.Courts.OrderBy(c => c.Order).ToList();
+
+            // Drop surplus courts (clearing any bracket references first).
+            for (var i = count; i < existing.Count; i++)
+            {
+                var court = existing[i];
+                var orphans = await db.BracketMatches.Where(m => m.CourtId == court.Id).ToListAsync(ct);
+                foreach (var m in orphans)
+                {
+                    m.CourtId = null;
+                }
+
+                db.Courts.Remove(court);
+            }
+
+            // Update / add the rest with the given (or default) names.
+            for (var i = 0; i < count; i++)
+            {
+                var name = string.IsNullOrWhiteSpace(names[i]) ? $"{label} {i + 1}" : names[i].Trim();
+                if (i < existing.Count)
+                {
+                    existing[i].Order = i + 1;
+                    existing[i].Name = name;
+                }
+                else
+                {
+                    activity.Courts.Add(new Court { ActivityId = id, Order = i + 1, Name = name });
+                }
+            }
+
+            await db.SaveChangesAsync(ct);
+            return Results.Ok(await LoadDtoAsync(db, id, ct));
+        }).AddEndpointFilter<ActivityManagerFilter>();
+
         app.MapDelete("/api/activities/{id:int}", async (int id, AppDbContext db, CancellationToken ct) =>
         {
             var activity = await db.Activities.FindAsync([id], ct);
@@ -205,6 +253,10 @@ internal static class ActivityEndpoints
 
         var pc = await db.Participants.CountAsync(p => p.ActivityId == id, ct);
         var qc = await db.Questions.CountAsync(q => q.ActivityId == id, ct);
-        return activity.ToDto(pc, qc);
+        var courts = await db.Courts.AsNoTracking()
+            .Where(c => c.ActivityId == id).OrderBy(c => c.Order)
+            .Select(c => new CourtDto { Id = c.Id, Order = c.Order, Name = c.Name })
+            .ToListAsync(ct);
+        return activity.ToDto(pc, qc, courts);
     }
 }

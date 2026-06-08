@@ -19,6 +19,9 @@ public enum ActivityType
 
     /// <summary>Generic score-tracked game (round-based points). Use for anything new.</summary>
     ScoreGame = 4,
+
+    /// <summary>Word game: flip letter tiles and form the longest word against a timer.</summary>
+    WordGame = 5,
 }
 
 /// <summary>Lifecycle of an activity.</summary>
@@ -75,6 +78,16 @@ public enum ScoreEntryMode
 
     /// <summary>A score per player per round; the team's total is the sum of its players' points.</summary>
     PerPlayer = 1,
+}
+
+/// <summary>Which side of a knockout bracket a match belongs to.</summary>
+public enum BracketSide
+{
+    /// <summary>Keep winning to reach the final.</summary>
+    Winners = 0,
+
+    /// <summary>First-round losers play here for the lower placements.</summary>
+    Losers = 1,
 }
 
 /// <summary>What a score-game measures — drives the entry UI and the displayed unit.</summary>

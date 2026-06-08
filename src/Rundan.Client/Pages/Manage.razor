@@ -130,6 +130,28 @@ else
         </button>
     </div>
 
+    <div class="card stack">
+        <h2>Courts / lanes</h2>
+        <p class="muted" style="font-size:.85rem">Add the playing surfaces (courts, fields, tracks, lanes). For Boule they're used to schedule the order of play.</p>
+        <div class="field">
+            <label>What they're called</label>
+            <input @bind="_editCourtLabel" maxlength="30" placeholder="Court" style="width:180px" />
+        </div>
+        @for (var i = 0; i < _editCourtNames.Count; i++)
+        {
+            var idx = i;
+            <div class="row">
+                <input class="grow" @bind="_editCourtNames[idx]" maxlength="60" />
+                <button class="btn ghost small danger" @onclick="() => RemoveCourt(idx)">✕</button>
+            </div>
+        }
+        <div class="row">
+            <button class="btn ghost small" @onclick="AddCourt">+ Add @((_editCourtLabel ?? "Court").Trim().ToLower())</button>
+            <span class="grow"></span>
+            <button class="btn success small" @onclick="SaveCourtsAsync" disabled="@_busy">Save courts</button>
+        </div>
+    </div>
+
     @if (_activity.UsesQuestions)
     {
         @if (_activity.Status == ActivityStatus.Draft)
@@ -164,6 +186,8 @@ else
     private Measurement _editMeasurement = Measurement.Points;
     private int _editTarget = 147;
     private bool _editRandomize;
+    private string _editCourtLabel = "Court";
+    private List<string> _editCourtNames = new();
     private double? _editLat;
     private double? _editLng;
     private int _editRadius = 25;
@@ -182,6 +206,8 @@ else
             _editMeasurement = _activity.Measurement;
             _editTarget = _activity.TargetValue ?? 147;
             _editRandomize = _activity.RandomizeQuestions;
+            _editCourtLabel = _activity.CourtLabel;
+            _editCourtNames = _activity.Courts.Select(c => c.Name).ToList();
             _editLat = _activity.Latitude;
             _editLng = _activity.Longitude;
             _editRadius = _activity.RadiusMeters ?? 25;
@@ -198,6 +224,36 @@ else
         }
 
         _loading = false;
+    }
+
+    private void AddCourt() => _editCourtNames.Add($"{(_editCourtLabel ?? "Court").Trim()} {_editCourtNames.Count + 1}");
+
+    private void RemoveCourt(int index)
+    {
+        if (index >= 0 && index < _editCourtNames.Count)
+        {
+            _editCourtNames.RemoveAt(index);
+        }
+    }
+
+    private async Task SaveCourtsAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            _activity = await Api.SetCourtsAsync(Id, (_editCourtLabel ?? "Court").Trim(), _editCourtNames);
+            _editCourtLabel = _activity.CourtLabel;
+            _editCourtNames = _activity.Courts.Select(c => c.Name).ToList();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
     }
 
     private void OnLocationChanged((double? Lat, double? Lng, int Radius) loc)
@@ -322,6 +378,7 @@ else
         ActivityType.Tipspromenad => "Tipspromenad",
         ActivityType.Boule => "Boule",
         ActivityType.ScoreGame => "Score game",
+        ActivityType.WordGame => "Word game",
         _ => type.ToString(),
     };
 }

@@ -1,0 +1,213 @@
+@implements IDisposable
+@inject RundanApi Api
+
+@if (_loading)
+{
+    <div class="card center muted"><div class="spinner" style="margin:1rem auto"></div></div>
+}
+else if (_game is null)
+{
+    <div class="card muted">@(_error ?? "Couldn't load the word game.")</div>
+}
+else if (_game.SubmittedScore is not null)
+{
+    <div class="card success stack center">
+        <h2>Your word</h2>
+        <div class="q-text"><b>@_game.SubmittedWord</b></div>
+        <p>@_game.SubmittedScore letter@(_game.SubmittedScore == 1 ? "" : "s") — longest word wins.</p>
+    </div>
+}
+else
+{
+    <div class="card stack">
+        <div class="row">
+            <h2 class="grow">Ordbygge</h2>
+            @if (_started)
+            {
+                <span class="badge @(_remaining <= 10 ? "live" : null)">@_remaining s</span>
+            }
+        </div>
+        <p class="muted">Open up to @_game.MaxOpen of the 20 tiles, then build the longest word you can. You have @_game.Seconds seconds.</p>
+
+        @if (_error is not null)
+        {
+            <div class="alert error">@_error</div>
+        }
+
+        @if (!_started)
+        {
+            <button class="btn block success" @onclick="StartAsync">Start (@_game.Seconds s)</button>
+        }
+        else
+        {
+            <div class="tiles">
+                @for (var i = 0; i < _game.Tiles.Count; i++)
+                {
+                    var idx = i;
+                    var open = _opened.Contains(idx);
+                    <button class="tile @(open ? "open" : null)"
+                            disabled="@(open || _timeUp || _opened.Count >= _game.MaxOpen || _submitting)"
+                            @onclick="() => Flip(idx)">
+                        @(open ? _game.Tiles[idx] : "?")
+                    </button>
+                }
+            </div>
+            <div class="muted">Opened @_opened.Count / @_game.MaxOpen</div>
+
+            <input placeholder="Your word" maxlength="20" @bind="_word" @bind:event="oninput" disabled="@(_timeUp || _submitting)" />
+            <div class="muted" style="font-size:.85rem">@WordStatus</div>
+
+            <button class="btn block success" @onclick="SubmitAsync" disabled="@(_submitting || !WordValid)">
+                Submit word (@CleanWord.Length letter@(CleanWord.Length == 1 ? "" : "s"))
+            </button>
+
+            @if (_timeUp)
+            {
+                <p class="muted">Time's up!</p>
+            }
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public ActivityDto Activity { get; set; } = default!;
+    [Parameter] public PlayerSession Session { get; set; } = default!;
+    [Parameter] public int RefreshKey { get; set; }
+
+    private WordGameDto? _game;
+    private readonly HashSet<int> _opened = new();
+    private string _word = string.Empty;
+    private bool _started;
+    private bool _timeUp;
+    private bool _submitting;
+    private int _remaining;
+    private bool _loading = true;
+    private bool _disposed;
+    private string? _error;
+
+    private string CleanWord => (_word ?? string.Empty).Trim().ToUpperInvariant();
+
+    private IEnumerable<char> OpenedLetters() => _opened.Select(i => _game!.Tiles[i][0]);
+
+    private bool WordValid
+    {
+        get
+        {
+            var w = CleanWord;
+            if (w.Length == 0)
+            {
+                return false;
+            }
+
+            var avail = OpenedLetters().GroupBy(c => c).ToDictionary(g => g.Key, g => g.Count());
+            foreach (var c in w)
+            {
+                if (!avail.TryGetValue(c, out var n) || n == 0)
+                {
+                    return false;
+                }
+
+                avail[c] = n - 1;
+            }
+
+            return true;
+        }
+    }
+
+    private string WordStatus
+    {
+        get
+        {
+            if (CleanWord.Length == 0)
+            {
+                return "Type a word using your opened letters.";
+            }
+
+            return WordValid ? $"{CleanWord.Length} letters" : "Uses letters you haven't opened.";
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _game = await Api.GetWordGameAsync(Activity.Id, Session.Token);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void Flip(int index)
+    {
+        if (_game is not null && !_timeUp && _opened.Count < _game.MaxOpen)
+        {
+            _opened.Add(index);
+        }
+    }
+
+    private async Task StartAsync()
+    {
+        _started = true;
+        _remaining = _game!.Seconds;
+        StateHasChanged();
+
+        while (_remaining > 0 && !_submitting && _game.SubmittedScore is null && !_disposed)
+        {
+            await Task.Delay(1000);
+            if (_disposed || _game.SubmittedScore is not null)
+            {
+                return;
+            }
+
+            _remaining--;
+            StateHasChanged();
+        }
+
+        if (_disposed)
+        {
+            return;
+        }
+
+        _timeUp = true;
+        if (WordValid)
+        {
+            await SubmitAsync();
+        }
+        else
+        {
+            StateHasChanged();
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (_submitting || !WordValid)
+        {
+            return;
+        }
+
+        _submitting = true;
+        _error = null;
+        try
+        {
+            _game = await Api.SubmitWordAsync(Activity.Id, _opened.ToList(), CleanWord, Session.Token);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _submitting = false;
+            StateHasChanged();
+        }
+    }
+
+    public void Dispose() => _disposed = true;
+}

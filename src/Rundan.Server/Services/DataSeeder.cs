@@ -90,6 +90,9 @@ public sealed class DataSeeder(AppDbContext db, TimeProvider clock)
             "Lagen möts i en utslagstävling. Appen lottar matcherna. Vinnarna går vidare till nästa omgång "
             + "och en final; förlorarna lottas in i ett förlorarträd. Placeringen avgör poängen.",
             ActivityStatus.Open);
+        boule.CourtLabel = "Bana";
+        boule.Courts.Add(new Court { Order = 1, Name = "Bana 1" });
+        boule.Courts.Add(new Court { Order = 2, Name = "Bana 2" });
 
         // 5 — Bygga högst torn: tallest (mm) wins.
         var tower = NewActivity(ev.Id, 5, ActivityType.ScoreGame, "Bygga högst torn", "TORN", now,
@@ -116,7 +119,7 @@ public sealed class DataSeeder(AppDbContext db, TimeProvider clock)
         ring.TargetValue = 147; // 2:27
 
         // 8 — Ordbygge med lappar: longest word wins. (Letter game pending.)
-        var words = NewActivity(ev.Id, 8, ActivityType.ScoreGame, "Ordbygge med lappar", "ORD", now,
+        var words = NewActivity(ev.Id, 8, ActivityType.WordGame, "Ordbygge med lappar", "ORD", now,
             "Bilda så långt ord som möjligt på 60 sekunder. Appen lottar 20 bokstavslappar upp och ner; ni "
             + "får vända upp 10 av dem. Längst ord vinner.",
             ActivityStatus.Open);

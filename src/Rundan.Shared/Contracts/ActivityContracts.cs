@@ -41,6 +41,12 @@ public class ActivityDto
     /// <summary>Serve question activities in a random order per player.</summary>
     public bool RandomizeQuestions { get; set; }
 
+    /// <summary>What the playing surfaces are called (Court / Field / Track / Lane).</summary>
+    public string CourtLabel { get; set; } = "Court";
+
+    /// <summary>The playing surfaces for this activity (courts/lanes/…).</summary>
+    public List<CourtDto> Courts { get; set; } = new();
+
     public int ParticipantCount { get; set; }
     public int QuestionCount { get; set; }
     public DateTimeOffset CreatedUtc { get; set; }
@@ -61,6 +67,21 @@ public class ActivityDto
 
     /// <summary>Score game measured as a length in millimetres.</summary>
     public bool MeasuresLength => Measurement == Measurement.Millimetres;
+}
+
+/// <summary>A playing surface (court / field / track / lane).</summary>
+public class CourtDto
+{
+    public int Id { get; set; }
+    public int Order { get; set; }
+    public string Name { get; set; } = string.Empty;
+}
+
+/// <summary>Sets an activity's playing surfaces: the noun + the list of names (count = list length).</summary>
+public class SetCourtsRequest
+{
+    public string Label { get; set; } = "Court";
+    public List<string> Names { get; set; } = new();
 }
 
 /// <summary>Admin request to create a new activity.</summary>

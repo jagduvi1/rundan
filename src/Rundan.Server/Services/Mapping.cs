@@ -7,7 +7,7 @@ namespace Rundan.Server.Services;
 /// <summary>Entity → DTO mapping helpers. Player-facing maps never leak correctness.</summary>
 public static class Mapping
 {
-    public static ActivityDto ToDto(this Activity a, int participantCount, int questionCount) => new()
+    public static ActivityDto ToDto(this Activity a, int participantCount, int questionCount, List<CourtDto>? courts = null) => new()
     {
         Id = a.Id,
         EventId = a.EventId,
@@ -22,6 +22,8 @@ public static class Mapping
         Measurement = a.Measurement,
         TargetValue = a.TargetValue,
         RandomizeQuestions = a.RandomizeQuestions,
+        CourtLabel = a.CourtLabel,
+        Courts = courts ?? new(),
         ScoreEntryMode = a.ScoreEntryMode,
         Latitude = a.Latitude,
         Longitude = a.Longitude,
