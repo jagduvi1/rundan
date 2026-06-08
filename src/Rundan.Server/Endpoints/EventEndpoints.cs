@@ -93,6 +93,7 @@ internal static class EventEndpoints
             ev.Description = Clean(req.Description);
             ev.ImageUrl = Clean(req.ImageUrl);
             ev.TeamSize = Math.Clamp(req.TeamSize, 1, 20);
+            ev.Scoring = req.Scoring;
             await db.SaveChangesAsync(ct);
             return Results.Ok(await LoadEventDtoAsync(db, ev, ct));
         }).AddEndpointFilter<EventManagerFilter>();

@@ -35,6 +35,7 @@ public static class Mapping
         Description = e.Description,
         ImageUrl = e.ImageUrl,
         TeamSize = e.TeamSize,
+        Scoring = e.Scoring,
         JoinCode = e.JoinCode,
         CreatedUtc = e.CreatedUtc,
         Activities = activities,

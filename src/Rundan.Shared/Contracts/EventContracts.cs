@@ -40,6 +40,7 @@ public class UpdateEventRequest
     public string? Description { get; set; }
     public string? ImageUrl { get; set; }
     public int TeamSize { get; set; } = 2;
+    public EventScoring Scoring { get; set; } = EventScoring.Cumulative;
 }
 
 /// <summary>Request to set a custom event code, or regenerate one when Code is empty.</summary>

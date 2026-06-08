@@ -45,6 +45,7 @@ else
 
     <div class="card">
         <h2>Total standings</h2>
+        <p class="muted" style="font-size:.8rem;margin-top:-.4rem">@ScoringLabel</p>
         @if (_standings is null || _standings.Entries.Count == 0)
         {
             <p class="muted center">No points yet — they add up across every activity.</p>
@@ -233,6 +234,13 @@ else
                 <input type="number" min="1" max="20" @bind="_editTeamSize" style="width:120px" />
             </div>
             <div class="field">
+                <label>Scoring (how the event total is calculated)</label>
+                <select @bind="_editScoring">
+                    <option value="@EventScoring.Placement">Placement — 1st = number of teams, then 3, 2, 1</option>
+                    <option value="@EventScoring.Cumulative">Cumulative — sum of actual activity points</option>
+                </select>
+            </div>
+            <div class="field">
                 <label>Picture / map</label>
                 <ImageUploader Value="_editImage" ValueChanged="v => _editImage = v" />
             </div>
@@ -273,9 +281,14 @@ else
     private string? _editDescription;
     private string? _editImage;
     private int _editTeamSize = 2;
+    private EventScoring _editScoring = EventScoring.Cumulative;
     private string _editCode = string.Empty;
 
     private bool IsMe(string name) => string.Equals(name, _eventName, StringComparison.Ordinal);
+
+    private string ScoringLabel => _event?.Scoring == EventScoring.Placement
+        ? "Placement points — your team's position each activity (1st = most), summed."
+        : "Cumulative — your team's actual points across all activities, summed.";
 
     protected override async Task OnParametersSetAsync()
     {
@@ -340,6 +353,7 @@ else
         _editDescription = _event.Description;
         _editImage = _event.ImageUrl;
         _editTeamSize = _event.TeamSize;
+        _editScoring = _event.Scoring;
         _editCode = _event.JoinCode;
     }
 
@@ -586,6 +600,7 @@ else
                 Description = _editDescription,
                 ImageUrl = _editImage,
                 TeamSize = _editTeamSize,
+                Scoring = _editScoring,
             });
             SyncEditFields();
         }

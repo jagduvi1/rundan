@@ -12,7 +12,8 @@ namespace Rundan.Server.Services;
 /// </summary>
 public sealed class DataSeeder(AppDbContext db, TimeProvider clock)
 {
-    private static readonly string[] RosterNames = { "Anna", "Erik", "Johan", "Sara" };
+    private static readonly string[] RosterNames =
+        { "Anna", "Erik", "Johan", "Sara", "Maja", "Olof", "Petra", "Sven" };
 
     public async Task<bool> SeedAsync(CancellationToken ct = default)
     {
@@ -33,8 +34,9 @@ public sealed class DataSeeder(AppDbContext db, TimeProvider clock)
         {
             Name = "Sommarfesten på bryggan",
             Description = "Lagtävling i tre grenar. Ni får ny lagkamrat inför varje gren — "
-                          + "lagets poäng läggs till bådas egna totaler. Högsta individuella total vinner!",
+                          + "varje grens placering ger poäng (1:a = antal lag) till båda i laget. Högsta individuella total vinner!",
             TeamSize = 2,
+            Scoring = EventScoring.Placement,
             JoinCode = "SOMMAR",
             CreatedUtc = now,
         };
@@ -51,7 +53,7 @@ public sealed class DataSeeder(AppDbContext db, TimeProvider clock)
 
         // 3) Activities.
         var walk = NewActivity(ev.Id, 1, ActivityType.Tipspromenad, "Skärgårdsrundan", "WALK", now,
-            "Gå laget runt till varje station. När ni är inom 30 m dyker frågan upp på telefonen.");
+            "Gå laget runt till varje station. När ni är inom 30 m dyker frågan upp på telefonen.", ActivityStatus.Finished);
         walk.Questions.Add(GeoMc(1, "Vilket träd dominerar i skärgården?", 59.3251, 18.1000,
             ("Tall · Pine", true), ("Ek · Oak", false), ("Bok · Beech", false)));
         walk.Questions.Add(GeoMc(2, "Sveriges inofficiella nationaldjur?", 59.3258, 18.1016,
@@ -62,7 +64,7 @@ public sealed class DataSeeder(AppDbContext db, TimeProvider clock)
             ("Ro · Rowing", true), ("Flyga · Flying", false), ("Gräva · Digging", false)));
 
         var quiz = NewActivity(ev.Id, 2, ActivityType.Quiz, "Kvällsquizet", "QUIZ", now,
-            "Fem frågor. En i taget — nästa fråga dyker upp när ni svarat.");
+            "Fem frågor. En i taget — nästa fråga dyker upp när ni svarat.", ActivityStatus.Finished);
         quiz.Questions.Add(Mc(1, "Vad är Sveriges huvudstad?", ("Stockholm", true), ("Göteborg", false), ("Malmö", false), ("Oslo", false)));
         quiz.Questions.Add(Mc(2, "Hur många ben har en spindel?", ("8", true), ("6", false), ("10", false), ("4", false)));
         quiz.Questions.Add(Mc(3, "Blå och gul blir?", ("Grön · Green", true), ("Lila · Purple", false), ("Orange", false)));
@@ -70,7 +72,7 @@ public sealed class DataSeeder(AppDbContext db, TimeProvider clock)
         quiz.Questions.Add(Mc(5, "Vilket hav ligger öster om Sverige?", ("Östersjön · Baltic", true), ("Atlanten", false), ("Medelhavet", false)));
 
         var boule = NewActivity(ev.Id, 3, ActivityType.Boule, "Boulekulan", "BOULE", now,
-            "Bäst av flera omgångar. Närmast lillen vinner omgången.");
+            "Bäst av flera omgångar. Närmast lillen vinner omgången.", ActivityStatus.Live);
 
         db.Activities.AddRange(walk, quiz, boule);
         await db.SaveChangesAsync(ct);
@@ -81,20 +83,21 @@ public sealed class DataSeeder(AppDbContext db, TimeProvider clock)
         var bouleTeams = MakeTeams(boule, users, ev.TeamSize, now);
         await db.SaveChangesAsync(ct);
 
-        // Walk: team 0 gets all 4, team 1 gets 3.
-        SeedTeamAnswers(walk, walkTeams, new[] { 4, 3 }, now);
-        // Quiz: team 0 gets all 5, team 1 gets 3.
-        SeedTeamAnswers(quiz, quizTeams, new[] { 5, 3 }, now);
-        // Boule: team 0 = 12 (6+6), team 1 = 9 (4+5).
-        AddTeamScore(boule.Id, bouleTeams[0], now, 6, 6);
-        AddTeamScore(boule.Id, bouleTeams[1], now, 4, 5);
+        // Distinct results so the four teams rank 1-2-3-4 in each finished activity.
+        SeedTeamAnswers(walk, walkTeams, new[] { 4, 3, 2, 1 }, now);
+        SeedTeamAnswers(quiz, quizTeams, new[] { 5, 4, 3, 2 }, now);
+        // Boule is still live (not yet counted in placement) — distinct team scores.
+        AddTeamScore(boule.Id, bouleTeams[0], now, 13);
+        AddTeamScore(boule.Id, bouleTeams[1], now, 10);
+        AddTeamScore(boule.Id, bouleTeams[2], now, 7);
+        AddTeamScore(boule.Id, bouleTeams[3], now, 4);
 
         await db.SaveChangesAsync(ct);
         return true;
     }
 
     private Activity NewActivity(int eventId, int order, ActivityType type, string title, string code,
-        DateTimeOffset now, string rules) => new()
+        DateTimeOffset now, string rules, ActivityStatus status) => new()
     {
         EventId = eventId,
         Order = order,
@@ -103,9 +106,10 @@ public sealed class DataSeeder(AppDbContext db, TimeProvider clock)
         Description = rules,
         JoinCode = code,
         ScoringMode = ScoringMode.HigherWins,
-        Status = ActivityStatus.Live,
+        Status = status,
         CreatedUtc = now,
         StartedUtc = now,
+        FinishedUtc = status == ActivityStatus.Finished ? now : null,
     };
 
     private static Question Mc(int order, string text, params (string Text, bool Correct)[] options)
