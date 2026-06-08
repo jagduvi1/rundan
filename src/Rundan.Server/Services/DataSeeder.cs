@@ -14,7 +14,7 @@ namespace Rundan.Server.Services;
 public sealed class DataSeeder(AppDbContext db, TimeProvider clock)
 {
     private static readonly string[] RosterNames =
-        { "Malis", "Palle", "LillMonica", "Jimmy BK", "Maria", "Björn", "Malin", "Calle" };
+        { "Mallis", "Palle", "LillMonica", "Jimmy BK", "Maria", "Björn", "Malin", "Calle" };
 
     public async Task<bool> SeedAsync(CancellationToken ct = default)
     {
