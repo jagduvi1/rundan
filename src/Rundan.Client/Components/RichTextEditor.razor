@@ -10,7 +10,7 @@
         <button type="button" class="rte__btn" title="Numbered list" @onmousedown:preventDefault @onclick='() => CmdAsync("insertOrderedList")'>1. List</button>
     </div>
     <div @ref="_editor" class="rte__area" contenteditable="true" data-placeholder="@Placeholder"
-         @onblur="PushAsync"></div>
+         @oninput="PushAsync" @onblur="PushAsync"></div>
 </div>
 
 @code {
