@@ -107,6 +107,23 @@ internal static class QuestionEndpoints
             return Results.Ok(question.ToAdminDto());
         }).AddEndpointFilter<ActivityManagerFilter>();
 
+        // Host fixes a wrong answer key after the fact and re-scores everyone (works post-finish).
+        app.MapPut("/api/activities/{id:int}/questions/{questionId:int}/answer-key", async (
+            int id, int questionId, UpdateAnswerKeyRequest req, AppDbContext db, GameService game,
+            ScoreboardNotifier notifier, CancellationToken ct) =>
+        {
+            var activity = await db.Activities.FirstOrDefaultAsync(a => a.Id == id, ct)
+                ?? throw new RuleViolationException("Activity not found.", StatusCodes.Status404NotFound);
+            if (activity.Type is not (ActivityType.Quiz or ActivityType.Tipspromenad))
+            {
+                throw new RuleViolationException("This activity type does not use questions.");
+            }
+
+            var result = await game.UpdateAnswerKeyAsync(activity, questionId, req, ct);
+            await notifier.PushScoreboardAsync(id, ct);
+            return Results.Ok(result);
+        }).AddEndpointFilter<ActivityManagerFilter>();
+
         app.MapDelete("/api/activities/{id:int}/questions/{questionId:int}", async (
             int id, int questionId, AppDbContext db, CancellationToken ct) =>
         {
