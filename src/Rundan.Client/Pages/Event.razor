@@ -347,6 +347,30 @@ else
         </div>
     }
 
+    @if (State.IsHost && _event.HasRoster)
+    {
+        <div class="card stack accent">
+            <h3>Play for a player</h3>
+            <p class="muted">If someone's phone dies or runs out of battery, take over here — you'll answer, score and slap as them on your own device. Tap Stop to go back to being yourself.</p>
+            @foreach (var m in _event.Members)
+            {
+                <div class="row" style="border-bottom:1px solid var(--line);padding:.45rem 0">
+                    <span class="grow" style="font-weight:500">@m.Name</span>
+                    @if (ProxyHere && State.Proxy!.UserId == m.Id)
+                    {
+                        <span class="badge admin">Playing as</span>
+                        <button class="btn small" @onclick="StopPlayingAsAsync" disabled="@_busy">Stop</button>
+                    }
+                    else
+                    {
+                        <button class="btn small secondary" @onclick="() => PlayAsAsync(m.Id)"
+                                disabled="@(_busy || State.IsProxying)">Play as</button>
+                    }
+                </div>
+            }
+        </div>
+    }
+
     @if (CanManage)
     {
         <div class="card stack accent">
@@ -448,13 +472,23 @@ else
     private int _slapTarget;
     private int _slapRecipient;
 
-    private bool IsMe(string name) => string.Equals(name, _eventName, StringComparison.Ordinal);
+    // True when this device is currently playing as another player in THIS event.
+    private bool ProxyHere => State.IsProxying && State.Proxy!.EventId == Id;
 
-    private bool CanSlap(PendingSlapDto slap) => _userId is { } uid && slap.WinnerUserIds.Contains(uid);
+    // The user id we're acting as: the proxied player if covering one, else our own claim.
+    private int? ActingUserId => ProxyHere ? State.Proxy!.UserId : _userId;
+
+    private bool IsMe(string name) =>
+        string.Equals(name, _eventName, StringComparison.Ordinal)
+        || (ProxyHere && string.Equals(name, State.Proxy!.Name, StringComparison.Ordinal));
+
+    private bool CanSlap(PendingSlapDto slap) => ActingUserId is { } uid && slap.WinnerUserIds.Contains(uid);
     private IEnumerable<SlapPersonDto> SlapTargets(PendingSlapDto slap) =>
         slap.Members.Where(m => !slap.WinnerUserIds.Contains(m.UserId));
     private IEnumerable<SlapPersonDto> SlapRecipients(PendingSlapDto slap) =>
-        slap.Members.Where(m => m.UserId != _userId && m.UserId != _slapTarget);
+        // Exclude both who we're acting as and our own real identity, so a proxying host
+        // can't route the points to themselves. (_userId == ActingUserId when not proxying.)
+        slap.Members.Where(m => m.UserId != ActingUserId && m.UserId != _userId && m.UserId != _slapTarget);
 
     private static string SlapBlurb(SlapMode mode) => mode switch
     {
@@ -497,6 +531,14 @@ else
         StateHasChanged();
 
         await State.EnsureInitializedAsync(Api);
+
+        // A "play as" overlay is scoped to one event — drop a stale one from another event
+        // BEFORE the first API call, so its member token isn't sent for a different event.
+        if (State.IsProxying && State.Proxy!.EventId != Id)
+        {
+            await State.ClearProxyAsync();
+        }
+
         _event = await Api.GetEventAsync(Id);
 
         if (_event is not null)
@@ -543,6 +585,9 @@ else
                 _selectedMemberIds = _event.Members.Select(m => m.Id).ToHashSet();
                 _selectedAdminIds = _event.AdminUserIds.ToHashSet();
             }
+
+            // If we're covering a player, refresh their sessions so any newly opened activity is included.
+            await RefreshProxyAsync();
 
             _standings = await Api.GetEventStandingsAsync(Id);
             await StartConnectionAsync();
@@ -699,6 +744,9 @@ else
             await EnsureFreeNameSessionsAsync();
         }
 
+        // Keep the covered player's sessions current as activities open/close.
+        await RefreshProxyAsync();
+
         StateHasChanged();
     }
 
@@ -764,6 +812,75 @@ else
                 DisplayName = slot.TeamName,
             });
         }
+    }
+
+    // ---- Host: play for another player (their phone died) ----
+    private async Task PlayAsAsync(int userId)
+    {
+        if (_event is null) return;
+        _busy = true;
+        _adminError = null;
+        StateHasChanged(); // reflect the disabled buttons before the network round-trip
+        try
+        {
+            // Claim the player's identity (idempotent, stable team tokens) and overlay it.
+            var res = await Api.ClaimAsync(_event.JoinCode, userId);
+            await State.SetProxyAsync(BuildProxy(userId, res));
+            _standings = await Api.GetEventStandingsAsync(Id);
+        }
+        catch (ApiException ex)
+        {
+            _adminError = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    // Re-claim the proxied player so activities opened AFTER we started covering them
+    // also get that player's team session (claim only returns Open/Live activities).
+    // Cheap-guarded: only re-claims when some playable activity isn't covered yet, so it
+    // doesn't fire a claim on every scoreboard refresh.
+    private async Task RefreshProxyAsync()
+    {
+        if (_event is null || !ProxyHere) return;
+
+        var missingPlayable = _event.Activities
+            .Where(a => a.Status is ActivityStatus.Open or ActivityStatus.Live)
+            .Any(a => !State.Proxy!.Sessions.ContainsKey(a.Id));
+        if (!missingPlayable) return;
+
+        var uid = State.Proxy!.UserId;
+        try
+        {
+            var res = await Api.ClaimAsync(_event.JoinCode, uid);
+            await State.SetProxyAsync(BuildProxy(uid, res));
+        }
+        catch (ApiException) { }
+    }
+
+    private ProxyIdentity BuildProxy(int userId, ClaimResultDto res) => new()
+    {
+        EventId = Id,
+        UserId = userId,
+        Name = res.DisplayName,
+        MemberToken = res.MemberToken,
+        Sessions = res.Slots.ToDictionary(s => s.ActivityId, s => new PlayerSession
+        {
+            Token = s.Token,
+            ParticipantId = s.ParticipantId,
+            DisplayName = s.TeamName,
+        }),
+    };
+
+    private async Task StopPlayingAsAsync()
+    {
+        _busy = true;
+        StateHasChanged();
+        await State.ClearProxyAsync();
+        // Force a reload so any open activity page re-reads our own (restored) session.
+        Nav.NavigateTo(Nav.Uri, forceLoad: true);
     }
 
     // ---- Free-name join (rosterless events) ----
