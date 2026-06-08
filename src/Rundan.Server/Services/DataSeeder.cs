@@ -14,7 +14,7 @@ namespace Rundan.Server.Services;
 public sealed class DataSeeder(AppDbContext db, TimeProvider clock)
 {
     private static readonly string[] RosterNames =
-        { "Anna", "Erik", "Johan", "Sara", "Maja", "Olof", "Petra", "Sven" };
+        { "Malis", "Palle", "LillMonica", "Jimmy BK", "Maria", "Björn", "Malin", "Calle" };
 
     public async Task<bool> SeedAsync(CancellationToken ct = default)
     {
@@ -47,7 +47,7 @@ public sealed class DataSeeder(AppDbContext db, TimeProvider clock)
         db.EventMembers.AddRange(users.Select(u => new EventMember
         {
             EventId = ev.Id, UserId = u.Id, Token = Guid.NewGuid(),
-            IsAdmin = u.Name == "Erik", // Erik is a co-host (event admin) to demo the role
+            IsAdmin = u.Name == "Palle", // Palle is a co-host (event admin) to demo the role
             AddedUtc = now,
         }));
         await db.SaveChangesAsync(ct);
