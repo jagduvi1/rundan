@@ -59,6 +59,7 @@ public sealed class DataSeeder(AppDbContext db, TimeProvider clock)
             "Pågår under hela dagen. Start i Husvik – avslut vid Utkiken. 1 poäng för varje rätt svar.",
             ActivityStatus.Live);
         walk.RandomizeQuestions = true;
+        walk.IsPublic = true; // reusable from the library
         walk.Questions.Add(GeoMc(1, "Sveriges största sjö?", 59.3250, 18.1000, ("Vänern", true), ("Vättern", false), ("Mälaren", false)));
         walk.Questions.Add(GeoMc(2, "Hur många kommuner har Sverige?", 59.3256, 18.1012, ("90", false), ("290", true), ("490", false)));
         walk.Questions.Add(GeoMc(3, "Vilket är skärgårdens vanligaste träd?", 59.3262, 18.0994, ("Tall", true), ("Ek", false), ("Bok", false)));
@@ -76,6 +77,7 @@ public sealed class DataSeeder(AppDbContext db, TimeProvider clock)
             + "mot kastaren som slungar marshmallows över axeln/huvudet. 15 marshmallows per par, 1 p per fångad.",
             ActivityStatus.Open);
         marsh.ScoreEntryMode = ScoreEntryMode.PerPlayer; // each catcher's catches add to the team
+        marsh.IsPublic = true; // reusable from the library
 
         // 3 — Skala potatis: fastest time wins.
         var potato = NewActivity(ev.Id, 3, ActivityType.ScoreGame, "Skala potatis", "POTATIS", now,
@@ -123,6 +125,8 @@ public sealed class DataSeeder(AppDbContext db, TimeProvider clock)
             "Bilda så långt ord som möjligt på 60 sekunder. Appen lottar 20 bokstavslappar upp och ner; ni "
             + "får vända upp 10 av dem. Längst ord vinner.",
             ActivityStatus.Open);
+
+        words.IsPublic = true; // reusable from the library
 
         activities.AddRange([walk, marsh, potato, boule, tower, corn, ring, words]);
         db.Activities.AddRange(activities);

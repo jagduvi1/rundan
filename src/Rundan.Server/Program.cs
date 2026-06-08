@@ -35,6 +35,7 @@ builder.Services.AddScoped<TeamService>();
 builder.Services.AddScoped<GameService>();
 builder.Services.AddScoped<BracketService>();
 builder.Services.AddScoped<WordGameService>();
+builder.Services.AddScoped<ActivityLibraryService>();
 builder.Services.AddScoped<ScoreboardNotifier>();
 builder.Services.AddScoped<DataSeeder>();
 

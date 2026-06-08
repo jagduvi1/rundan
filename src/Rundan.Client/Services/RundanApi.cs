@@ -135,6 +135,10 @@ public sealed class RundanApi(HttpClient http, AppState state)
     public Task<List<EventDto>> ListEventsAsync() =>
         GetListAsync<EventDto>("api/events", admin: true);
 
+    /// <summary>Player-facing event list for the welcome page (no admin code needed).</summary>
+    public Task<List<EventDto>> GetActiveEventsAsync() =>
+        GetListAsync<EventDto>("api/events/active");
+
     public async Task<EventDto> CreateEventAsync(CreateEventRequest request) =>
         (await SendAsync<EventDto>(HttpMethod.Post, "api/events", body: request, admin: true))!;
 
@@ -188,6 +192,12 @@ public sealed class RundanApi(HttpClient http, AppState state)
     public async Task<ScoreEntryDto> RecordScoreAsync(int id, RecordScoreRequest request, Guid token) =>
         (await SendAsync<ScoreEntryDto>(
             HttpMethod.Post, $"api/activities/{id}/scores", body: request, participantToken: token))!;
+
+    public Task<List<ActivityDto>> GetLibraryAsync() =>
+        GetListAsync<ActivityDto>("api/activities/library", admin: true);
+
+    public async Task<ActivityDto> AddFromLibraryAsync(int eventId, int sourceId) =>
+        (await SendAsync<ActivityDto>(HttpMethod.Post, $"api/events/{eventId}/activities/from-library/{sourceId}", admin: true))!;
 
     public async Task<ActivityDto> SetCourtsAsync(int id, string label, List<string> names) =>
         (await SendAsync<ActivityDto>(HttpMethod.Put, $"api/activities/{id}/courts",

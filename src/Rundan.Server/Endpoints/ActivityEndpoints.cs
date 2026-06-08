@@ -73,6 +73,30 @@ internal static class ActivityEndpoints
             return Results.Ok(rows.Select(r => r.Activity.ToDto(r.Pc, r.Qc)));
         }).AddEndpointFilter<AdminEndpointFilter>();
 
+        // The library: public activity definitions, reusable in any event.
+        app.MapGet("/api/activities/library", async (AppDbContext db, CancellationToken ct) =>
+        {
+            var rows = await db.Activities.AsNoTracking()
+                .Where(a => a.IsPublic)
+                .OrderBy(a => a.Title)
+                .Select(a => new { Activity = a, Qc = a.Questions.Count })
+                .ToListAsync(ct);
+            return Results.Ok(rows.Select(r => r.Activity.ToDto(0, r.Qc)));
+        }).AddEndpointFilter<AdminEndpointFilter>();
+
+        // Deep-copy a library activity into an event as a fresh Draft instance.
+        app.MapPost("/api/events/{id:int}/activities/from-library/{sourceId:int}", async (
+            int id, int sourceId, AppDbContext db, ActivityLibraryService lib, CancellationToken ct) =>
+        {
+            if (!await db.Events.AnyAsync(e => e.Id == id, ct))
+            {
+                return Results.NotFound();
+            }
+
+            var newId = await lib.CopyToEventAsync(sourceId, id, ct);
+            return Results.Ok(await LoadDtoAsync(db, newId, ct));
+        }).AddEndpointFilter<EventManagerFilter>();
+
         app.MapPut("/api/activities/{id:int}/status", async (
             int id, UpdateActivityStatusRequest req, AppDbContext db,
             ScoreboardNotifier notifier, TeamService teams, TimeProvider clock, CancellationToken ct) =>
@@ -137,6 +161,7 @@ internal static class ActivityEndpoints
                 ? req.TargetValue
                 : null;
             activity.RandomizeQuestions = req.RandomizeQuestions;
+            activity.IsPublic = req.IsPublic;
             activity.ScoreEntryMode = req.ScoreEntryMode;
             activity.Latitude = req.Latitude;
             activity.Longitude = req.Longitude;

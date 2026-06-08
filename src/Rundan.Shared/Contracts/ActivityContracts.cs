@@ -41,6 +41,9 @@ public class ActivityDto
     /// <summary>Serve question activities in a random order per player.</summary>
     public bool RandomizeQuestions { get; set; }
 
+    /// <summary>Reusable from the library in other events.</summary>
+    public bool IsPublic { get; set; }
+
     /// <summary>What the playing surfaces are called (Court / Field / Track / Lane).</summary>
     public string CourtLabel { get; set; } = "Court";
 
@@ -109,6 +112,7 @@ public class UpdateActivityRequest
     public Measurement Measurement { get; set; } = Measurement.Points;
     public int? TargetValue { get; set; }
     public bool RandomizeQuestions { get; set; }
+    public bool IsPublic { get; set; }
     public ScoreEntryMode ScoreEntryMode { get; set; } = ScoreEntryMode.Team;
     public double? Latitude { get; set; }
     public double? Longitude { get; set; }

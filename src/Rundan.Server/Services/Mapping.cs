@@ -22,6 +22,7 @@ public static class Mapping
         Measurement = a.Measurement,
         TargetValue = a.TargetValue,
         RandomizeQuestions = a.RandomizeQuestions,
+        IsPublic = a.IsPublic,
         CourtLabel = a.CourtLabel,
         Courts = courts ?? new(),
         ScoreEntryMode = a.ScoreEntryMode,

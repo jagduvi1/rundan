@@ -1,18 +1,45 @@
 @page "/"
 @inject RundanApi Api
+@inject AppState State
 @inject NavigationManager Nav
 
 <PageTitle>Rundan</PageTitle>
 
 <div class="card hero stack center">
     <img src="img/rundan-mark.svg" width="64" height="64" alt="" style="margin:0 auto" />
-    <h1>Join the round</h1>
-    <p style="color:rgba(255,255,255,.9)">Quiz walks, quizzes and boule — an afternoon out with your people.</p>
+    <h1>Welcome to Rundan</h1>
+    <p style="color:rgba(255,255,255,.9)">A day out with your people — quiz walks, games and a friendly scoreboard.</p>
 </div>
+
+@if (_loading)
+{
+    <div class="card center muted"><div class="spinner" style="margin:1rem auto"></div></div>
+}
+else
+{
+    @if (_events.Count == 0)
+    {
+        <div class="card stack">
+            <h2>Nothing scheduled just yet</h2>
+            <p class="muted">When your host sets up a day, it'll show up right here. Got a code? Use it below.</p>
+        </div>
+    }
+    else
+    {
+        @if (_events.Count > 1)
+        {
+            <h2 style="margin:.25rem 0 -.25rem">What's on</h2>
+        }
+        @foreach (var ev in _events)
+        {
+            @EventCard(ev)
+        }
+    }
+}
 
 <div class="card stack">
     <h2>Got a code?</h2>
-    <p class="muted">Type the code your host shared with the group.</p>
+    <p class="muted">Type the code your host shared to jump straight in.</p>
 
     @if (_error is not null)
     {
@@ -32,9 +59,88 @@
 </div>
 
 @code {
+    private List<EventDto> _events = new();
+    private readonly Dictionary<int, string> _names = new();
+    private bool _loading = true;
+
     private string _code = string.Empty;
     private string? _error;
     private bool _busy;
+
+    private RenderFragment EventCard(EventDto ev) =>
+    @<div class="card stack">
+        @if (!string.IsNullOrEmpty(ev.ImageUrl))
+        {
+            <img src="@ev.ImageUrl" alt="" style="width:100%;border-radius:var(--radius-md)" />
+        }
+        <h2>@ev.Name</h2>
+        @if (!string.IsNullOrWhiteSpace(ev.Description))
+        {
+            <p class="muted" style="white-space:pre-wrap">@ev.Description</p>
+        }
+        <div class="row wrap muted" style="font-size:.85rem;gap:.5rem">
+            <span>@ev.Activities.Count activit@(ev.Activities.Count == 1 ? "y" : "ies")</span>
+            <span>·</span>
+            <span>teams of @ev.TeamSize</span>
+            <span>·</span>
+            <span>@(ev.Scoring == EventScoring.Placement ? "placement scoring" : "points scoring")</span>
+            @if (ev.EstimatedMeters is { } m)
+            {
+                <span>·</span>
+                <span>≈ @FormatDistance(m) on foot</span>
+            }
+        </div>
+
+        @if (ev.Activities.Count > 0)
+        {
+            <ul class="list">
+                @foreach (var a in ev.Activities.OrderBy(a => a.Order))
+                {
+                    <li>
+                        <span class="grow">
+                            <b>@a.Order.</b> @a.Title
+                            <span class="muted" style="font-size:.8rem"> · @TypeLabel(a.Type)</span>
+                        </span>
+                        <StatusBadge Status="a.Status" />
+                    </li>
+                }
+            </ul>
+        }
+
+        <button class="btn block success" @onclick="() => Enter(ev.Id)">
+            @(_names.TryGetValue(ev.Id, out var name) ? $"Continue as {name}" : $"Enter {ev.Name}")
+        </button>
+    </div>;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await State.EnsureInitializedAsync(Api);
+        try
+        {
+            _events = await Api.GetActiveEventsAsync();
+            foreach (var ev in _events)
+            {
+                var saved = await State.GetEventNameAsync(ev.Id);
+                if (saved is not null)
+                {
+                    _names[ev.Id] = saved;
+                }
+            }
+        }
+        catch (ApiException)
+        {
+            // Leave the welcome page on the code-entry fallback if the list can't load.
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void Enter(int eventId) => Nav.NavigateTo($"e/{eventId}");
+
+    private static string FormatDistance(int meters) =>
+        meters >= 1000 ? $"{meters / 1000.0:0.0} km" : $"{meters} m";
 
     private async Task OnKeyDown(KeyboardEventArgs e)
     {
@@ -76,4 +182,14 @@
 
         Nav.NavigateTo($"a/{activity.Id}");
     }
+
+    private static string TypeLabel(ActivityType type) => type switch
+    {
+        ActivityType.Quiz => "Quiz",
+        ActivityType.Tipspromenad => "Tipspromenad",
+        ActivityType.Boule => "Boule",
+        ActivityType.ScoreGame => "Score game",
+        ActivityType.WordGame => "Word game",
+        _ => type.ToString(),
+    };
 }
