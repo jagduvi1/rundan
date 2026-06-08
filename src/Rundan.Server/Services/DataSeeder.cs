@@ -33,7 +33,7 @@ public sealed class DataSeeder(AppDbContext db, TimeProvider clock)
         // 2) The day's event (teams of 2, placement scoring) with the whole roster.
         var ev = new Event
         {
-            Name = "Skärgårdsdagen",
+            Name = "Försommarspelen 2026",
             Description = "En dag med åtta grenar. Ni byter lagkamrat inför varje gren — varje grens "
                           + "placering ger poäng (1:a = antal lag) till båda i laget. Högsta individuella total vinner!",
             TeamSize = 2,
