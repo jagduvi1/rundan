@@ -151,8 +151,12 @@ else
         {
             <div class="field">
                 <label>Cities to place</label>
-                <input type="number" min="1" max="20" @bind="_editMapCityCount" style="width:120px" />
-                <p class="muted" style="font-size:.8rem">Random Swedish cities are drawn (the same set for every team) when you open the game. Lowest total distance wins.</p>
+                <input type="number" min="1" max="20" @bind="_editMapCityCount" style="width:120px"
+                       disabled="@(_activity.Status != ActivityStatus.Draft)" />
+                <p class="muted" style="font-size:.8rem">
+                    Random Swedish cities are drawn (the same set for every team) when you open the game; lowest
+                    total distance wins. @(_activity.Status != ActivityStatus.Draft ? "The set is already drawn — locked." : "Set this before you open it.")
+                </p>
             </div>
         }
 

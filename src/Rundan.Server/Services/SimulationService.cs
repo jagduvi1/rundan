@@ -71,6 +71,8 @@ public sealed class SimulationService(AppDbContext db, TeamService teams, Bracke
         db.Answers.RemoveRange(db.Answers.Where(a => a.Participant!.ActivityId == activityId));
         db.ScoreEntries.RemoveRange(db.ScoreEntries.Where(s => s.ActivityId == activityId));
         db.BracketMatches.RemoveRange(db.BracketMatches.Where(m => m.ActivityId == activityId));
+        // Drop the drawn MapPin cities too, so re-opening draws a fresh set instead of replaying them.
+        db.MapCities.RemoveRange(db.MapCities.Where(c => c.ActivityId == activityId));
         await db.SaveChangesAsync(ct);
     }
 

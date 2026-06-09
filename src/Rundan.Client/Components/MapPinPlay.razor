@@ -38,12 +38,16 @@
             </button>
         }
     }
-    else
+    else if (_error is null && _cities.Count > 0)
     {
         <div class="alert success">
             All @_cities.Count cities pinned! Your total is <b>@Fmt.Num(TotalKm) km</b> —
             lowest total wins, see the scoreboard above.
         </div>
+    }
+    else if (_error is null)
+    {
+        <div class="center muted">No cities yet — the host draws them when the game opens.</div>
     }
 </div>
 
@@ -92,6 +96,12 @@
     [JSInvokable]
     public void OnPinned(double lat, double lng)
     {
+        // Ignore map clicks/drags while a submit is in flight or after the answer is revealed.
+        if (_busy || _result is not null)
+        {
+            return;
+        }
+
         _pin = (lat, lng);
         StateHasChanged();
     }

@@ -63,8 +63,12 @@ internal static class MapPinEndpoints
 
             var distanceKm = Math.Round(GeoMath.DistanceKm(req.Lat, req.Lng, city.Latitude, city.Longitude), 1);
 
-            var entry = await db.ScoreEntries
-                .FirstOrDefaultAsync(s => s.ActivityId == id && s.ParticipantId == participant.Id && s.Round == city.Order, ct);
+            // One pin per team per city (Round == city.Order). Load every row for this slot so a prior
+            // concurrent double-submit can't leave two rows silently summing — keep one, drop the rest.
+            var existing = await db.ScoreEntries
+                .Where(s => s.ActivityId == id && s.ParticipantId == participant.Id && s.Round == city.Order)
+                .ToListAsync(ct);
+            var entry = existing.FirstOrDefault();
             if (entry is null)
             {
                 entry = new ScoreEntry
@@ -75,6 +79,10 @@ internal static class MapPinEndpoints
                     RecordedUtc = clock.GetUtcNow(),
                 };
                 db.ScoreEntries.Add(entry);
+            }
+            else if (existing.Count > 1)
+            {
+                db.ScoreEntries.RemoveRange(existing.Skip(1));
             }
 
             entry.Points = distanceKm;
