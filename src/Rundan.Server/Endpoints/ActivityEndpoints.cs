@@ -324,10 +324,19 @@ internal static class ActivityEndpoints
         var dto = activity.ToDto(pc, qc, courts);
         if (activity.EventId is { } evId)
         {
-            // Participants are teams when the event pairs players up (TeamSize > 1).
             var teamSize = await db.Events.AsNoTracking()
-                .Where(e => e.Id == evId).Select(e => (int?)e.TeamSize).FirstOrDefaultAsync(ct);
+                .Where(e => e.Id == evId).Select(e => (int?)e.TeamSize).FirstOrDefaultAsync(ct) ?? 1;
+            // Participants are teams when the event pairs players up (TeamSize > 1).
             dto.IsTeamBased = teamSize > 1;
+
+            // For a roster event, the player/team counts come from the roster (stable even before
+            // teams are generated when the activity opens). Free-name events keep the joined count.
+            var memberCount = await db.EventMembers.CountAsync(m => m.EventId == evId, ct);
+            if (memberCount > 0)
+            {
+                dto.PlayerCount = memberCount;
+                dto.TeamCount = teamSize > 1 ? (int)Math.Ceiling(memberCount / (double)teamSize) : 0;
+            }
         }
 
         return dto;

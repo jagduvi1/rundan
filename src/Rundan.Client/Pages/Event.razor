@@ -421,7 +421,7 @@ else
             </div>
             <div class="field">
                 <label>Rules / info</label>
-                <RichTextEditor @key="_event.Id" Value="_editDescription" ValueChanged="v => _editDescription = v"
+                <RichTextEditor @key="_event.Id" Value="@_editDescription" ValueChanged="v => _editDescription = v"
                                 Placeholder="Explain how the event works — use the toolbar for bullet lists" />
             </div>
             <div class="field">

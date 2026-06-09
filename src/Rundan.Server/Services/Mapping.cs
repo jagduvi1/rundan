@@ -33,6 +33,7 @@ public static class Mapping
         Longitude = a.Longitude,
         RadiusMeters = a.RadiusMeters,
         ParticipantCount = participantCount,
+        PlayerCount = participantCount, // default; LoadDtoAsync refines this from the event roster
         QuestionCount = questionCount,
         CreatedUtc = a.CreatedUtc,
         StartedUtc = a.StartedUtc,
