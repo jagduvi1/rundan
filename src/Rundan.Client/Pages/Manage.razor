@@ -128,11 +128,14 @@ else
             </div>
         }
 
-        <div class="field">
-            <label>Location geofence (optional)</label>
-            <p class="muted" style="font-size:.85rem">Set a GPS point + radius. The activity unlocks on a player's phone when they enter the radius.</p>
-            <LocationPicker @key="_activity.Id" Lat="_editLat" Lng="_editLng" Radius="_editRadius" Changed="OnLocationChanged" />
-        </div>
+        @if (!_activity.UsesMap)
+        {
+            <div class="field">
+                <label>Location geofence (optional)</label>
+                <p class="muted" style="font-size:.85rem">Set a GPS point + radius. The activity unlocks on a player's phone when they enter the radius.</p>
+                <LocationPicker @key="_activity.Id" Lat="_editLat" Lng="_editLng" Radius="_editRadius" Changed="OnLocationChanged" />
+            </div>
+        }
 
         <button class="btn block success" @onclick="SaveDetailsAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_editTitle))">
             Save details
@@ -165,7 +168,11 @@ else
     {
         @if (_activity.Status == ActivityStatus.Draft)
         {
-            <QuestionEditor Activity="_activity" @key="_activity.Id" />
+            @if (_activity.UsesMap)
+            {
+                <StationsEditor Activity="_activity" @key="_activity.Id" RefreshKey="_qVersion" OnChanged="BumpQuestions" />
+            }
+            <QuestionEditor Activity="_activity" @key="_activity.Id" RefreshKey="_qVersion" OnChanged="BumpQuestions" />
         }
         else
         {
@@ -202,6 +209,9 @@ else
     private double? _editLng;
     private int _editRadius = 25;
     private int _loadedId = -1;
+
+    // Bumped to keep the Stations panel and the Questions editor in sync (each reloads on change).
+    private int _qVersion;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -289,6 +299,9 @@ else
         _editLng = loc.Lng;
         _editRadius = loc.Radius;
     }
+
+    // One editor changed the question set — nudge both to reload so the count + statuses stay in sync.
+    private void BumpQuestions() => _qVersion++;
 
     private async Task SaveDetailsAsync()
     {

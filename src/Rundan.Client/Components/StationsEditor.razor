@@ -1,0 +1,265 @@
+@inject RundanApi Api
+
+@* Geofencing for a tipspromenad: set how many stations there are and drop each one on the map.
+   Deliberately shows no question text — stations are normalized to "#1 … #N" so you can place
+   them without seeing the questions. Content is written separately in the Questions editor. *@
+<div class="card stack">
+    <div class="row">
+        <h2 class="grow">Stations (@_questions.Count)</h2>
+    </div>
+    <p class="muted" style="font-size:.85rem">
+        Set how many stations the walk has, then drop each one on the map. Each station unlocks on a
+        player's phone when they reach it. The questions themselves are written below — they're hidden here on purpose.
+    </p>
+
+    @if (_error is not null)
+    {
+        <div class="alert error">@_error</div>
+    }
+
+    <div class="row wrap" style="align-items:flex-end;gap:.6rem">
+        <div class="field" style="width:160px;margin:0">
+            <label>Number of stations</label>
+            <input type="number" min="0" max="100" @bind="_targetCount" />
+        </div>
+        <button class="btn success" @onclick="ApplyCountAsync" disabled="@(_busy || _targetCount == _questions.Count)">
+            Apply
+        </button>
+        <span class="grow"></span>
+        <span class="muted" style="font-size:.85rem">@SummaryText</span>
+    </div>
+
+    @if (_trimNote is not null)
+    {
+        <div class="alert">@_trimNote</div>
+    }
+
+    @if (_questions.Count == 0)
+    {
+        <p class="muted">No stations yet — set a number above to create them.</p>
+    }
+    else
+    {
+        <ul class="list">
+            @foreach (var q in _questions)
+            {
+                <li style="flex-wrap:wrap">
+                    <span class="grow">
+                        <b>#@q.Order</b>
+                        <span class="muted" style="font-size:.78rem">
+                            @if (q.HasLocation)
+                            {
+                                <span> · placed · @(q.RadiusMeters ?? 25) m</span>
+                            }
+                            else
+                            {
+                                <span> · no spot yet</span>
+                            }
+                        </span>
+                    </span>
+
+                    @if (!q.IsComplete)
+                    {
+                        <span class="badge" title="This station still needs a question">needs question</span>
+                    }
+                    @if (q.HasLocation)
+                    {
+                        <span class="badge live">placed</span>
+                    }
+
+                    <button class="btn ghost small" @onclick="() => ToggleSpot(q)" disabled="@_busy">
+                        @(_spotEditId == q.Id ? "Close" : q.HasLocation ? "Edit spot" : "Set spot")
+                    </button>
+                    <button class="btn ghost small danger" @onclick="() => RemoveAsync(q)" disabled="@_busy" title="Remove this station">✕</button>
+
+                    @if (_spotEditId == q.Id)
+                    {
+                        <div style="flex-basis:100%;margin-top:.5rem">
+                            <LocationPicker @key="q.Id" Lat="_spotLat" Lng="_spotLng" Radius="_spotRadius" Changed="OnSpotChanged" />
+                            <div class="row" style="margin-top:.4rem">
+                                <button class="btn small success" @onclick="() => SaveSpotAsync(q)" disabled="@(_busy || _spotLat is null)">Save spot</button>
+                                <button class="btn small ghost" @onclick="() => _spotEditId = null">Cancel</button>
+                                @if (q.HasLocation)
+                                {
+                                    <button class="btn small ghost danger" @onclick="() => ClearSpotAsync(q)" disabled="@_busy">Remove spot</button>
+                                }
+                            </div>
+                        </div>
+                    }
+                </li>
+            }
+        </ul>
+    }
+</div>
+
+@code {
+    [Parameter] public ActivityDto Activity { get; set; } = default!;
+
+    /// <summary>Bumped by the parent when the sibling editor changes questions, to keep both in sync.</summary>
+    [Parameter] public int RefreshKey { get; set; }
+
+    /// <summary>Raised after this panel changes the station set, so the parent can refresh the question editor.</summary>
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private List<QuestionAdminDto> _questions = new();
+    private int _targetCount;
+    private bool _busy;
+    private string? _error;
+    private string? _trimNote;
+    private int _lastRefreshKey = -1;
+
+    private int? _spotEditId;
+    private double? _spotLat;
+    private double? _spotLng;
+    private int _spotRadius = 25;
+
+    private string SummaryText
+    {
+        get
+        {
+            var placed = _questions.Count(q => q.HasLocation);
+            var need = _questions.Count(q => !q.IsComplete);
+            var parts = new List<string> { $"{placed}/{_questions.Count} placed" };
+            if (need > 0)
+            {
+                parts.Add($"{need} need a question");
+            }
+
+            return string.Join(" · ", parts);
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_lastRefreshKey != RefreshKey)
+        {
+            _lastRefreshKey = RefreshKey;
+            await ReloadAsync();
+        }
+    }
+
+    private async Task ReloadAsync()
+    {
+        try
+        {
+            _questions = await Api.GetAdminQuestionsAsync(Activity.Id);
+            _targetCount = _questions.Count;
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task ApplyCountAsync()
+    {
+        _busy = true;
+        _error = null;
+        _trimNote = null;
+        var requested = Math.Clamp(_targetCount, 0, 100);
+        try
+        {
+            _questions = await Api.SetStationCountAsync(Activity.Id, requested);
+            _targetCount = _questions.Count;
+            if (_questions.Count > requested)
+            {
+                _trimNote = "Kept the stations that already have a question — remove those individually with ✕.";
+            }
+
+            await NotifyChangedAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void ToggleSpot(QuestionAdminDto q)
+    {
+        if (_spotEditId == q.Id)
+        {
+            _spotEditId = null;
+            return;
+        }
+
+        _spotEditId = q.Id;
+        _spotLat = q.Latitude;
+        _spotLng = q.Longitude;
+        _spotRadius = q.RadiusMeters ?? 25;
+    }
+
+    private void OnSpotChanged((double? Lat, double? Lng, int Radius) loc)
+    {
+        _spotLat = loc.Lat;
+        _spotLng = loc.Lng;
+        _spotRadius = loc.Radius;
+    }
+
+    private async Task SaveSpotAsync(QuestionAdminDto q)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            await Api.SetQuestionLocationAsync(Activity.Id, q.Id, _spotLat, _spotLng, _spotRadius);
+            _spotEditId = null;
+            await ReloadAsync();
+            await NotifyChangedAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ClearSpotAsync(QuestionAdminDto q)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            await Api.SetQuestionLocationAsync(Activity.Id, q.Id, null, null, null);
+            _spotEditId = null;
+            await ReloadAsync();
+            await NotifyChangedAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task RemoveAsync(QuestionAdminDto q)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            await Api.DeleteQuestionAsync(Activity.Id, q.Id);
+            await ReloadAsync();
+            await NotifyChangedAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private Task NotifyChangedAsync() => OnChanged.HasDelegate ? OnChanged.InvokeAsync() : Task.CompletedTask;
+}

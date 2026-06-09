@@ -307,6 +307,11 @@ public sealed class RundanApi(HttpClient http, AppState state)
     public Task<List<QuestionAdminDto>> GetAdminQuestionsAsync(int id) =>
         GetListAsync<QuestionAdminDto>($"api/activities/{id}/questions/admin", admin: true);
 
+    /// <summary>Sets how many stations a tipspromenad/quiz has — adds blank stations or trims empty ones.</summary>
+    public async Task<List<QuestionAdminDto>> SetStationCountAsync(int id, int count) =>
+        await SendAsync<List<QuestionAdminDto>>(HttpMethod.Put, $"api/activities/{id}/stations/count",
+            body: new SetStationCountRequest { Count = count }, admin: true) ?? new();
+
     public async Task<QuestionAdminDto> AddQuestionAsync(int id, QuestionUpsertRequest request) =>
         (await SendAsync<QuestionAdminDto>(HttpMethod.Post, $"api/activities/{id}/questions",
             body: request, admin: true))!;
