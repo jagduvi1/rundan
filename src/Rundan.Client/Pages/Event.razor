@@ -217,7 +217,12 @@ else
                         <div class="row">
                             <b class="grow">@a.Order. @a.Title</b>
                             <StatusBadge Status="a.Status" />
-                            @if (!IsLocked(a) && a.Status is ActivityStatus.Live or ActivityStatus.Open or ActivityStatus.Finished)
+                            @if (IsLocked(a))
+                            {
+                                @* The geofence is a nudge, not a hard lock — let players in even if they're not at the spot. *@
+                                <a class="btn ghost small" href="@($"a/{a.Id}")">Join anyway</a>
+                            }
+                            else if (a.Status is ActivityStatus.Live or ActivityStatus.Open or ActivityStatus.Finished)
                             {
                                 <a class="btn small @(a.Status == ActivityStatus.Live ? "" : "secondary")" href="@($"a/{a.Id}")">
                                     @ActionLabel(a.Status)
