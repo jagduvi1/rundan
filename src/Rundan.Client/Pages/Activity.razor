@@ -150,6 +150,9 @@ else
             case ActivityType.WordGame:
                 <WordGamePlay @key="_activity.Id" Activity="_activity" Session="_session" RefreshKey="_scoreVersion" />
                 break;
+            case ActivityType.MapPin:
+                <MapPinPlay @key="_activity.Id" Activity="_activity" Session="_session" />
+                break;
             default:
                 <BouleBoard @key="_activity.Id" Activity="_activity" Session="_session"
                             Participants="_participants" RefreshKey="_scoreVersion" />

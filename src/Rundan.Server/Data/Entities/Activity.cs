@@ -69,6 +69,9 @@ public class Activity
     public double? Longitude { get; set; }
     public int? RadiusMeters { get; set; }
 
+    /// <summary>MapPin only: how many cities to draw for the game (defaults to 5 when null).</summary>
+    public int? MapCityCount { get; set; }
+
     public DateTimeOffset CreatedUtc { get; set; }
     public DateTimeOffset? StartedUtc { get; set; }
     public DateTimeOffset? FinishedUtc { get; set; }
@@ -76,4 +79,5 @@ public class Activity
     public List<Participant> Participants { get; set; } = new();
     public List<Question> Questions { get; set; } = new();
     public List<ScoreEntry> ScoreEntries { get; set; } = new();
+    public List<MapCity> MapCities { get; set; } = new();
 }

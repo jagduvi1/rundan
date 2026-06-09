@@ -22,6 +22,9 @@ public enum ActivityType
 
     /// <summary>Word game: flip letter tiles and form the longest word against a timer.</summary>
     WordGame = 5,
+
+    /// <summary>"Pin the city": place a pin on a label-free map for each drawn city; lowest total distance wins.</summary>
+    MapPin = 6,
 }
 
 /// <summary>Lifecycle of an activity.</summary>

@@ -147,6 +147,15 @@ else
             </div>
         }
 
+        @if (_activity.Type == ActivityType.MapPin)
+        {
+            <div class="field">
+                <label>Cities to place</label>
+                <input type="number" min="1" max="20" @bind="_editMapCityCount" style="width:120px" />
+                <p class="muted" style="font-size:.8rem">Random Swedish cities are drawn (the same set for every team) when you open the game. Lowest total distance wins.</p>
+            </div>
+        }
+
         @if (_activity.Type == ActivityType.Boule)
         {
             <div class="field">
@@ -252,6 +261,7 @@ else
     private MatchFormat _editMatchFormat = MatchFormat.Free;
     private int _editBestOfSets = 3;
     private int _editGames = 13;
+    private int _editMapCityCount = 5;
     private bool _editRandomize;
     private bool _editHideQuestions;
     private bool _editPublic;
@@ -296,6 +306,7 @@ else
             _editMatchFormat = _activity.MatchFormat;
             _editBestOfSets = _activity.BestOfSets is 1 or 3 or 5 ? _activity.BestOfSets : 3;
             _editGames = _activity.GamesToWinSet;
+            _editMapCityCount = _activity.MapCityCount ?? 5;
             _editRandomize = _activity.RandomizeQuestions;
             _editHideQuestions = _activity.HideQuestionsFromHost;
             _editPublic = _activity.IsPublic;
@@ -407,6 +418,7 @@ else
                 MatchFormat = _editMatchFormat,
                 BestOfSets = _editBestOfSets,
                 GamesToWinSet = _editGames,
+                MapCityCount = _editMapCityCount,
             });
 
             // Reload the question/stations grids so the "hide questions" toggle masks (or reveals) right away.

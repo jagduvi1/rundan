@@ -68,6 +68,12 @@ public static class Fmt
                 lines.Add("Your score is the length of your word.");
                 break;
 
+            case ActivityType.MapPin:
+                lines.Add($"You'll get {a.MapCityCount ?? 5} cities to place on a map that has no place names.");
+                lines.Add("Drop a pin where you think each city is — the distance from the real spot is your score.");
+                lines.Add("Lowest total distance across all the cities wins.");
+                break;
+
             default: // ScoreGame and any future round-based game
                 var measure = a.Measurement switch
                 {
@@ -99,6 +105,7 @@ public static class Fmt
         ActivityType.Boule => "Boule",
         ActivityType.ScoreGame => "Score game",
         ActivityType.WordGame => "Word game",
+        ActivityType.MapPin => "Pin the city (map)",
         _ => type.ToString(),
     };
 }

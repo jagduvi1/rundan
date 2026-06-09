@@ -56,6 +56,14 @@ internal static class ActivityEndpoints
                 JoinCode = await codes.NextAsync(db, ct),
                 CreatedUtc = clock.GetUtcNow(),
             };
+
+            // MapPin is scored by distance — lowest total wins — and draws 5 cities by default.
+            if (req.Type == ActivityType.MapPin)
+            {
+                activity.ScoringMode = ScoringMode.LowerWins;
+                activity.MapCityCount = 5;
+            }
+
             db.Activities.Add(activity);
             await db.SaveChangesAsync(ct);
 
@@ -160,6 +168,28 @@ internal static class ActivityEndpoints
                 await teams.EnsureTeamsAsync(activity, ct);
             }
 
+            // MapPin: draw the cities once when it first opens — the same set for every team.
+            if (activity.Type == ActivityType.MapPin && activity.Status is ActivityStatus.Open or ActivityStatus.Live
+                && !await db.MapCities.AnyAsync(c => c.ActivityId == id, ct))
+            {
+                var n = Math.Clamp(activity.MapCityCount ?? 5, 1, SwedishCities.All.Count);
+                var rng = new Random();
+                var drawn = SwedishCities.All.OrderBy(_ => rng.Next()).Take(n).ToList();
+                for (var i = 0; i < drawn.Count; i++)
+                {
+                    db.MapCities.Add(new MapCity
+                    {
+                        ActivityId = id,
+                        Order = i,
+                        Name = drawn[i].Name,
+                        Latitude = drawn[i].Lat,
+                        Longitude = drawn[i].Lng,
+                    });
+                }
+
+                await db.SaveChangesAsync(ct);
+            }
+
             await notifier.PushStatusAsync(id, activity.Status);
             await notifier.PushScoreboardAsync(id, ct);
 
@@ -195,6 +225,11 @@ internal static class ActivityEndpoints
             activity.Latitude = req.Latitude;
             activity.Longitude = req.Longitude;
             activity.RadiusMeters = req.RadiusMeters;
+            if (activity.Type == ActivityType.MapPin)
+            {
+                activity.MapCityCount = req.MapCityCount is int n ? Math.Clamp(n, 1, SwedishCities.All.Count) : 5;
+                activity.ScoringMode = ScoringMode.LowerWins; // distance — lowest total wins, always
+            }
             activity.MatchFormat = req.MatchFormat;
             activity.BestOfSets = req.BestOfSets is 1 or 3 or 5 ? req.BestOfSets : 3;
             activity.GamesToWinSet = Math.Clamp(req.GamesToWinSet, 1, 100);
