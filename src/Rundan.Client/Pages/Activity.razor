@@ -23,7 +23,7 @@ else
     <div class="card stack">
         @if (_activity.EventId is { } eventId)
         {
-            <a class="activity-link muted" href="@($"e/{eventId}")" style="font-size:.85rem">‹ Back to the event</a>
+            <a class="btn ghost small" href="@($"e/{eventId}")" style="align-self:flex-start">‹ All activities</a>
         }
         <div class="row">
             <h1 class="grow">@_activity.Title</h1>
@@ -188,6 +188,11 @@ else
                 <p class="muted">See the scoreboard above.</p>
             </div>
         }
+    }
+
+    @if (_activity.EventId is { } backId)
+    {
+        <a class="btn ghost block" href="@($"e/{backId}")">← Back to all activities</a>
     }
 
     @if (State.IsHost && !State.IsProxying)
