@@ -39,6 +39,11 @@ public class Event
 
     public DateTimeOffset CreatedUtc { get; set; }
 
+    /// <summary>Optional availability window (local wall-clock; both ends optional). Outside it, players
+    /// see "starts at…/ended" and can't join or play; the host always has full access.</summary>
+    public DateTime? StartsAt { get; set; }
+    public DateTime? EndsAt { get; set; }
+
     public List<Activity> Activities { get; set; } = new();
     public List<EventMember> Members { get; set; } = new();
 }

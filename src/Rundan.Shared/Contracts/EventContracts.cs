@@ -22,6 +22,10 @@ public class EventDto
     public string JoinCode { get; set; } = string.Empty;
     public DateTimeOffset CreatedUtc { get; set; }
 
+    /// <summary>Optional availability window (local wall-clock). Outside it, players can't join/play; the host can.</summary>
+    public DateTime? StartsAt { get; set; }
+    public DateTime? EndsAt { get; set; }
+
     /// <summary>Estimated metres covered walking the geolocated route (stations + activity points), if any.</summary>
     public int? EstimatedMeters { get; set; }
 
@@ -125,6 +129,10 @@ public class UpdateEventRequest
     public EventScoring Scoring { get; set; } = EventScoring.Cumulative;
     public TeamShuffle TeamShuffle { get; set; } = TeamShuffle.EveryActivity;
     public SlapMode SlapMode { get; set; } = SlapMode.Off;
+
+    /// <summary>Optional availability window (local wall-clock). Either end may be null.</summary>
+    public DateTime? StartsAt { get; set; }
+    public DateTime? EndsAt { get; set; }
 }
 
 /// <summary>Request to set a custom event code, or regenerate one when Code is empty.</summary>

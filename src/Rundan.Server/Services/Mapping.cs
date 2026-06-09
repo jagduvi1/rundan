@@ -55,6 +55,8 @@ public static class Mapping
         SlapMode = e.SlapMode,
         JoinCode = e.JoinCode,
         CreatedUtc = e.CreatedUtc,
+        StartsAt = e.StartsAt,
+        EndsAt = e.EndsAt,
         Activities = activities,
         Members = members,
     };
