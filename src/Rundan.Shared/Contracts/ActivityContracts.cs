@@ -8,6 +8,10 @@ public class ActivityDto
     /// <summary>Parent event, if this activity is part of one.</summary>
     public int? EventId { get; set; }
 
+    /// <summary>True when participants compete as teams (the parent event pairs players up, TeamSize &gt; 1).
+    /// False for singles events and standalone activities, where each participant is one player.</summary>
+    public bool IsTeamBased { get; set; }
+
     /// <summary>Position in the event's running order (1, 2, 3 …).</summary>
     public int Order { get; set; }
 
