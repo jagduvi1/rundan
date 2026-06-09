@@ -62,6 +62,8 @@ public sealed class ActivityLibraryService(AppDbContext db, JoinCodeGenerator co
                     Longitude = q.Longitude,
                     RadiusMeters = q.RadiusMeters,
                     AcceptedFreeTextAnswer = q.AcceptedFreeTextAnswer,
+                    SpotifyUrl = q.SpotifyUrl,
+                    AcceptedArtist = q.AcceptedArtist,
                     Options = q.Options
                         .OrderBy(o => o.Order)
                         .Select(o => new AnswerOption { Order = o.Order, Text = o.Text, IsCorrect = o.IsCorrect })

@@ -120,9 +120,16 @@ public sealed class GameService(AppDbContext db, TimeProvider clock)
             return string.Empty;
         }
 
+        // Decompose so accents become separate marks we can drop (é→e, ö→o, å→a) — lenient matching.
+        var decomposed = s.Trim().ToLowerInvariant().Normalize(System.Text.NormalizationForm.FormD);
         var sb = new System.Text.StringBuilder();
-        foreach (var c in s.Trim().ToLowerInvariant())
+        foreach (var c in decomposed)
         {
+            if (System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) == System.Globalization.UnicodeCategory.NonSpacingMark)
+            {
+                continue;
+            }
+
             if (char.IsLetterOrDigit(c))
             {
                 sb.Append(c);
