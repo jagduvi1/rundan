@@ -89,7 +89,7 @@ else
                 <p class="muted">Waiting for @slap.WinnerName to take the slap…</p>
             }
 
-            @if (CanManage)
+            @if (CanManage && !ProxyHere)
             {
                 <button class="btn ghost small" @onclick="() => SkipSlapAsync(slap)" disabled="@_busy">Skip slap (host)</button>
             }
@@ -282,7 +282,7 @@ else
         </div>
     }
 
-    @if (CanManage)
+    @if (CanManage && !ProxyHere)
     {
         <div class="card stack accent">
             <h2>Host controls</h2>
@@ -353,7 +353,7 @@ else
                 Add to event
             </button>
 
-            @if (State.IsHost)
+            @if (State.IsHost && !ProxyHere)
             {
                 <h3 style="margin-top:.5rem">…or add from the activity library</h3>
                 @if (_library.Count == 0)
@@ -398,7 +398,7 @@ else
         </div>
     }
 
-    @if (State.IsHost)
+    @if (State.IsHost && !ProxyHere)
     {
         <div class="card stack accent">
             <h3>Players &amp; event admins</h3>
@@ -433,7 +433,7 @@ else
         </div>
     }
 
-    @if (State.IsHost && _event.HasRoster)
+    @if (State.IsHost && _event.HasRoster && !ProxyHere)
     {
         <div class="card stack accent">
             <h3>Play for a player</h3>
@@ -457,7 +457,7 @@ else
         </div>
     }
 
-    @if (CanManage)
+    @if (CanManage && !ProxyHere)
     {
         <div class="card stack accent">
             <h3>Event details</h3>
