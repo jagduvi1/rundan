@@ -25,6 +25,7 @@ public static class Mapping
         BestOfSets = a.BestOfSets,
         GamesToWinSet = a.GamesToWinSet,
         RandomizeQuestions = a.RandomizeQuestions,
+        HideQuestionsFromHost = a.HideQuestionsFromHost,
         IsPublic = a.IsPublic,
         CourtLabel = a.CourtLabel,
         Courts = courts ?? new(),

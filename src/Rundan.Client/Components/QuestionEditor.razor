@@ -14,7 +14,11 @@
                 <li style="flex-wrap:wrap">
                     <span class="grow">
                         <b>@q.Order.</b>
-                        @if (string.IsNullOrWhiteSpace(q.Text))
+                        @if (q.Hidden)
+                        {
+                            <span class="muted"><i>Hidden — you'll see it when you play</i></span>
+                        }
+                        else if (string.IsNullOrWhiteSpace(q.Text))
                         {
                             <span class="muted"><i>No question yet</i></span>
                         }
@@ -30,9 +34,12 @@
                     {
                         <span class="badge" title="Needs text and an answer key">needs question</span>
                     }
-                    <button class="btn ghost small" @onclick="() => StartEdit(q)" disabled="@_busy">
-                        @(string.IsNullOrWhiteSpace(q.Text) ? "Add question" : "Edit")
-                    </button>
+                    @if (!q.Hidden)
+                    {
+                        <button class="btn ghost small" @onclick="() => StartEdit(q)" disabled="@_busy">
+                            @(string.IsNullOrWhiteSpace(q.Text) ? "Add question" : "Edit")
+                        </button>
+                    }
                     <button class="btn ghost small danger" @onclick="() => DeleteAsync(q.Id)" disabled="@_busy">✕</button>
                 </li>
             }

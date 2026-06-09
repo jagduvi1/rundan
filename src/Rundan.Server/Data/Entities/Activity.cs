@@ -48,6 +48,10 @@ public class Activity
     /// <summary>For question activities: serve the questions in a random order per player.</summary>
     public bool RandomizeQuestions { get; set; }
 
+    /// <summary>For question activities: blank out the question text/answers in the host's management
+    /// view (so a host who's also playing doesn't spoil library-pulled questions). Players still see them.</summary>
+    public bool HideQuestionsFromHost { get; set; }
+
     /// <summary>If true, this activity's definition is reusable from the library in other events.</summary>
     public bool IsPublic { get; set; }
 

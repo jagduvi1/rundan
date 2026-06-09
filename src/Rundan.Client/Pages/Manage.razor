@@ -101,6 +101,16 @@ else
                     <span>Randomize question order per player</span>
                 </label>
             </div>
+            <div class="field">
+                <label class="row" style="font-weight:500">
+                    <input type="checkbox" style="width:auto;min-height:auto"
+                           checked="@_editHideQuestions" @onchange="e => _editHideQuestions = (bool)e.Value!" />
+                    <span>Hide questions from me — I'm playing too</span>
+                </label>
+                <p class="muted" style="font-size:.8rem;margin-top:-.3rem">
+                    Blanks the questions here (e.g. ones pulled from the library) so you don't spoil them. Players still see them.
+                </p>
+            </div>
         }
 
         @if (_activity.UsesRounds)
@@ -243,6 +253,7 @@ else
     private int _editBestOfSets = 3;
     private int _editGames = 13;
     private bool _editRandomize;
+    private bool _editHideQuestions;
     private bool _editPublic;
     private string _editCourtLabel = "Court";
     private List<string> _editCourtNames = new();
@@ -286,6 +297,7 @@ else
             _editBestOfSets = _activity.BestOfSets is 1 or 3 or 5 ? _activity.BestOfSets : 3;
             _editGames = _activity.GamesToWinSet;
             _editRandomize = _activity.RandomizeQuestions;
+            _editHideQuestions = _activity.HideQuestionsFromHost;
             _editPublic = _activity.IsPublic;
             _editCourtLabel = _activity.CourtLabel;
             _editCourtNames = _activity.Courts.Select(c => c.Name).ToList();
@@ -376,6 +388,7 @@ else
                 Measurement = _editMeasurement,
                 TargetValue = _editTarget,
                 RandomizeQuestions = _editRandomize,
+                HideQuestionsFromHost = _editHideQuestions,
                 IsPublic = _editPublic,
                 ScoreEntryMode = _editScoreEntryMode,
                 Latitude = _editLat,
