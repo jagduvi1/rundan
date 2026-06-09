@@ -55,6 +55,16 @@ else
         </div>
     }
 
+    <div class="card stack">
+        <h2>How it works</h2>
+        <ul style="margin:.1rem 0 0;padding-left:1.15rem;line-height:1.55">
+            @foreach (var line in Fmt.RulesSummary(_activity))
+            {
+                <li>@line</li>
+            }
+        </ul>
+    </div>
+
     <div class="card">
         <h2>Scoreboard</h2>
         <Scoreboard Board="_board" MyParticipantId="_session?.ParticipantId" />
