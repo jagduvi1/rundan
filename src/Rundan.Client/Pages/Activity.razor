@@ -179,7 +179,7 @@ else
         }
     }
 
-    @if (State.IsHost)
+    @if (State.IsHost && !State.IsProxying)
     {
         <div class="card center muted">
             <a href="@($"manage/{_activity.Id}")">Manage this activity (host)</a>
