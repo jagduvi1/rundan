@@ -222,7 +222,7 @@ else
                             }
                         </span>
                         <StatusBadge Status="a.Status" />
-                        @if (a.Status == ActivityStatus.Live && a.HasLocation && !WithinRadius(a))
+                        @if ((a.Status is ActivityStatus.Live or ActivityStatus.Open) && a.HasLocation && !WithinRadius(a))
                         {
                             <a class="btn ghost small" href="@ActivityMapsUrl(a)" target="_blank" rel="noopener">Maps</a>
                             <span class="muted" style="font-size:.82rem">@LockText(a)</span>
@@ -238,6 +238,26 @@ else
             </ul>
         }
     </div>
+
+    @* You've-arrived prompt: shown when the player walks into a ready activity's geofence. *@
+    @if (_arrivedPromptId is { } arrId && _event.Activities.FirstOrDefault(x => x.Id == arrId) is { } arr)
+    {
+        <div class="arrival" @onclick="DismissArrival">
+            @for (var c = 0; c < 14; c++)
+            {
+                <span class="confetti"
+                      style="left:@(((c * 7 + 6) % 96))%;background:@ConfettiColor(c);border-radius:@(c % 2 == 0 ? "50%" : "3px");animation-delay:@((c % 6) * 250)ms"></span>
+            }
+            <div class="arrival__check">✓</div>
+            <div class="arrival__title">You've arrived!</div>
+            <div class="arrival__sub">@arr.Order. @arr.Title</div>
+            <div class="arrival__cta">
+                <button class="btn accent block" @onclick="() => GoToActivity(arrId)" @onclick:stopPropagation="true">
+                    @ActionLabel(arr.Status)
+                </button>
+            </div>
+        </div>
+    }
 
     @if (CanManage)
     {
@@ -511,6 +531,7 @@ else
     private GeoPosition? _pos;
     private readonly Dictionary<int, double> _distances = new();
     private readonly HashSet<int> _arrived = new();
+    private int? _arrivedPromptId;
 
     private string _joinName = string.Empty;
     private string? _joinError;
@@ -697,18 +718,47 @@ else
         {
             foreach (var a in _event.Activities.Where(a => a.HasLocation))
             {
-                var d = GeolocationInterop.DistanceMeters(p.Latitude, p.Longitude, a.Latitude!.Value, a.Longitude!.Value);
-                _distances[a.Id] = d;
-                if (a.Status == ActivityStatus.Live && d <= RadiusOf(a) && _arrived.Add(a.Id))
-                {
-                    _ = _vibe?.PatternAsync(90, 50, 140);
-                }
+                _distances[a.Id] = GeolocationInterop.DistanceMeters(
+                    p.Latitude, p.Longitude, a.Latitude!.Value, a.Longitude!.Value);
             }
+
+            CheckArrivals();
         }
 
         StateHasChanged();
         return Task.CompletedTask;
     });
+
+    // Raises the "you've arrived" prompt the first time the player is within a ready (Open/Live)
+    // activity's radius — also catches a stationary player when the host opens the activity they're at.
+    private void CheckArrivals()
+    {
+        if (_event is null)
+        {
+            return;
+        }
+
+        foreach (var a in _event.Activities)
+        {
+            if (a.HasLocation && a.Status is ActivityStatus.Open or ActivityStatus.Live
+                && _distances.TryGetValue(a.Id, out var d) && d <= RadiusOf(a) && _arrived.Add(a.Id))
+            {
+                _ = _vibe?.PatternAsync(90, 50, 140);
+                _arrivedPromptId = a.Id;
+            }
+        }
+    }
+
+    private void DismissArrival() => _arrivedPromptId = null;
+
+    private void GoToActivity(int activityId)
+    {
+        _arrivedPromptId = null;
+        Nav.NavigateTo($"a/{activityId}");
+    }
+
+    private static string ConfettiColor(int i) =>
+        new[] { "var(--coral-400)", "var(--sun-400)", "var(--green-300)", "#fff", "var(--sea-200)" }[i % 5];
 
     private static string ActivityMapsUrl(ActivityDto a)
     {
@@ -807,6 +857,11 @@ else
     {
         _event = await Api.GetEventAsync(Id) ?? _event;
         _standings = await Api.GetEventStandingsAsync(Id);
+
+        // An activity may have just opened (or gained a location) — start tracking if needed and
+        // re-check arrivals so a player already at the spot is prompted right away.
+        await StartGeoAsync();
+        CheckArrivals();
 
         if (_conn is not null && _event is not null)
         {
