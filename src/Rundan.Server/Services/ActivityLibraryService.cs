@@ -38,6 +38,7 @@ public sealed class ActivityLibraryService(AppDbContext db, JoinCodeGenerator co
             Measurement = src.Measurement,
             TargetValue = src.TargetValue,
             RandomizeQuestions = src.RandomizeQuestions,
+            HideQuestionsFromHost = src.HideQuestionsFromHost,
             ScoreEntryMode = src.ScoreEntryMode,
             CourtLabel = src.CourtLabel,
             Latitude = src.Latitude,
