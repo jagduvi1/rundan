@@ -55,15 +55,7 @@ internal static class QuestionEndpoints
             }
 
             var questions = await LoadOrderedAsync(db, id, ct);
-            var dtos = questions.Select(q => q.ToAdminDto());
-
-            // When the host plays too, blank the text/answers server-side so the real content never
-            // reaches their browser — they can still reorder, place, and delete by number.
-            if (activity.HideQuestionsFromHost)
-            {
-                dtos = dtos.Select(Mask);
-            }
-
+            var dtos = MaskIfHidden(questions.Select(q => q.ToAdminDto()), activity.HideQuestionsFromHost);
             return Results.Ok(dtos.ToList());
         }).AddEndpointFilter<ActivityManagerFilter>();
 
@@ -138,7 +130,12 @@ internal static class QuestionEndpoints
             question.Longitude = req.Longitude;
             question.RadiusMeters = req.RadiusMeters is > 0 ? req.RadiusMeters : null;
             await db.SaveChangesAsync(ct);
-            return Results.Ok(question.ToAdminDto());
+
+            // StationsEditor calls this; on a hidden activity the response must not leak the question.
+            var hide = await db.Activities.AsNoTracking()
+                .Where(a => a.Id == id).Select(a => a.HideQuestionsFromHost).FirstOrDefaultAsync(ct);
+            var dto = question.ToAdminDto();
+            return Results.Ok(hide && dto.IsComplete ? Mask(dto) : dto);
         }).AddEndpointFilter<ActivityManagerFilter>();
 
         // Host fixes a wrong answer key after the fact and re-scores everyone (works post-finish).
@@ -151,6 +148,15 @@ internal static class QuestionEndpoints
             if (activity.Type is not (ActivityType.Quiz or ActivityType.Tipspromenad))
             {
                 throw new RuleViolationException("This activity type does not use questions.");
+            }
+
+            // Post-finish correction only. The response reveals the answer, so blocking it earlier also
+            // stops it leaking the questions to a host who hid them to play.
+            if (activity.Status != ActivityStatus.Finished)
+            {
+                throw new RuleViolationException(
+                    "The answer key can only be corrected once the activity is finished.",
+                    StatusCodes.Status409Conflict);
             }
 
             var result = await game.UpdateAnswerKeyAsync(activity, questionId, req, ct);
@@ -229,7 +235,7 @@ internal static class QuestionEndpoints
             }
 
             await db.SaveChangesAsync(ct);
-            return Results.Ok(remaining.Select(q => q.ToAdminDto()));
+            return Results.Ok(MaskIfHidden(remaining.Select(q => q.ToAdminDto()), activity.HideQuestionsFromHost).ToList());
         }).AddEndpointFilter<ActivityManagerFilter>();
     }
 
@@ -241,6 +247,11 @@ internal static class QuestionEndpoints
             : q.Options.Count >= 2
               && q.Options.Count(o => o.IsCorrect) == 1
               && q.Options.All(o => !string.IsNullOrWhiteSpace(o.Text)));
+
+    // Blanks completed questions for a host who hides them (host plays too). Blank/incomplete ones have
+    // no content to spoil, so they pass through visible and editable — the host can still fill them in.
+    private static IEnumerable<QuestionAdminDto> MaskIfHidden(IEnumerable<QuestionAdminDto> dtos, bool hide) =>
+        hide ? dtos.Select(d => d.IsComplete ? Mask(d) : d) : dtos;
 
     // Blanks a question's content for the host's view (text, answers, options, image) while keeping
     // what's needed to manage it (order, kind, points, geofence).
