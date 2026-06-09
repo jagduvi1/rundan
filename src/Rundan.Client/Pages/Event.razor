@@ -360,6 +360,7 @@ else
                 <option value="@ActivityType.ScoreGame">Other score game</option>
                 <option value="@ActivityType.WordGame">Word game</option>
                 <option value="@ActivityType.MapPin">Pin the city (map)</option>
+                <option value="@ActivityType.MusicQuiz">Music quiz</option>
             </select>
             <button class="btn block success" @onclick="AddActivityAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_newTitle))">
                 Add to event

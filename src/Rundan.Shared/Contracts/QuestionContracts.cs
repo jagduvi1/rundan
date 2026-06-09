@@ -54,8 +54,13 @@ public class QuestionUpsertRequest
     /// <summary>For multiple-choice / true-false questions.</summary>
     public List<AnswerOptionUpsert> Options { get; set; } = new();
 
-    /// <summary>Accepted answer for free-text questions (compared case-insensitively, trimmed).</summary>
+    /// <summary>Accepted answer for free-text questions (compared case-insensitively, trimmed).
+    /// For a MusicQuiz track this is the correct SONG title.</summary>
     public string? AcceptedFreeTextAnswer { get; set; }
+
+    /// <summary>MusicQuiz: the Spotify link the host plays, and the correct artist.</summary>
+    public string? SpotifyUrl { get; set; }
+    public string? AcceptedArtist { get; set; }
 }
 
 /// <summary>Reveals a question and its correct answer (after the activity is finished).</summary>

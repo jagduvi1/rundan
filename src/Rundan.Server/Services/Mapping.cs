@@ -101,6 +101,8 @@ public static class Mapping
         Longitude = q.Longitude,
         RadiusMeters = q.RadiusMeters,
         AcceptedFreeTextAnswer = q.AcceptedFreeTextAnswer,
+        SpotifyUrl = q.SpotifyUrl,
+        AcceptedArtist = q.AcceptedArtist,
         Options = q.Options
             .OrderBy(o => o.Order)
             .Select(o => new AnswerOptionAdminDto { Id = o.Id, Order = o.Order, Text = o.Text, IsCorrect = o.IsCorrect })

@@ -243,6 +243,18 @@ else
             </div>
         }
     }
+
+    @if (_activity.Type == ActivityType.MusicQuiz)
+    {
+        @if (_activity.Status == ActivityStatus.Draft)
+        {
+            <MusicTracksEditor Activity="_activity" @key="(3, _activity.Id)" RefreshKey="_qVersion" OnChanged="BumpQuestions" />
+        }
+        else
+        {
+            <div class="card muted">Tracks are locked while the activity is @_activity.Status. Set it back to <b>Draft</b> to edit them.</div>
+        }
+    }
 }
 
 @code {

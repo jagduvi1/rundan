@@ -22,6 +22,11 @@ public class QuestionAdminDto
     public double? Longitude { get; set; }
     public int? RadiusMeters { get; set; }
     public string? AcceptedFreeTextAnswer { get; set; }
+
+    /// <summary>MusicQuiz: the Spotify link the host plays, and the correct artist (host-only).</summary>
+    public string? SpotifyUrl { get; set; }
+    public string? AcceptedArtist { get; set; }
+
     public List<AnswerOptionAdminDto> Options { get; set; } = new();
 
     /// <summary>The text/answers are blanked because the activity hides questions from the host (host plays too).</summary>

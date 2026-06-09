@@ -1,0 +1,130 @@
+@inject RundanApi Api
+
+<div class="card stack">
+    <div class="row">
+        <h3 class="grow" style="margin:0">Tracks</h3>
+        <button class="btn small" @onclick="AddAsync" disabled="@_busy">Add a track</button>
+    </div>
+    <p class="muted" style="font-size:.82rem;margin:0">
+        Paste a Spotify track link (you'll play it), then the correct song and artist. Players type both;
+        each correct guess is worth the track's points. Players never see the link or the answers.
+    </p>
+
+    @if (_error is not null)
+    {
+        <div class="alert error">@_error</div>
+    }
+
+    @if (_tracks.Count == 0)
+    {
+        <p class="muted">No tracks yet — add the first one.</p>
+    }
+
+    @foreach (var (t, i) in _tracks.Select((t, i) => (t, i)))
+    {
+        <div class="card stack" style="background:var(--paper-2, #faf7f2)">
+            <div class="row">
+                <b class="grow">Track @(i + 1)</b>
+                @if (!string.IsNullOrWhiteSpace(t.SpotifyUrl))
+                {
+                    <a class="btn ghost small" href="@t.SpotifyUrl" target="_blank" rel="noopener">▶ Open</a>
+                }
+                <button class="btn ghost small danger" @onclick="() => DeleteAsync(t)" disabled="@_busy">Remove</button>
+            </div>
+            <input placeholder="Spotify track link (https://open.spotify.com/track/…)" @bind="t.SpotifyUrl" />
+            <div class="row wrap">
+                <input class="grow" placeholder="Song title (correct answer)" @bind="t.AcceptedFreeTextAnswer" />
+                <input class="grow" placeholder="Artist (correct answer)" @bind="t.AcceptedArtist" />
+            </div>
+            <div class="row">
+                <label class="muted" style="font-size:.85rem">Points each</label>
+                <input type="number" min="0" max="100" style="width:90px" @bind="t.Points" />
+                <span class="grow"></span>
+                <button class="btn small success" @onclick="() => SaveAsync(t)" disabled="@_busy">Save</button>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public ActivityDto Activity { get; set; } = default!;
+    [Parameter] public int RefreshKey { get; set; }
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private List<QuestionAdminDto> _tracks = new();
+    private bool _busy;
+    private string? _error;
+    private int _lastKey = -1;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (RefreshKey != _lastKey)
+        {
+            _lastKey = RefreshKey;
+            await LoadAsync();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        try { _tracks = await Api.GetAdminQuestionsAsync(Activity.Id); }
+        catch (ApiException ex) { _error = ex.Message; }
+    }
+
+    private async Task AddAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var order = _tracks.Count == 0 ? 1 : _tracks.Max(t => t.Order) + 1;
+            await Api.AddQuestionAsync(Activity.Id, new QuestionUpsertRequest
+            {
+                Order = order,
+                Text = $"Track {order}",
+                Kind = QuestionKind.FreeText,
+                Points = 1,
+            });
+            await LoadAsync();
+            await OnChanged.InvokeAsync();
+        }
+        catch (ApiException ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task SaveAsync(QuestionAdminDto t)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            await Api.UpdateQuestionAsync(Activity.Id, t.Id, new QuestionUpsertRequest
+            {
+                Order = t.Order,
+                Text = string.IsNullOrWhiteSpace(t.Text) ? $"Track {t.Order}" : t.Text,
+                Kind = QuestionKind.FreeText,
+                Points = Math.Max(0, t.Points),
+                SpotifyUrl = t.SpotifyUrl,
+                AcceptedFreeTextAnswer = t.AcceptedFreeTextAnswer,
+                AcceptedArtist = t.AcceptedArtist,
+            });
+            await OnChanged.InvokeAsync();
+        }
+        catch (ApiException ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task DeleteAsync(QuestionAdminDto t)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            await Api.DeleteQuestionAsync(Activity.Id, t.Id);
+            await LoadAsync();
+            await OnChanged.InvokeAsync();
+        }
+        catch (ApiException ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+}

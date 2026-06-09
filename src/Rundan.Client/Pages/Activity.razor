@@ -70,6 +70,11 @@ else
         <Scoreboard Board="_board" MyParticipantId="_session?.ParticipantId" />
     </div>
 
+    @if (State.IsHost && _activity.Type == ActivityType.MusicQuiz && _activity.Status != ActivityStatus.Draft)
+    {
+        <MusicHostPanel @key="_activity.Id" Activity="_activity" />
+    }
+
     @if (_activity.Status == ActivityStatus.Draft)
     {
         <div class="card muted">This activity hasn't opened yet. The host is still setting it up.</div>
@@ -152,6 +157,9 @@ else
                 break;
             case ActivityType.MapPin:
                 <MapPinPlay @key="_activity.Id" Activity="_activity" Session="_session" />
+                break;
+            case ActivityType.MusicQuiz:
+                <MusicQuizPlay @key="_activity.Id" Activity="_activity" Session="_session" />
                 break;
             default:
                 <BouleBoard @key="_activity.Id" Activity="_activity" Session="_session"

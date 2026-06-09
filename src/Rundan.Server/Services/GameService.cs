@@ -34,6 +34,7 @@ public sealed class GameService(AppDbContext db, TimeProvider clock)
                 StatusCodes.Status409Conflict);
         }
 
+        var isMusic = activity.Type == ActivityType.MusicQuiz;
         var totalQuestions = await db.Questions.CountAsync(q => q.ActivityId == activity.Id, ct);
 
         // Already answered? Return the original result (no resubmission / no score farming).
@@ -41,11 +42,37 @@ public sealed class GameService(AppDbContext db, TimeProvider clock)
             .FirstOrDefaultAsync(a => a.QuestionId == question.Id && a.ParticipantId == participant.Id, ct);
         if (existing is not null)
         {
-            return await BuildAnswerResultAsync(participant.Id, question.Id, existing, totalQuestions, ct);
+            return await BuildAnswerResultAsync(participant.Id, question, existing, totalQuestions, isMusic, ct);
         }
 
-        var (isCorrect, selectedOptionId, freeText) = Evaluate(question, req);
-        var awarded = isCorrect ? question.Points : 0;
+        int? selectedOptionId;
+        string? freeText;
+        string? artistText = null;
+        bool isCorrect;
+        int awarded;
+        if (isMusic)
+        {
+            // Score the song and the artist independently — each correct guess is worth the track's points.
+            var song = (req.FreeText ?? string.Empty).Trim();
+            var artist = (req.ArtistText ?? string.Empty).Trim();
+            if (song.Length == 0 && artist.Length == 0)
+            {
+                throw new RuleViolationException("Type the song and/or the artist first.");
+            }
+
+            var songOk = Matches(song, question.AcceptedFreeTextAnswer);
+            var artistOk = Matches(artist, question.AcceptedArtist);
+            selectedOptionId = null;
+            freeText = song;
+            artistText = artist;
+            isCorrect = songOk && artistOk;
+            awarded = (songOk ? question.Points : 0) + (artistOk ? question.Points : 0);
+        }
+        else
+        {
+            (isCorrect, selectedOptionId, freeText) = Evaluate(question, req);
+            awarded = isCorrect ? question.Points : 0;
+        }
 
         var answer = new Answer
         {
@@ -53,6 +80,7 @@ public sealed class GameService(AppDbContext db, TimeProvider clock)
             ParticipantId = participant.Id,
             SelectedOptionId = selectedOptionId,
             FreeText = freeText,
+            ArtistText = artistText,
             IsCorrect = isCorrect,
             AwardedPoints = awarded,
             SubmittedUtc = clock.GetUtcNow(),
@@ -75,10 +103,38 @@ public sealed class GameService(AppDbContext db, TimeProvider clock)
                 throw;
             }
 
-            return await BuildAnswerResultAsync(participant.Id, question.Id, winner, totalQuestions, ct);
+            return await BuildAnswerResultAsync(participant.Id, question, winner, totalQuestions, isMusic, ct);
         }
 
-        return await BuildAnswerResultAsync(participant.Id, question.Id, answer, totalQuestions, ct);
+        return await BuildAnswerResultAsync(participant.Id, question, answer, totalQuestions, isMusic, ct);
+    }
+
+    private static bool Matches(string? guess, string? accepted) =>
+        !string.IsNullOrWhiteSpace(accepted) && Normalize(guess) == Normalize(accepted);
+
+    // Lenient match for music answers: lowercase, strip punctuation/accents-ish, collapse spaces, drop a leading "the".
+    private static string Normalize(string? s)
+    {
+        if (string.IsNullOrWhiteSpace(s))
+        {
+            return string.Empty;
+        }
+
+        var sb = new System.Text.StringBuilder();
+        foreach (var c in s.Trim().ToLowerInvariant())
+        {
+            if (char.IsLetterOrDigit(c))
+            {
+                sb.Append(c);
+            }
+            else if (char.IsWhiteSpace(c))
+            {
+                sb.Append(' ');
+            }
+        }
+
+        var cleaned = string.Join(' ', sb.ToString().Split(' ', StringSplitOptions.RemoveEmptyEntries));
+        return cleaned.StartsWith("the ", StringComparison.Ordinal) ? cleaned[4..] : cleaned;
     }
 
     private static (bool isCorrect, int? selectedOptionId, string? freeText) Evaluate(
@@ -110,17 +166,28 @@ public sealed class GameService(AppDbContext db, TimeProvider clock)
     }
 
     private async Task<AnswerResultDto> BuildAnswerResultAsync(
-        int participantId, int questionId, Answer answer, int totalQuestions, CancellationToken ct)
+        int participantId, Question question, Answer answer, int totalQuestions, bool isMusic, CancellationToken ct)
     {
         var answeredCount = await db.Answers.CountAsync(a => a.ParticipantId == participantId, ct);
-        return new AnswerResultDto
+        var dto = new AnswerResultDto
         {
-            QuestionId = questionId,
+            QuestionId = question.Id,
             IsCorrect = answer.IsCorrect,
             AwardedPoints = answer.AwardedPoints,
             AnsweredCount = answeredCount,
             TotalQuestions = totalQuestions,
         };
+
+        if (isMusic)
+        {
+            // Reveal this track's answers to the team that just answered it (they can't re-submit).
+            dto.SongCorrect = Matches(answer.FreeText, question.AcceptedFreeTextAnswer);
+            dto.ArtistCorrect = Matches(answer.ArtistText, question.AcceptedArtist);
+            dto.CorrectSong = question.AcceptedFreeTextAnswer;
+            dto.CorrectArtist = question.AcceptedArtist;
+        }
+
+        return dto;
     }
 
     /// <summary>

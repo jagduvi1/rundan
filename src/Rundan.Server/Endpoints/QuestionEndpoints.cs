@@ -105,6 +105,8 @@ internal static class QuestionEndpoints
             question.RadiusMeters = req.RadiusMeters;
             question.AcceptedFreeTextAnswer =
                 req.Kind == QuestionKind.FreeText ? TextHelpers.Clean(req.AcceptedFreeTextAnswer) : null;
+            question.SpotifyUrl = TextHelpers.Clean(req.SpotifyUrl);
+            question.AcceptedArtist = TextHelpers.Clean(req.AcceptedArtist);
 
             db.AnswerOptions.RemoveRange(question.Options);
             question.Options.Clear();
@@ -268,6 +270,8 @@ internal static class QuestionEndpoints
         Text = string.Empty,
         ImageUrl = null,
         AcceptedFreeTextAnswer = null,
+        SpotifyUrl = null,
+        AcceptedArtist = null,
         Options = new(),
     };
 
@@ -280,7 +284,7 @@ internal static class QuestionEndpoints
 
     private static void EnsureQuestionEditable(Activity activity)
     {
-        if (activity.Type is not (ActivityType.Quiz or ActivityType.Tipspromenad))
+        if (activity.Type is not (ActivityType.Quiz or ActivityType.Tipspromenad or ActivityType.MusicQuiz))
         {
             throw new RuleViolationException("This activity type does not use questions.");
         }
@@ -341,6 +345,8 @@ internal static class QuestionEndpoints
             Longitude = req.Longitude,
             RadiusMeters = req.RadiusMeters,
             AcceptedFreeTextAnswer = req.Kind == QuestionKind.FreeText ? TextHelpers.Clean(req.AcceptedFreeTextAnswer) : null,
+            SpotifyUrl = TextHelpers.Clean(req.SpotifyUrl),
+            AcceptedArtist = TextHelpers.Clean(req.AcceptedArtist),
         };
         AddOptions(question, req);
         return question;

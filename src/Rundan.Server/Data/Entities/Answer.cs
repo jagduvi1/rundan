@@ -14,7 +14,11 @@ public class Answer
     public int? SelectedOptionId { get; set; }
     public AnswerOption? SelectedOption { get; set; }
 
+    /// <summary>Free-text answer; for a MusicQuiz track this is the SONG guess.</summary>
     public string? FreeText { get; set; }
+
+    /// <summary>MusicQuiz: the artist guess.</summary>
+    public string? ArtistText { get; set; }
 
     public bool IsCorrect { get; set; }
     public int AwardedPoints { get; set; }

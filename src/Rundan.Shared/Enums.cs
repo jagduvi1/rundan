@@ -25,6 +25,9 @@ public enum ActivityType
 
     /// <summary>"Pin the city": place a pin on a label-free map for each drawn city; lowest total distance wins.</summary>
     MapPin = 6,
+
+    /// <summary>Music quiz: the host plays a Spotify track per question; players name the song and the artist.</summary>
+    MusicQuiz = 7,
 }
 
 /// <summary>Lifecycle of an activity.</summary>
