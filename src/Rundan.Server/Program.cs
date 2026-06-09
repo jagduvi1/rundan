@@ -42,6 +42,7 @@ builder.Services.AddScoped<QuestionLibraryService>();
 builder.Services.AddScoped<LibrarySeeder>();
 builder.Services.AddScoped<ScoreboardNotifier>();
 builder.Services.AddScoped<DataSeeder>();
+builder.Services.AddScoped<MaintenanceService>();
 
 builder.Services.AddSignalR();
 
@@ -124,6 +125,7 @@ app.MapBracketEndpoints();
 app.MapWordGameEndpoints();
 app.MapSimulationEndpoints();
 app.MapQuestionLibraryEndpoints();
+app.MapMaintenanceEndpoints();
 
 app.MapHub<ScoreboardHub>(HubRoutes.Scoreboard);
 

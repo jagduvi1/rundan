@@ -156,6 +156,48 @@ else
             Create standalone activity
         </button>
     </div>
+
+    @* ---- Danger zone: destructive maintenance (shown only when an admin code actually gates it) ---- *@
+    @if (State.Bootstrap?.RequiresAdminCode == true)
+    {
+        <div class="card stack" style="border:1px solid var(--coral-100)">
+            <h2>Danger zone</h2>
+            <p class="muted" style="font-size:.85rem">
+                <b>Clean &amp; seed</b> deletes every event, activity, player, team and score (and uploaded
+                images), then recreates the demo day (Försommarspelen 2026) and rebuilds the question library.
+                A one-off backup of the database is saved next to it first. This can't be undone.
+            </p>
+
+            @if (_resetDone)
+            {
+                <div class="alert success">Done — wiped everything and re-seeded the demo day.</div>
+            }
+
+            @if (!_confirmReset)
+            {
+                <button class="btn danger" @onclick="StartReset" disabled="@_busy">Clean &amp; seed demo data</button>
+            }
+            else
+            {
+                <div class="alert" style="background:var(--coral-50);color:var(--coral-700);border:1px solid var(--coral-100)">
+                    This permanently deletes <b>@_events.Count event@(_events.Count == 1 ? "" : "s")</b>,
+                    <b>@TotalActivities activit@(TotalActivities == 1 ? "y" : "ies")</b> and
+                    <b>@_peopleCount player@(_peopleCount == 1 ? "" : "s")</b> (plus all teams, scores and uploads),
+                    then re-seeds the demo. This can't be undone.
+                </div>
+                <div class="field">
+                    <label>Type <b>WIPE</b> to confirm</label>
+                    <input @bind="_confirmText" @bind:event="oninput" placeholder="WIPE" disabled="@_busy" />
+                </div>
+                <div class="row">
+                    <button class="btn danger" @onclick="CleanAndSeedAsync" disabled="@(_busy || _confirmText != "WIPE")">
+                        @(_busy ? "Working…" : "Yes, wipe & seed")
+                    </button>
+                    <button class="btn ghost" @onclick="CancelReset" disabled="@_busy">Cancel</button>
+                </div>
+            }
+        </div>
+    }
 }
 
 @code {
@@ -167,6 +209,9 @@ else
     private string _eventName = string.Empty;
     private string _title = string.Empty;
     private ActivityType _type = ActivityType.Quiz;
+    private bool _confirmReset;
+    private bool _resetDone;
+    private string _confirmText = string.Empty;
 
     private List<EventDto> _events = new();
     private List<ActivityDto> _standalone = new();
@@ -210,6 +255,7 @@ else
     {
         _busy = true;
         _error = null;
+        _resetDone = false; // any reload dismisses the post-wipe banner
         try
         {
             _events = await Api.ListEventsAsync();
@@ -271,6 +317,52 @@ else
         catch (ApiException ex)
         {
             _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void StartReset()
+    {
+        _confirmReset = true;
+        _resetDone = false;
+        _confirmText = string.Empty;
+    }
+
+    private void CancelReset()
+    {
+        _confirmReset = false;
+        _confirmText = string.Empty;
+    }
+
+    private async Task CleanAndSeedAsync()
+    {
+        if (_confirmText != "WIPE")
+        {
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            await Api.CleanAndSeedAsync();
+            _confirmReset = false;
+            _confirmText = string.Empty;
+            await LoadAsync();   // clears _resetDone, so set the banner afterwards
+            _resetDone = true;
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        catch (Exception)
+        {
+            // Timeout / dropped connection: the wipe may have partially run — warn rather than
+            // letting it bubble to the full-page Blazor error UI.
+            _error = "Couldn't reach the server — the data may be in an unknown state. Refresh and check before retrying.";
         }
         finally
         {
