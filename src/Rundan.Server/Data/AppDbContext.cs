@@ -101,6 +101,8 @@ public class AppDbContext : DbContext
             e.Property(x => x.Text).HasMaxLength(1000).IsRequired();
             e.Property(x => x.ImageUrl).HasMaxLength(500);
             e.Property(x => x.AcceptedFreeTextAnswer).HasMaxLength(200);
+            e.Property(x => x.SpotifyUrl).HasMaxLength(500);
+            e.Property(x => x.AcceptedArtist).HasMaxLength(200);
             e.HasIndex(x => new { x.ActivityId, x.Order });
             e.HasOne(x => x.Activity)
                 .WithMany(a => a.Questions)
@@ -120,6 +122,7 @@ public class AppDbContext : DbContext
         b.Entity<Answer>(e =>
         {
             e.Property(x => x.FreeText).HasMaxLength(500);
+            e.Property(x => x.ArtistText).HasMaxLength(500);
             // One answer per participant per question.
             e.HasIndex(x => new { x.QuestionId, x.ParticipantId }).IsUnique();
 

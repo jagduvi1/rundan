@@ -1,0 +1,124 @@
+@inject RundanApi Api
+
+@if (_loading)
+{
+    <div class="card center muted"><div class="spinner" style="margin:1rem auto"></div>Loading tracks…</div>
+}
+else if (_tracks.Count == 0)
+{
+    <div class="card muted">No tracks yet — the host is still setting up.</div>
+}
+else
+{
+    <div class="card stack">
+        <h2 style="margin:0">Music quiz</h2>
+        <p class="muted" style="margin:0;font-size:.85rem">
+            The host plays each track — type the song and the artist. @_answered.Count of @_tracks.Count answered.
+        </p>
+        @if (_error is not null)
+        {
+            <div class="alert error">@_error</div>
+        }
+    </div>
+
+    @foreach (var (q, i) in _tracks.Select((q, i) => (q, i)))
+    {
+        var mine = _answered.GetValueOrDefault(q.Id);
+        var res = _results.GetValueOrDefault(q.Id);
+        <div class="card stack">
+            <div class="row">
+                <b class="grow">Track @(i + 1)@(HasLabel(q, i) ? $" · {q.Text}" : "")</b>
+                <span class="muted" style="font-size:.8rem">@q.Points pt each</span>
+            </div>
+
+            @if (mine is null)
+            {
+                <input placeholder="Song title" value="@_song.GetValueOrDefault(q.Id)"
+                       @oninput="e => _song[q.Id] = e.Value?.ToString() ?? string.Empty" />
+                <input placeholder="Artist" value="@_artist.GetValueOrDefault(q.Id)"
+                       @oninput="e => _artist[q.Id] = e.Value?.ToString() ?? string.Empty" />
+                <button class="btn block success" @onclick="() => SubmitAsync(q.Id)"
+                        disabled="@(_busy || (string.IsNullOrWhiteSpace(_song.GetValueOrDefault(q.Id)) && string.IsNullOrWhiteSpace(_artist.GetValueOrDefault(q.Id))))">
+                    Lock in
+                </button>
+            }
+            else
+            {
+                <div class="alert @(mine.AwardedPoints > 0 ? "success" : "")">
+                    <div>You said — Song: <b>@Shown(mine.FreeText)</b> · Artist: <b>@Shown(mine.ArtistText)</b></div>
+                    @if (res is not null)
+                    {
+                        <div style="margin-top:.25rem">
+                            Song @(res.SongCorrect ? "✓" : "✗")@(string.IsNullOrWhiteSpace(res.CorrectSong) ? "" : $" — {res.CorrectSong}")
+                            · Artist @(res.ArtistCorrect ? "✓" : "✗")@(string.IsNullOrWhiteSpace(res.CorrectArtist) ? "" : $" — {res.CorrectArtist}")
+                        </div>
+                    }
+                    <div style="margin-top:.25rem"><b>+@mine.AwardedPoints</b></div>
+                </div>
+            }
+        </div>
+    }
+}
+
+@code {
+    [Parameter] public ActivityDto Activity { get; set; } = default!;
+    [Parameter] public PlayerSession Session { get; set; } = default!;
+
+    private bool _loading = true;
+    private bool _busy;
+    private string? _error;
+    private List<QuestionDto> _tracks = new();
+    private readonly Dictionary<int, MyAnswerDto> _answered = new();
+    private readonly Dictionary<int, AnswerResultDto> _results = new();
+    private readonly Dictionary<int, string> _song = new();
+    private readonly Dictionary<int, string> _artist = new();
+
+    private static bool HasLabel(QuestionDto q, int i) =>
+        !string.IsNullOrWhiteSpace(q.Text) && q.Text != $"Track {i + 1}";
+
+    private static string Shown(string? s) => string.IsNullOrWhiteSpace(s) ? "—" : s;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _tracks = await Api.GetQuestionsAsync(Activity.Id);
+            var mine = await Api.GetMyAnswersAsync(Activity.Id, Session.Token);
+            foreach (var a in mine)
+            {
+                _answered[a.QuestionId] = a;
+            }
+        }
+        catch (ApiException ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private async Task SubmitAsync(int questionId)
+    {
+        var song = _song.GetValueOrDefault(questionId, string.Empty).Trim();
+        var artist = _artist.GetValueOrDefault(questionId, string.Empty).Trim();
+        if (song.Length == 0 && artist.Length == 0)
+        {
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            var res = await Api.SubmitAnswerAsync(
+                Activity.Id, new SubmitAnswerRequest { QuestionId = questionId, FreeText = song, ArtistText = artist }, Session.Token);
+            _results[questionId] = res;
+            _answered[questionId] = new MyAnswerDto
+            {
+                QuestionId = questionId,
+                FreeText = song,
+                ArtistText = artist,
+                IsCorrect = res.IsCorrect,
+                AwardedPoints = res.AwardedPoints,
+            };
+        }
+        catch (ApiException ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+}

@@ -1,0 +1,47 @@
+@inject RundanApi Api
+
+<div class="card stack accent">
+    <h2 style="margin:0">Tracks to play (host)</h2>
+    <p class="muted" style="margin:0;font-size:.85rem">Play each one out loud; players type the song and artist. Only you see this.</p>
+
+    @if (_error is not null)
+    {
+        <div class="alert error">@_error</div>
+    }
+
+    <ul class="list">
+        @foreach (var (t, i) in _tracks.Select((t, i) => (t, i)))
+        {
+            <li style="flex-direction:column;align-items:stretch;gap:.3rem">
+                <div class="row">
+                    <b class="grow">Track @(i + 1)</b>
+                    @if (!string.IsNullOrWhiteSpace(t.SpotifyUrl))
+                    {
+                        <a class="btn small" href="@t.SpotifyUrl" target="_blank" rel="noopener">▶ Play on Spotify</a>
+                    }
+                    else
+                    {
+                        <span class="muted" style="font-size:.8rem">no link set</span>
+                    }
+                </div>
+                <div class="muted" style="font-size:.82rem">
+                    Answer: <b>@(string.IsNullOrWhiteSpace(t.AcceptedFreeTextAnswer) ? "—" : t.AcceptedFreeTextAnswer)</b>
+                    by <b>@(string.IsNullOrWhiteSpace(t.AcceptedArtist) ? "—" : t.AcceptedArtist)</b>
+                </div>
+            </li>
+        }
+    </ul>
+</div>
+
+@code {
+    [Parameter] public ActivityDto Activity { get; set; } = default!;
+
+    private List<QuestionAdminDto> _tracks = new();
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { _tracks = await Api.GetAdminQuestionsAsync(Activity.Id); }
+        catch (ApiException ex) { _error = ex.Message; }
+    }
+}

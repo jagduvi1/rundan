@@ -74,6 +74,11 @@ public static class Fmt
                 lines.Add("Lowest total distance across all the cities wins.");
                 break;
 
+            case ActivityType.MusicQuiz:
+                lines.Add("The host plays a track for each question — name the song and the artist.");
+                lines.Add("Each correct guess (song and artist) scores that track's points; close spellings are accepted.");
+                break;
+
             default: // ScoreGame and any future round-based game
                 var measure = a.Measurement switch
                 {
@@ -106,6 +111,7 @@ public static class Fmt
         ActivityType.ScoreGame => "Score game",
         ActivityType.WordGame => "Word game",
         ActivityType.MapPin => "Pin the city (map)",
+        ActivityType.MusicQuiz => "Music quiz",
         _ => type.ToString(),
     };
 }

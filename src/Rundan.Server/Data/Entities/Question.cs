@@ -20,8 +20,13 @@ public class Question
     public double? Longitude { get; set; }
     public int? RadiusMeters { get; set; }
 
-    /// <summary>Accepted answer for free-text questions (compared case-insensitively, trimmed).</summary>
+    /// <summary>Accepted answer for free-text questions (compared case-insensitively, trimmed).
+    /// For a MusicQuiz track this holds the correct SONG title.</summary>
     public string? AcceptedFreeTextAnswer { get; set; }
+
+    /// <summary>MusicQuiz: the Spotify link the host plays (never sent to players), and the correct artist.</summary>
+    public string? SpotifyUrl { get; set; }
+    public string? AcceptedArtist { get; set; }
 
     public List<AnswerOption> Options { get; set; } = new();
     public List<Answer> Answers { get; set; } = new();
