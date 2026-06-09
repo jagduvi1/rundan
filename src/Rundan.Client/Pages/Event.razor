@@ -222,8 +222,11 @@ else
                             }
                         </span>
                         <StatusBadge Status="a.Status" />
-                        @if ((a.Status is ActivityStatus.Live or ActivityStatus.Open) && a.HasLocation && !WithinRadius(a))
+                        @if ((a.Status is ActivityStatus.Live or ActivityStatus.Open) && a.HasLocation
+                             && !_geoFailed && _distances.ContainsKey(a.Id) && !WithinRadius(a))
                         {
+                            @* Only lock when we actually have a fix that's out of range — never trap a
+                               player who denied location / is on desktop / hasn't got a fix yet. *@
                             <a class="btn ghost small" href="@ActivityMapsUrl(a)" target="_blank" rel="noopener">Maps</a>
                             <span class="muted" style="font-size:.82rem">@LockText(a)</span>
                         }
@@ -532,6 +535,7 @@ else
     private readonly Dictionary<int, double> _distances = new();
     private readonly HashSet<int> _arrived = new();
     private int? _arrivedPromptId;
+    private bool _geoFailed;
 
     private string _joinName = string.Empty;
     private string? _joinError;
@@ -700,7 +704,8 @@ else
 
     private async Task StartGeoAsync()
     {
-        if (_event is null || _geo is not null || !_event.Activities.Any(a => a.HasLocation))
+        // Spectators don't need tracking, and it powers the player-only arrival prompt.
+        if (_event is null || _isViewer || _geo is not null || !_event.Activities.Any(a => a.HasLocation))
         {
             return;
         }
@@ -708,18 +713,31 @@ else
         _geo = new GeolocationInterop(JS);
         _vibe = new VibrationInterop(JS);
         _geo.PositionChanged += OnGeo;
-        try { await _geo.StartAsync(); } catch { /* geolocation unavailable */ }
+        _geo.ErrorOccurred += OnGeoError;
+        _geoFailed = false;
+        try { await _geo.StartAsync(); }
+        catch { _geoFailed = true; }
+
+        // Seed a one-shot fix so a stationary player (already at the spot when it opens) is caught
+        // before the watch delivers its first position.
+        try { OnGeo(await _geo.GetCurrentAsync()); } catch { /* no fix yet */ }
     }
 
     private void OnGeo(GeoPosition p) => _ = InvokeAsync(() =>
     {
         _pos = p;
+        _geoFailed = false;
         if (_event is not null)
         {
             foreach (var a in _event.Activities.Where(a => a.HasLocation))
             {
                 _distances[a.Id] = GeolocationInterop.DistanceMeters(
                     p.Latitude, p.Longitude, a.Latitude!.Value, a.Longitude!.Value);
+                // Leaving the radius re-arms the prompt so a genuine re-entry fires again.
+                if (!WithinRadius(a))
+                {
+                    _arrived.Remove(a.Id);
+                }
             }
 
             CheckArrivals();
@@ -729,11 +747,20 @@ else
         return Task.CompletedTask;
     });
 
+    private void OnGeoError(string message) => _ = InvokeAsync(() =>
+    {
+        _geoFailed = true;
+        StateHasChanged();
+        return Task.CompletedTask;
+    });
+
     // Raises the "you've arrived" prompt the first time the player is within a ready (Open/Live)
     // activity's radius — also catches a stationary player when the host opens the activity they're at.
     private void CheckArrivals()
     {
-        if (_event is null)
+        // Player-only: skip spectators and a host who isn't playing (no own/free-name identity),
+        // so the full-screen overlay never interrupts spectating or the Host controls.
+        if (_event is null || _isViewer || (_userId is null && _eventName is null))
         {
             return;
         }
@@ -744,7 +771,7 @@ else
                 && _distances.TryGetValue(a.Id, out var d) && d <= RadiusOf(a) && _arrived.Add(a.Id))
             {
                 _ = _vibe?.PatternAsync(90, 50, 140);
-                _arrivedPromptId = a.Id;
+                _arrivedPromptId ??= a.Id; // earliest arrival in a tick wins; the rest follow on dismiss
             }
         }
     }
@@ -861,6 +888,15 @@ else
         // An activity may have just opened (or gained a location) — start tracking if needed and
         // re-check arrivals so a player already at the spot is prompted right away.
         await StartGeoAsync();
+        if (_event is not null)
+        {
+            // A finished/paused activity re-arms, so re-opening it later can prompt again.
+            foreach (var a in _event.Activities.Where(a => a.Status is not (ActivityStatus.Open or ActivityStatus.Live)))
+            {
+                _arrived.Remove(a.Id);
+            }
+        }
+
         CheckArrivals();
 
         if (_conn is not null && _event is not null)
@@ -1369,6 +1405,7 @@ else
         if (_geo is not null)
         {
             _geo.PositionChanged -= OnGeo;
+            _geo.ErrorOccurred -= OnGeoError;
             await _geo.DisposeAsync();
             _geo = null;
         }
@@ -1377,6 +1414,8 @@ else
         _distances.Clear();
         _arrived.Clear();
         _pos = null;
+        _geoFailed = false;
+        _arrivedPromptId = null;
     }
 
     public async ValueTask DisposeAsync() => await TeardownAsync();
