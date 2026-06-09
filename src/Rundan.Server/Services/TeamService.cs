@@ -1,16 +1,23 @@
 using Microsoft.EntityFrameworkCore;
 using Rundan.Server.Data;
 using Rundan.Server.Data.Entities;
+using Rundan.Shared;
+using Rundan.Shared.Contracts;
 
 namespace Rundan.Server.Services;
 
 /// <summary>
-/// Generates the per-activity teams (the partner mixer). Teams are reshuffled for each
-/// activity so players get fresh teammates; the team's score credits each member's
-/// individual total (handled by <see cref="EventStandingsService"/>).
+/// Generates the per-activity teams (the partner mixer). By default teams are reshuffled
+/// for each activity so players get fresh teammates; an event can instead fix its teams
+/// (<see cref="TeamShuffle.FixedForEvent"/>), keeping the same line-ups all event. The
+/// team's score credits each member's individual total (handled by EventStandingsService).
 /// </summary>
 public sealed class TeamService(AppDbContext db, TimeProvider clock)
 {
+    /// <summary>The mixer seed for an activity: fixed per-event, or the activity's running order.</summary>
+    private static int SeedFor(Event ev, Activity activity) =>
+        ev.TeamShuffle == TeamShuffle.FixedForEvent ? ev.FixedTeamSeed : activity.Order;
+
     /// <summary>
     /// Ensures team participants exist for an event-activity. Idempotent: returns the
     /// existing teams if already generated, otherwise generates and saves them.
@@ -43,7 +50,7 @@ public sealed class TeamService(AppDbContext db, TimeProvider clock)
             return new();
         }
 
-        var teams = PartnerMixer.MakeTeams(members, Math.Max(1, ev.TeamSize), activity.Order);
+        var teams = PartnerMixer.MakeTeams(members, Math.Max(1, ev.TeamSize), SeedFor(ev, activity));
 
         var created = new List<Participant>();
         foreach (var group in teams)
@@ -74,12 +81,60 @@ public sealed class TeamService(AppDbContext db, TimeProvider clock)
 
         return created;
     }
+
+    /// <summary>
+    /// Computes the teams an event's roster would form right now (no persistence) — used to
+    /// show the host the fixed-team line-up and to preview a reshuffle.
+    /// </summary>
+    public async Task<List<TeamDto>> PreviewTeamsAsync(Event ev, CancellationToken ct = default)
+    {
+        var members = await db.EventMembers
+            .Where(m => m.EventId == ev.Id)
+            .Select(m => m.User!)
+            .OrderBy(u => u.Name)
+            .ToListAsync(ct);
+        if (members.Count == 0)
+        {
+            return new();
+        }
+
+        var seed = ev.TeamShuffle == TeamShuffle.FixedForEvent ? ev.FixedTeamSeed : 1;
+        return PartnerMixer.MakeTeams(members, Math.Max(1, ev.TeamSize), seed)
+            .Select(group => new TeamDto
+            {
+                Name = string.Join(" & ", group.Select(u => u.Name)),
+                Members = group.Select(u => new UserDto { Id = u.Id, Name = u.Name }).ToList(),
+            })
+            .ToList();
+    }
+
+    /// <summary>
+    /// Drops the generated team participants for an event's activities that haven't been
+    /// played yet (no answers, no scores), so they regenerate with the current seed. Teams
+    /// for activities already in play are left untouched. Used when fixed teams are reshuffled.
+    /// </summary>
+    public async Task ResetUnplayedTeamsAsync(int eventId, CancellationToken ct = default)
+    {
+        var stale = await db.Participants
+            .Where(p => p.IsTeam && p.Activity!.EventId == eventId
+                        && !p.Answers.Any() && !p.ScoreEntries.Any())
+            .ToListAsync(ct);
+        if (stale.Count == 0)
+        {
+            return;
+        }
+
+        db.Participants.RemoveRange(stale); // ParticipantMember rows cascade-delete
+        await db.SaveChangesAsync(ct);
+    }
 }
 
 /// <summary>Pure team-pairing logic (the partner mixer).</summary>
 internal static class PartnerMixer
 {
-    public static List<List<User>> MakeTeams(IReadOnlyList<User> members, int teamSize, int activityOrder)
+    // <param name="seed">Selects which line-up to produce. Per-activity mode passes the activity
+    // order (so each activity differs); fixed-team mode passes the event's locked seed.</param>
+    public static List<List<User>> MakeTeams(IReadOnlyList<User> members, int teamSize, int seed)
     {
         if (teamSize <= 1)
         {
@@ -88,19 +143,19 @@ internal static class PartnerMixer
 
         if (teamSize == 2)
         {
-            return Pairs(members, activityOrder);
+            return Pairs(members, seed);
         }
 
-        // General case: rotate the roster per activity, then chunk into teams. Rotate by the round
+        // General case: rotate the roster by the seed, then chunk into teams. Rotate by the seed
         // itself (not a multiple of teamSize, which would shift whole chunks and reproduce the same
-        // teams every activity).
-        var round = Math.Max(0, activityOrder - 1);
+        // teams every time).
+        var round = Math.Max(0, seed - 1);
         var rotated = Rotate(members.ToList(), round % members.Count);
         return Chunk(rotated, teamSize);
     }
 
-    // Circle method: distinct pairings each round; an odd roster leaves one solo team.
-    private static List<List<User>> Pairs(IReadOnlyList<User> members, int activityOrder)
+    // Circle method: distinct pairings per seed; an odd roster leaves one solo team.
+    private static List<List<User>> Pairs(IReadOnlyList<User> members, int seed)
     {
         var players = members.Select(u => (User?)u).ToList();
         if (players.Count % 2 == 1)
@@ -110,7 +165,7 @@ internal static class PartnerMixer
 
         var n = players.Count;
         var rounds = n - 1;
-        var r = rounds == 0 ? 0 : (((activityOrder - 1) % rounds) + rounds) % rounds;
+        var r = rounds == 0 ? 0 : (((seed - 1) % rounds) + rounds) % rounds;
 
         var arranged = new List<User?> { players[0] };
         arranged.AddRange(Rotate(players.Skip(1).ToList(), r));

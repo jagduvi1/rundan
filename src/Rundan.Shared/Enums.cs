@@ -67,6 +67,16 @@ public enum EventScoring
     Placement = 1,
 }
 
+/// <summary>How an event forms its teams across its activities.</summary>
+public enum TeamShuffle
+{
+    /// <summary>Re-mix teammates before every activity, so players get fresh partners each round (the default).</summary>
+    EveryActivity = 0,
+
+    /// <summary>Decide the teams once (shuffled at the start) and keep them for every activity.</summary>
+    FixedForEvent = 1,
+}
+
 /// <summary>
 /// For score-game activities (boule etc.): how points are entered. Question activities
 /// (quiz / tipspromenad) are always team-collaborative and ignore this.

@@ -46,6 +46,7 @@ public static class Mapping
         ImageUrl = e.ImageUrl,
         TeamSize = e.TeamSize,
         Scoring = e.Scoring,
+        TeamShuffle = e.TeamShuffle,
         SlapMode = e.SlapMode,
         JoinCode = e.JoinCode,
         CreatedUtc = e.CreatedUtc,

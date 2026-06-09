@@ -428,6 +428,38 @@ else
                 <label>Players per team</label>
                 <input type="number" min="1" max="20" @bind="_editTeamSize" style="width:120px" />
             </div>
+            @if (_editTeamSize > 1)
+            {
+                <div class="field">
+                    <label>Teams (how partners are decided)</label>
+                    <select @bind="_editTeamShuffle" @bind:after="OnTeamModeChangedAsync">
+                        <option value="@TeamShuffle.EveryActivity">Shuffle every activity — fresh partners each round</option>
+                        <option value="@TeamShuffle.FixedForEvent">Fixed teams — the same teams play the whole event</option>
+                    </select>
+                </div>
+                @if (_editTeamShuffle == TeamShuffle.FixedForEvent)
+                {
+                    <div class="field">
+                        <div class="row">
+                            <span class="grow muted" style="font-size:.85rem">These teams play every activity.</span>
+                            <button class="btn small secondary" type="button" @onclick="ShuffleTeamsAsync" disabled="@_busy">Shuffle teams</button>
+                        </div>
+                        @if (_fixedTeams.Count > 0)
+                        {
+                            <ul class="list">
+                                @foreach (var t in _fixedTeams)
+                                {
+                                    <li><span class="grow">@t.Name</span></li>
+                                }
+                            </ul>
+                        }
+                        else
+                        {
+                            <p class="muted" style="font-size:.85rem">Add players to the roster below, then shuffle to form teams.</p>
+                        }
+                    </div>
+                }
+            }
             <div class="field">
                 <label>Scoring (how the event total is calculated)</label>
                 <select @bind="_editScoring">
@@ -499,6 +531,8 @@ else
     private string? _editImage;
     private int _editTeamSize = 2;
     private EventScoring _editScoring = EventScoring.Cumulative;
+    private TeamShuffle _editTeamShuffle = TeamShuffle.EveryActivity;
+    private List<TeamDto> _fixedTeams = new();
     private SlapMode _editSlapMode = SlapMode.Off;
     private string _editCode = string.Empty;
 
@@ -619,6 +653,11 @@ else
                 _selectedAdminIds = _event.AdminUserIds.ToHashSet();
             }
 
+            if (CanManage && _event.TeamShuffle == TeamShuffle.FixedForEvent)
+            {
+                await LoadFixedTeamsAsync();
+            }
+
             // If we're covering a player, refresh their sessions so any newly opened activity is included.
             await RefreshProxyAsync();
 
@@ -684,6 +723,7 @@ else
         _editImage = _event.ImageUrl;
         _editTeamSize = _event.TeamSize;
         _editScoring = _event.Scoring;
+        _editTeamShuffle = _event.TeamShuffle;
         _editSlapMode = _event.SlapMode;
         _editCode = _event.JoinCode;
     }
@@ -1005,9 +1045,51 @@ else
                 ImageUrl = _editImage,
                 TeamSize = _editTeamSize,
                 Scoring = _editScoring,
+                TeamShuffle = _editTeamShuffle,
                 SlapMode = _editSlapMode,
             });
             SyncEditFields();
+            await LoadFixedTeamsAsync();
+        }
+        catch (ApiException ex)
+        {
+            _adminError = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    // Switched the team-formation dropdown: preview the line-up when fixed teams are chosen.
+    private async Task OnTeamModeChangedAsync()
+    {
+        if (_editTeamShuffle == TeamShuffle.FixedForEvent)
+        {
+            await LoadFixedTeamsAsync();
+        }
+    }
+
+    private async Task LoadFixedTeamsAsync()
+    {
+        if (!CanManage)
+        {
+            return;
+        }
+
+        try { _fixedTeams = await Api.GetEventTeamsAsync(Id); } catch (ApiException) { }
+    }
+
+    // Host re-rolls the locked teams; this also switches the event into fixed-team mode server-side.
+    private async Task ShuffleTeamsAsync()
+    {
+        _busy = true;
+        _adminError = null;
+        try
+        {
+            _fixedTeams = await Api.ReshuffleTeamsAsync(Id);
+            _editTeamShuffle = TeamShuffle.FixedForEvent;
+            _event = await Api.GetEventAsync(Id) ?? _event;
         }
         catch (ApiException ex)
         {

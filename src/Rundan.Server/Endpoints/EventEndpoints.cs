@@ -128,7 +128,7 @@ internal static class EventEndpoints
             return Results.NoContent();
         }).AddEndpointFilter<AdminEndpointFilter>();
 
-        app.MapPut("/api/events/{id:int}", async (int id, UpdateEventRequest req, AppDbContext db, CancellationToken ct) =>
+        app.MapPut("/api/events/{id:int}", async (int id, UpdateEventRequest req, AppDbContext db, TeamService teams, CancellationToken ct) =>
         {
             var ev = await db.Events.FirstOrDefaultAsync(e => e.Id == id, ct)
                 ?? throw new RuleViolationException("Event not found.", StatusCodes.Status404NotFound);
@@ -137,14 +137,54 @@ internal static class EventEndpoints
                 throw new RuleViolationException("Give the event a name.");
             }
 
+            var teamModeChanged = ev.TeamShuffle != req.TeamShuffle;
+
             ev.Name = req.Name.Trim();
             ev.Description = TextHelpers.Clean(req.Description);
             ev.ImageUrl = TextHelpers.Clean(req.ImageUrl);
             ev.TeamSize = Math.Clamp(req.TeamSize, 1, 20);
             ev.Scoring = req.Scoring;
+            ev.TeamShuffle = req.TeamShuffle;
+            // Fixed mode needs a seed to lock teams; give it one the first time it's selected.
+            if (ev.TeamShuffle == TeamShuffle.FixedForEvent && ev.FixedTeamSeed == 0)
+            {
+                ev.FixedTeamSeed = NextTeamSeed(0);
+            }
+
             ev.SlapMode = req.SlapMode;
             await db.SaveChangesAsync(ct);
+
+            // Switching how teams are formed re-forms the not-yet-played activities' teams.
+            if (teamModeChanged)
+            {
+                await teams.ResetUnplayedTeamsAsync(id, ct);
+            }
+
             return Results.Ok(await LoadEventDtoAsync(db, ev, ct));
+        }).AddEndpointFilter<EventManagerFilter>();
+
+        // Host re-rolls the locked teams of a fixed-team event: a fresh seed, regenerate the
+        // not-yet-played activities' teams, and return the new line-up to preview.
+        app.MapPost("/api/events/{id:int}/teams/reshuffle", async (
+            int id, AppDbContext db, TeamService teams, CancellationToken ct) =>
+        {
+            var ev = await db.Events.FirstOrDefaultAsync(e => e.Id == id, ct)
+                ?? throw new RuleViolationException("Event not found.", StatusCodes.Status404NotFound);
+
+            ev.TeamShuffle = TeamShuffle.FixedForEvent;
+            ev.FixedTeamSeed = NextTeamSeed(ev.FixedTeamSeed);
+            await db.SaveChangesAsync(ct);
+
+            await teams.ResetUnplayedTeamsAsync(id, ct);
+            return Results.Ok(await teams.PreviewTeamsAsync(ev, ct));
+        }).AddEndpointFilter<EventManagerFilter>();
+
+        // The team line-up the event's roster currently forms (host view; the locked set in fixed mode).
+        app.MapGet("/api/events/{id:int}/teams", async (
+            int id, AppDbContext db, TeamService teams, CancellationToken ct) =>
+        {
+            var ev = await db.Events.FirstOrDefaultAsync(e => e.Id == id, ct);
+            return ev is null ? Results.NotFound() : Results.Ok(await teams.PreviewTeamsAsync(ev, ct));
         }).AddEndpointFilter<EventManagerFilter>();
 
         app.MapPut("/api/events/{id:int}/members", async (
@@ -430,6 +470,19 @@ internal static class EventEndpoints
             }).ToList();
             return Results.Ok(dto);
         });
+    }
+
+    // A fresh, non-zero partner-mixer seed (zero means "never shuffled"); avoids repeating the current one.
+    private static int NextTeamSeed(int current)
+    {
+        int seed;
+        do
+        {
+            seed = Random.Shared.Next(1, 1_000_000);
+        }
+        while (seed == current);
+
+        return seed;
     }
 
     // Newest-first list of every event as DTOs (SQLite can't ORDER BY DateTimeOffset; Id ≈ creation order).
