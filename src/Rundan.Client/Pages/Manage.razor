@@ -398,6 +398,9 @@ else
                 BestOfSets = _editBestOfSets,
                 GamesToWinSet = _editGames,
             });
+
+            // Reload the question/stations grids so the "hide questions" toggle masks (or reveals) right away.
+            BumpQuestions();
         }
         catch (ApiException ex)
         {
