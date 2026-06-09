@@ -184,11 +184,11 @@ else
                 then re-seeds the demo. This can't be undone.
             </div>
             <div class="field">
-                <label>Enter the code <b>@SeedCodes.CleanAndSeed</b> to confirm</label>
-                <input @bind="_confirmText" @bind:event="oninput" placeholder="@SeedCodes.CleanAndSeed" disabled="@_busy" />
+                <label>Enter the secret code to confirm</label>
+                <input type="password" autocomplete="off" @bind="_confirmText" @bind:event="oninput" disabled="@_busy" />
             </div>
             <div class="row">
-                <button class="btn danger" @onclick="CleanAndSeedAsync" disabled="@(_busy || _confirmText != SeedCodes.CleanAndSeed)">
+                <button class="btn danger" @onclick="CleanAndSeedAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_confirmText))">
                     @(_busy ? "Working…" : "Yes, wipe & seed")
                 </button>
                 <button class="btn ghost" @onclick="CancelReset" disabled="@_busy">Cancel</button>
@@ -336,7 +336,7 @@ else
 
     private async Task CleanAndSeedAsync()
     {
-        if (_confirmText != SeedCodes.CleanAndSeed)
+        if (string.IsNullOrWhiteSpace(_confirmText))
         {
             return;
         }

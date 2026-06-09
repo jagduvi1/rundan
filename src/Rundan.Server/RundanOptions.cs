@@ -32,6 +32,10 @@ public class RundanOptions
     /// <summary>If true, populates sample data (one event with several activities) on startup when the database is empty.</summary>
     public bool SeedOnStartup { get; set; }
 
+    /// <summary>Confirmation code the host types to run the destructive clean-and-seed wipe. Defaults
+    /// to "CALLE"; override it (e.g. <c>Rundan__SeedCode</c>) for a real secret that isn't in the source.</summary>
+    public string SeedCode { get; set; } = "CALLE";
+
     public bool RequiresAccessCode => !string.IsNullOrWhiteSpace(AccessCode);
     public bool RequiresAdminCode => !string.IsNullOrWhiteSpace(AdminCode);
 }
