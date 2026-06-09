@@ -591,6 +591,7 @@ else
     private readonly HashSet<int> _arrived = new();
     private int? _arrivedPromptId;
     private bool _geoFailed;
+    private bool _geoPrimed;
 
     private string _joinName = string.Empty;
     private string? _joinError;
@@ -861,6 +862,20 @@ else
                 if (!WithinRadius(a))
                 {
                     _arrived.Remove(a.Id);
+                }
+            }
+
+            // On the first fix after the page opens, treat activities you're ALREADY inside (and already
+            // open) as seen — landing back on this page shouldn't pop "You've arrived" for where you stand.
+            if (!_geoPrimed)
+            {
+                _geoPrimed = true;
+                foreach (var a in _event.Activities)
+                {
+                    if (a.HasLocation && a.Status is ActivityStatus.Open or ActivityStatus.Live && WithinRadius(a))
+                    {
+                        _arrived.Add(a.Id);
+                    }
                 }
             }
 
@@ -1549,6 +1564,7 @@ else
         _arrived.Clear();
         _pos = null;
         _geoFailed = false;
+        _geoPrimed = false;
         _arrivedPromptId = null;
         _clock?.Dispose();
         _clock = null;
