@@ -116,6 +116,22 @@ internal static class ActivityEndpoints
                     StatusCodes.Status409Conflict);
             }
 
+            // Leaving Draft locks the questions, so every station must be filled in first
+            // (blank stations are created by setting a station count).
+            if (activity.Status == ActivityStatus.Draft && req.Status is ActivityStatus.Open or ActivityStatus.Live
+                && activity.Type is ActivityType.Quiz or ActivityType.Tipspromenad)
+            {
+                var blanks = (await db.Questions.Include(q => q.Options)
+                        .Where(q => q.ActivityId == id).ToListAsync(ct))
+                    .Count(q => !QuestionEndpoints.IsPlayable(q));
+                if (blanks > 0)
+                {
+                    throw new RuleViolationException(
+                        $"{blanks} station{(blanks == 1 ? "" : "s")} still need a question — fill them in before starting.",
+                        StatusCodes.Status409Conflict);
+                }
+            }
+
             // Slap twist: a pending slap must be resolved before the next activity starts.
             if (req.Status == ActivityStatus.Live && activity.EventId is { } slapEventId)
             {

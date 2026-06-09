@@ -1,12 +1,10 @@
-@implements IAsyncDisposable
 @inject RundanApi Api
-@inject IJSRuntime JS
 
 <div class="card">
     <h2>Questions (@_questions.Count)</h2>
     @if (_questions.Count == 0)
     {
-        <p class="muted">No questions yet — add the first one below.</p>
+        <p class="muted">No questions yet — add the first one below@(Activity.UsesMap ? ", or set a station count above." : ".")</p>
     }
     else
     {
@@ -15,37 +13,27 @@
             {
                 <li style="flex-wrap:wrap">
                     <span class="grow">
-                        <b>@q.Order.</b> @q.Text
+                        <b>@q.Order.</b>
+                        @if (string.IsNullOrWhiteSpace(q.Text))
+                        {
+                            <span class="muted"><i>No question yet</i></span>
+                        }
+                        else
+                        {
+                            @q.Text
+                        }
                         <span class="muted" style="font-size:.78rem">
                             · @KindLabel(q.Kind) · @q.Points pt@(q.Points == 1 ? "" : "s")
-                            @if (Activity.UsesMap)
-                            {
-                                <span> · @(q.Latitude.HasValue ? "placed" : "no spot")</span>
-                            }
                         </span>
                     </span>
-                    @if (Activity.UsesMap)
+                    @if (!q.IsComplete)
                     {
-                        <button class="btn ghost small" @onclick="() => ToggleLoc(q)" disabled="@_busy">
-                            @(_locEditId == q.Id ? "Close" : q.Latitude.HasValue ? "Edit spot" : "Set spot")
-                        </button>
+                        <span class="badge" title="Needs text and an answer key">needs question</span>
                     }
+                    <button class="btn ghost small" @onclick="() => StartEdit(q)" disabled="@_busy">
+                        @(string.IsNullOrWhiteSpace(q.Text) ? "Add question" : "Edit")
+                    </button>
                     <button class="btn ghost small danger" @onclick="() => DeleteAsync(q.Id)" disabled="@_busy">✕</button>
-
-                    @if (_locEditId == q.Id)
-                    {
-                        <div style="flex-basis:100%;margin-top:.5rem">
-                            <LocationPicker @key="q.Id" Lat="_locLat" Lng="_locLng" Radius="_locRadius" Changed="OnLocChanged" />
-                            <div class="row" style="margin-top:.4rem">
-                                <button class="btn small success" @onclick="() => SaveLocAsync(q)" disabled="@(_busy || _locLat is null)">Save spot</button>
-                                <button class="btn small ghost" @onclick="() => _locEditId = null">Cancel</button>
-                                @if (q.Latitude.HasValue)
-                                {
-                                    <button class="btn small ghost danger" @onclick="() => ClearLocAsync(q)" disabled="@_busy">Remove spot</button>
-                                }
-                            </div>
-                        </div>
-                    }
                 </li>
             }
         </ul>
@@ -111,7 +99,7 @@
 </div>
 
 <div class="card stack">
-    <h2>Add a question</h2>
+    <h2>@(_editId is null ? "Add a question" : $"Edit station #{_editOrder}")</h2>
 
     @if (_error is not null)
     {
@@ -177,31 +165,35 @@
         </div>
     }
 
-    @if (Activity.UsesMap)
-    {
-        <div class="field">
-            <label>Location</label>
-            <div class="row wrap">
-                <input class="grow" style="min-width:120px" type="number" step="any" placeholder="Latitude" @bind="_lat" />
-                <input class="grow" style="min-width:120px" type="number" step="any" placeholder="Longitude" @bind="_lng" />
-                <input style="width:110px" type="number" min="5" max="500" placeholder="Radius m" @bind="_radius" />
-            </div>
-            <button class="btn ghost small" style="margin-top:.4rem" @onclick="UseMyLocationAsync" disabled="@_locating">
-                @(_locating ? "Getting location…" : "📍 Use my current location")
-            </button>
-        </div>
-    }
-
-    <button class="btn block success" @onclick="AddAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_text))">
-        Add question
-    </button>
+    <div class="row">
+        <button class="btn block success" @onclick="SaveAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_text))">
+            @(_editId is null ? "Add question" : "Save changes")
+        </button>
+        @if (_editId is not null)
+        {
+            <button class="btn ghost" @onclick="CancelEdit" disabled="@_busy">Cancel</button>
+        }
+    </div>
 </div>
 
 @code {
     [Parameter] public ActivityDto Activity { get; set; } = default!;
 
-    private List<QuestionAdminDto> _questions = new();
+    /// <summary>Bumped by the parent when the stations panel changes questions, to keep both in sync.</summary>
+    [Parameter] public int RefreshKey { get; set; }
 
+    /// <summary>Raised after this editor changes the question set, so the parent can refresh the stations panel.</summary>
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private List<QuestionAdminDto> _questions = new();
+    private int _lastRefreshKey = -1;
+
+    // Add / edit form. _editId is null when adding, or the question id being edited.
+    private int? _editId;
+    private int _editOrder;
+    private double? _editLat;
+    private double? _editLng;
+    private int? _editRadius;
     private string _text = string.Empty;
     private QuestionKind _kind = QuestionKind.MultipleChoice;
     private int _points = 1;
@@ -209,14 +201,9 @@
     private int _correctIndex;
     private bool _trueIsCorrect = true;
     private string _acceptedAnswer = string.Empty;
-    private double? _lat;
-    private double? _lng;
-    private int _radius = 25;
 
     private bool _busy;
-    private bool _locating;
     private string? _error;
-    private GeolocationInterop? _geo;
 
     // Question library
     private List<string> _tags = new();
@@ -226,21 +213,23 @@
     private bool _libBusy;
     private string? _libError;
 
-    // Per-question location editing (tipspromenad stations).
-    private int? _locEditId;
-    private double? _locLat;
-    private double? _locLng;
-    private int _locRadius = 25;
-
     private List<string> TopicTags => _tags.Where(t => t.StartsWith("topic:", StringComparison.Ordinal)).ToList();
     private List<string> AgeTags => _tags.Where(t => t.StartsWith("age:", StringComparison.Ordinal)).ToList();
     private List<string> DifficultyTags => _tags.Where(t => t.StartsWith("difficulty:", StringComparison.Ordinal)).ToList();
 
     protected override async Task OnInitializedAsync()
     {
-        await ReloadAsync();
         try { _tags = await Api.GetLibraryTagsAsync(); } catch (ApiException) { }
         await RefreshAvailableAsync();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_lastRefreshKey != RefreshKey)
+        {
+            _lastRefreshKey = RefreshKey;
+            await ReloadAsync();
+        }
     }
 
     private async Task ToggleTagAsync(string tag)
@@ -268,6 +257,7 @@
             var result = await Api.GenerateFromLibraryAsync(Activity.Id, _libCount, _selectedTags.ToList());
             _libAvailable = result.Available;
             await ReloadAsync();
+            await NotifyChangedAsync();
             if (result.Added == 0)
             {
                 _libError = "No matching questions left for those tags.";
@@ -289,67 +279,6 @@
         var i = tag.IndexOf(':');
         var s = i >= 0 ? tag[(i + 1)..] : tag;
         return s.Length == 0 ? tag : char.ToUpperInvariant(s[0]) + s[1..];
-    }
-
-    private void ToggleLoc(QuestionAdminDto q)
-    {
-        if (_locEditId == q.Id)
-        {
-            _locEditId = null;
-            return;
-        }
-
-        _locEditId = q.Id;
-        _locLat = q.Latitude;
-        _locLng = q.Longitude;
-        _locRadius = q.RadiusMeters ?? 25;
-    }
-
-    private void OnLocChanged((double? Lat, double? Lng, int Radius) loc)
-    {
-        _locLat = loc.Lat;
-        _locLng = loc.Lng;
-        _locRadius = loc.Radius;
-    }
-
-    private async Task SaveLocAsync(QuestionAdminDto q)
-    {
-        _busy = true;
-        _error = null;
-        try
-        {
-            await Api.SetQuestionLocationAsync(Activity.Id, q.Id, _locLat, _locLng, _locRadius);
-            _locEditId = null;
-            await ReloadAsync();
-        }
-        catch (ApiException ex)
-        {
-            _error = ex.Message;
-        }
-        finally
-        {
-            _busy = false;
-        }
-    }
-
-    private async Task ClearLocAsync(QuestionAdminDto q)
-    {
-        _busy = true;
-        _error = null;
-        try
-        {
-            await Api.SetQuestionLocationAsync(Activity.Id, q.Id, null, null, null);
-            _locEditId = null;
-            await ReloadAsync();
-        }
-        catch (ApiException ex)
-        {
-            _error = ex.Message;
-        }
-        finally
-        {
-            _busy = false;
-        }
     }
 
     private async Task ReloadAsync()
@@ -375,45 +304,57 @@
         }
     }
 
-    private async Task UseMyLocationAsync()
+    // Load an existing question (including a blank station) into the form for editing.
+    private void StartEdit(QuestionAdminDto q)
     {
-        _locating = true;
+        _editId = q.Id;
+        _editOrder = q.Order;
+        _editLat = q.Latitude;       // preserve the geofence set in the Stations panel
+        _editLng = q.Longitude;
+        _editRadius = q.RadiusMeters;
+        _text = q.Text;
+        _kind = q.Kind;
+        _points = q.Points;
         _error = null;
-        try
+
+        if (q.Kind == QuestionKind.FreeText)
         {
-            _geo ??= new GeolocationInterop(JS);
-            var pos = await _geo.GetCurrentAsync();
-            _lat = Math.Round(pos.Latitude, 6);
-            _lng = Math.Round(pos.Longitude, 6);
+            _acceptedAnswer = q.AcceptedFreeTextAnswer ?? string.Empty;
+            _options = new() { string.Empty, string.Empty };
+            _correctIndex = 0;
         }
-        catch (Exception)
+        else if (q.Kind == QuestionKind.TrueFalse)
         {
-            _error = "Couldn't read your location. Enter it manually.";
+            _trueIsCorrect = q.Options.FirstOrDefault(o => o.IsCorrect)?.Text == "True";
+            _options = new() { string.Empty, string.Empty };
+            _correctIndex = 0;
         }
-        finally
+        else
         {
-            _locating = false;
+            _options = q.Options.Count >= 2 ? q.Options.Select(o => o.Text).ToList() : new() { string.Empty, string.Empty };
+            var correct = q.Options.FindIndex(o => o.IsCorrect);
+            _correctIndex = correct >= 0 ? correct : 0;
         }
     }
 
-    private async Task AddAsync()
+    private void CancelEdit() => ResetForm();
+
+    private async Task SaveAsync()
     {
         _busy = true;
         _error = null;
 
         var request = new QuestionUpsertRequest
         {
+            Order = _editOrder,
             Text = _text.Trim(),
             Kind = _kind,
             Points = _points,
+            // Carry the station's geofence through a content edit (the update replaces these).
+            Latitude = _editLat,
+            Longitude = _editLng,
+            RadiusMeters = _editRadius,
         };
-
-        if (Activity.UsesMap)
-        {
-            request.Latitude = _lat;
-            request.Longitude = _lng;
-            request.RadiusMeters = _radius;
-        }
 
         switch (_kind)
         {
@@ -437,9 +378,18 @@
 
         try
         {
-            await Api.AddQuestionAsync(Activity.Id, request);
+            if (_editId is { } editId)
+            {
+                await Api.UpdateQuestionAsync(Activity.Id, editId, request);
+            }
+            else
+            {
+                await Api.AddQuestionAsync(Activity.Id, request);
+            }
+
             ResetForm();
             await ReloadAsync();
+            await NotifyChangedAsync();
         }
         catch (ApiException ex)
         {
@@ -453,16 +403,19 @@
 
     private void ResetForm()
     {
+        _editId = null;
+        _editOrder = 0;
+        _editLat = null;
+        _editLng = null;
+        _editRadius = null;
         _text = string.Empty;
+        _kind = QuestionKind.MultipleChoice;
         _points = 1;
         _options = new() { string.Empty, string.Empty };
         _correctIndex = 0;
         _trueIsCorrect = true;
         _acceptedAnswer = string.Empty;
-        // keep _lat/_lng cleared so each placed question gets its own spot
-        _lat = null;
-        _lng = null;
-        _radius = 25;
+        _error = null;
     }
 
     private async Task DeleteAsync(int questionId)
@@ -472,7 +425,13 @@
         try
         {
             await Api.DeleteQuestionAsync(Activity.Id, questionId);
+            if (_editId == questionId)
+            {
+                ResetForm();
+            }
+
             await ReloadAsync();
+            await NotifyChangedAsync();
         }
         catch (ApiException ex)
         {
@@ -492,11 +451,5 @@
         _ => kind.ToString(),
     };
 
-    public async ValueTask DisposeAsync()
-    {
-        if (_geo is not null)
-        {
-            await _geo.DisposeAsync();
-        }
-    }
+    private Task NotifyChangedAsync() => OnChanged.HasDelegate ? OnChanged.InvokeAsync() : Task.CompletedTask;
 }
