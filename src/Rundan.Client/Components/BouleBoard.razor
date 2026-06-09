@@ -1,5 +1,6 @@
 @inject RundanApi Api
 @inject AppState State
+@implements IDisposable
 
 <div class="card stack">
     <div class="row">
@@ -39,8 +40,15 @@
                     {
                         <button class="btn ghost small" @onclick="() => ToggleStopwatch(key)">@(IsRunning(key) ? "Stop" : "Start")</button>
                     }
-                    <input type="number" min="0" max="100000" step="any" style="width:84px" value="@Fmt.Num(pending)" @onchange="e => SetPending(key, e)" />
-                    <span class="muted">@UnitSuffix</span>
+                    @if (Activity.MeasuresTime && IsRunning(key))
+                    {
+                        <span style="font-variant-numeric:tabular-nums;font-size:1.15rem;font-weight:600;min-width:60px;text-align:right">@Clock(Elapsed(key))</span>
+                    }
+                    else
+                    {
+                        <input type="number" min="0" max="100000" step="any" style="width:84px" value="@Fmt.Num(pending)" @onchange="e => SetPending(key, e)" />
+                        <span class="muted">@UnitSuffix</span>
+                    }
                     <button class="btn small success" @onclick="() => RecordSingleAsync(u.Id, key)" disabled="@(_busy || pending <= 0)">Set</button>
                 </div>
             }
@@ -161,6 +169,34 @@
 
     private bool IsRunning(string key) => _swStart.ContainsKey(key);
 
+    private double Elapsed(string key) => _swStart.TryGetValue(key, out var start)
+        ? (DateTimeOffset.UtcNow - start).TotalSeconds
+        : 0;
+
+    private static string Clock(double seconds)
+    {
+        var s = (int)Math.Round(seconds);
+        return $"{s / 60}:{s % 60:00}";
+    }
+
+    private System.Threading.Timer? _ticker;
+
+    // While any stopwatch is running, re-render a few times a second so the live time ticks up.
+    private void EnsureTicking() =>
+        _ticker ??= new System.Threading.Timer(_ => _ = InvokeAsync(() =>
+        {
+            if (_swStart.Count == 0)
+            {
+                _ticker?.Dispose();
+                _ticker = null;
+                return;
+            }
+
+            StateHasChanged();
+        }), null, 250, 250);
+
+    public void Dispose() => _ticker?.Dispose();
+
     private void ToggleStopwatch(string key)
     {
         if (_swStart.TryGetValue(key, out var start))
@@ -171,6 +207,7 @@
         else
         {
             _swStart[key] = DateTimeOffset.UtcNow;
+            EnsureTicking();
         }
     }
 
@@ -248,6 +285,7 @@
         {
             _loadedActivityId = Activity.Id;
             _pending.Clear();
+            _swStart.Clear();
             _round = 1;
             _lastRefreshKey = RefreshKey;
             await LoadAsync();

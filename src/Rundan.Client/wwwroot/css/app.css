@@ -248,8 +248,9 @@ a.stat:hover { border-color: var(--sea-300); }
 .row.wrap { flex-wrap: wrap; }
 .grow { flex: 1; }
 
-/* Event/activity picture: scale down by height so it never dominates; keeps the whole image (no crop). */
-.media-img { display: block; max-width: 100%; max-height: 240px; margin: 0 auto; border-radius: var(--radius-md); }
+/* Event/activity picture: fill the card width (as before), but cap the height so a tall image
+   doesn't dominate. object-fit keeps it undistorted; only very tall images crop to a banner. */
+.media-img { display: block; width: 100%; max-height: 320px; object-fit: cover; border-radius: var(--radius-md); }
 
 /* ---- Buttons ------------------------------------------------------------ */
 .btn {
