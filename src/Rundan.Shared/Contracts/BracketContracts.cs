@@ -29,13 +29,26 @@ public class BracketMatchDto
     /// <summary>The court/lane this match is played on, if assigned.</summary>
     public string? CourtName { get; set; }
 
+    /// <summary>The recorded score, formatted for display (e.g. "13–7, 9–13, 13–10" or "3–1"); null if none.</summary>
+    public string? Score { get; set; }
+
     public bool Ready => AId.HasValue && BId.HasValue && !IsBye;
     public bool Decided => WinnerParticipantId.HasValue;
 }
 
-/// <summary>Records the winner of a single bracket match (host / event admin).</summary>
+/// <summary>One set's score in a recorded match (A vs B). A single entry is used for free scoring.</summary>
+public class MatchSetInputDto
+{
+    public int A { get; set; }
+    public int B { get; set; }
+}
+
+/// <summary>
+/// Records a bracket match result (host / event admin). The winner is derived from the set scores
+/// per the activity's match format (free single score, or best-of-N sets).
+/// </summary>
 public class RecordBracketResultRequest
 {
     public int MatchId { get; set; }
-    public int WinnerParticipantId { get; set; }
+    public List<MatchSetInputDto> Sets { get; set; } = new();
 }

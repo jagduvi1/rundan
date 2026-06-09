@@ -24,6 +24,10 @@ public class BracketMatch
     /// <summary>Set once the result is recorded.</summary>
     public int? WinnerParticipantId { get; set; }
 
+    /// <summary>The recorded score, if any — comma-separated set scores like "13-7,9-13,13-10"
+    /// (a single "3-1" for free scoring). Null for byes or winner-only (simulated) results.</summary>
+    public string? SetScores { get; set; }
+
     /// <summary>A walkover (only one team) — auto-advances and scores no win.</summary>
     public bool IsBye { get; set; }
 
