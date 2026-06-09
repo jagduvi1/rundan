@@ -216,7 +216,7 @@ else
                         @* Title + type + your team — full width. *@
                         <div>
                             <b>@a.Order. @a.Title</b>
-                            <span class="muted" style="font-size:.85rem"> · @Fmt.TypeLabel(a.Type)</span>
+                            <div class="muted" style="font-size:.85rem">@Fmt.TypeLabel(a.Type)</div>
                             @if (_teamByActivity.TryGetValue(a.Id, out var team) && !string.IsNullOrEmpty(team))
                             {
                                 <div style="font-size:.8rem;color:var(--sea-600)">Your team: @team</div>
