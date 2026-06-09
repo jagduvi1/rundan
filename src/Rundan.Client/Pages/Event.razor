@@ -212,10 +212,25 @@ else
             <ul class="list">
                 @foreach (var a in _event.Activities)
                 {
-                    <li style="flex-direction:column;align-items:stretch;gap:.3rem">
-                        @* Row 1: number + title, status, and the action — one tidy line. *@
-                        <div class="row">
-                            <b class="grow">@a.Order. @a.Title</b>
+                    <li style="flex-direction:column;align-items:stretch;gap:.55rem">
+                        @* Title + type + your team — full width. *@
+                        <div>
+                            <b>@a.Order. @a.Title</b>
+                            <span class="muted" style="font-size:.85rem"> · @Fmt.TypeLabel(a.Type)</span>
+                            @if (_teamByActivity.TryGetValue(a.Id, out var team) && !string.IsNullOrEmpty(team))
+                            {
+                                <div style="font-size:.8rem;color:var(--sea-600)">Your team: @team</div>
+                            }
+                        </div>
+
+                        @* Activity picture, if one is set. *@
+                        @if (!string.IsNullOrEmpty(a.ImageUrl))
+                        {
+                            <img src="@a.ImageUrl" alt="" class="media-img" />
+                        }
+
+                        @* Status + the action (Join lobby / Play now / Join anyway / See results) on its own row. *@
+                        <div class="row wrap">
                             <StatusBadge Status="a.Status" />
                             @if (IsLocked(a))
                             {
@@ -229,23 +244,18 @@ else
                                 </a>
                             }
                         </div>
-                        @* Row 2: type · your team · (map link for any geofenced activity + distance when locked). *@
-                        <div class="row wrap" style="font-size:.8rem;gap:.4rem">
-                            <span class="muted">@Fmt.TypeLabel(a.Type)</span>
-                            @if (_teamByActivity.TryGetValue(a.Id, out var team) && !string.IsNullOrEmpty(team))
-                            {
-                                <span style="color:var(--sea-600)">Your team: @team</span>
-                            }
-                            @if (a.HasLocation)
-                            {
-                                <span class="grow"></span>
+
+                        @* Map + walk-there distance for a geofenced activity, on its own row. *@
+                        @if (a.HasLocation)
+                        {
+                            <div class="row wrap" style="font-size:.8rem;gap:.4rem">
                                 <a class="btn ghost small" href="@ActivityMapsUrl(a)" target="_blank" rel="noopener" title="See where it is on a map">Map</a>
                                 @if (IsLocked(a))
                                 {
                                     <span class="muted">@LockText(a)</span>
                                 }
-                            }
-                        </div>
+                            </div>
+                        }
                     </li>
                 }
             </ul>
