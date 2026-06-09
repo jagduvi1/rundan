@@ -150,6 +150,7 @@ else
                 <option value="@ActivityType.Boule">Boule (knockout bracket)</option>
                 <option value="@ActivityType.ScoreGame">Other score game</option>
                 <option value="@ActivityType.WordGame">Word game</option>
+                <option value="@ActivityType.MapPin">Pin the city (map)</option>
             </select>
         </div>
         <button class="btn block secondary" @onclick="CreateActivityAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_title))">

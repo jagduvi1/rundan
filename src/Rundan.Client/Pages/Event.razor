@@ -542,6 +542,15 @@ else
                     <option value="@EventScoring.Placement">Placement — 1st = number of teams, then 3, 2, 1</option>
                     <option value="@EventScoring.Cumulative">Cumulative — sum of actual activity points</option>
                 </select>
+                @if (_editScoring == EventScoring.Cumulative
+                     && _event.Activities.Any(a => a.ScoringMode is ScoringMode.LowerWins or ScoringMode.ClosestToTarget))
+                {
+                    <div class="alert" style="background:var(--coral-50);color:var(--coral-700);border:1px solid var(--coral-100);font-size:.85rem;margin-top:.4rem">
+                        Heads up: some activities are scored <b>lowest-wins</b> (a time, or a “Pin the city” distance).
+                        Cumulative just adds the raw values, so those won't combine sensibly with points totals —
+                        pick <b>Placement</b> for a mixed day.
+                    </div>
+                }
             </div>
             <div class="field">
                 <label>Slaps (make it spicy — winner of each activity slaps a rival)</label>
