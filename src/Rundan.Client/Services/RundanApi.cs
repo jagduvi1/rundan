@@ -249,9 +249,10 @@ public sealed class RundanApi(HttpClient http, AppState state)
     public async Task<ActivityDto> ResetActivityResultsAsync(int id) =>
         (await SendAsync<ActivityDto>(HttpMethod.Post, $"api/activities/{id}/reset-results", admin: true))!;
 
-    /// <summary>Destructive: wipe all data and re-seed the demo day (host "clean &amp; seed").</summary>
-    public Task CleanAndSeedAsync() =>
-        SendAsync(HttpMethod.Post, "api/admin/clean-and-seed", admin: true);
+    /// <summary>Destructive: wipe all data and re-seed the demo day (host "clean &amp; seed"). Needs the code.</summary>
+    public Task CleanAndSeedAsync(string code) =>
+        SendAsync(HttpMethod.Post, "api/admin/clean-and-seed",
+            body: new CleanAndSeedRequest { Code = code }, admin: true);
 
     public async Task SimulateEventAsync(int eventId) =>
         await SendAsync<object>(HttpMethod.Post, $"api/events/{eventId}/simulate", admin: true);

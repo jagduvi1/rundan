@@ -157,47 +157,44 @@ else
         </button>
     </div>
 
-    @* ---- Danger zone: destructive maintenance (shown only when an admin code actually gates it) ---- *@
-    @if (State.Bootstrap?.RequiresAdminCode == true)
-    {
-        <div class="card stack" style="border:1px solid var(--coral-100)">
-            <h2>Danger zone</h2>
-            <p class="muted" style="font-size:.85rem">
-                <b>Clean &amp; seed</b> deletes every event, activity, player, team and score (and uploaded
-                images), then recreates the demo day (Försommarspelen 2026) and rebuilds the question library.
-                A one-off backup of the database is saved next to it first. This can't be undone.
-            </p>
+    @* ---- Danger zone: destructive maintenance, gated by the hardcoded confirmation code ---- *@
+    <div class="card stack" style="border:1px solid var(--coral-100)">
+        <h2>Danger zone</h2>
+        <p class="muted" style="font-size:.85rem">
+            <b>Clean &amp; seed</b> deletes every event, activity, player, team and score (and uploaded
+            images), then recreates the demo day (Försommarspelen 2026) and rebuilds the question library.
+            A one-off backup of the database is saved next to it first. This can't be undone.
+        </p>
 
-            @if (_resetDone)
-            {
-                <div class="alert success">Done — wiped everything and re-seeded the demo day.</div>
-            }
+        @if (_resetDone)
+        {
+            <div class="alert success">Done — wiped everything and re-seeded the demo day.</div>
+        }
 
-            @if (!_confirmReset)
-            {
-                <button class="btn danger" @onclick="StartReset" disabled="@_busy">Clean &amp; seed demo data</button>
-            }
-            else
-            {
-                <div class="alert" style="background:var(--coral-50);color:var(--coral-700);border:1px solid var(--coral-100)">
-                    This permanently deletes <b>@_events.Count event@(_events.Count == 1 ? "" : "s")</b>,
-                    <b>@TotalActivities activit@(TotalActivities == 1 ? "y" : "ies")</b> and
-                    <b>@_peopleCount player@(_peopleCount == 1 ? "" : "s")</b> (plus all teams, scores and uploads),
-                    then re-seeds the demo. This can't be undone.
-                </div>
-                <div class="field">
-                    <label>Type <b>WIPE</b> to confirm</label>
-                    <input @bind="_confirmText" @bind:event="oninput" placeholder="WIPE" disabled="@_busy" />
-                </div>
-                <div class="row">
-                    <button class="btn danger" @onclick="CleanAndSeedAsync" disabled="@(_busy || _confirmText != "WIPE")">
-                        @(_busy ? "Working…" : "Yes, wipe & seed")
-                    </button>
-                    <button class="btn ghost" @onclick="CancelReset" disabled="@_busy">Cancel</button>
-                </div>
-            }
-        </div>
-    }
+        @if (!_confirmReset)
+        {
+            <button class="btn danger" @onclick="StartReset" disabled="@_busy">Clean &amp; seed demo data</button>
+        }
+        else
+        {
+            <div class="alert" style="background:var(--coral-50);color:var(--coral-700);border:1px solid var(--coral-100)">
+                This permanently deletes <b>@_events.Count event@(_events.Count == 1 ? "" : "s")</b>,
+                <b>@TotalActivities activit@(TotalActivities == 1 ? "y" : "ies")</b> and
+                <b>@_peopleCount player@(_peopleCount == 1 ? "" : "s")</b> (plus all teams, scores and uploads),
+                then re-seeds the demo. This can't be undone.
+            </div>
+            <div class="field">
+                <label>Enter the code <b>@SeedCodes.CleanAndSeed</b> to confirm</label>
+                <input @bind="_confirmText" @bind:event="oninput" placeholder="@SeedCodes.CleanAndSeed" disabled="@_busy" />
+            </div>
+            <div class="row">
+                <button class="btn danger" @onclick="CleanAndSeedAsync" disabled="@(_busy || _confirmText != SeedCodes.CleanAndSeed)">
+                    @(_busy ? "Working…" : "Yes, wipe & seed")
+                </button>
+                <button class="btn ghost" @onclick="CancelReset" disabled="@_busy">Cancel</button>
+            </div>
+        }
+    </div>
 }
 
 @code {
@@ -339,7 +336,7 @@ else
 
     private async Task CleanAndSeedAsync()
     {
-        if (_confirmText != "WIPE")
+        if (_confirmText != SeedCodes.CleanAndSeed)
         {
             return;
         }
@@ -348,7 +345,7 @@ else
         _error = null;
         try
         {
-            await Api.CleanAndSeedAsync();
+            await Api.CleanAndSeedAsync(_confirmText);
             _confirmReset = false;
             _confirmText = string.Empty;
             await LoadAsync();   // clears _resetDone, so set the banner afterwards
