@@ -329,12 +329,30 @@ internal static class ActivityEndpoints
                 return Results.NotFound();
             }
 
+            var eventId = activity.EventId;
+
             // Slaps reference the activity by a loose int (no FK), so the event cascade won't
             // clean them — remove them here or a deleted activity's penalty haunts the standings.
             await db.Slaps.Where(s => s.ActivityId == id).ExecuteDeleteAsync(ct);
 
             db.Activities.Remove(activity);
             await db.SaveChangesAsync(ct);
+
+            // Close the gap in the running order so the remaining activities stay numbered 1, 2, 3, …
+            if (eventId is { } evId)
+            {
+                var remaining = await db.Activities
+                    .Where(a => a.EventId == evId)
+                    .OrderBy(a => a.Order)
+                    .ToListAsync(ct);
+                for (var i = 0; i < remaining.Count; i++)
+                {
+                    remaining[i].Order = i + 1;
+                }
+
+                await db.SaveChangesAsync(ct);
+            }
+
             return Results.NoContent();
         }).AddEndpointFilter<ActivityManagerFilter>();
 
