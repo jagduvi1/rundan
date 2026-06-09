@@ -71,6 +71,15 @@ else
                             Placeholder="Explain how this game works — use the toolbar for bullet lists" />
         </div>
         <div class="field">
+            <label>How players will see the rules (auto, from the type &amp; scoring)</label>
+            <ul class="muted" style="margin:.1rem 0 0;padding-left:1.15rem;line-height:1.55;font-size:.9rem">
+                @foreach (var line in Fmt.RulesSummary(_activity))
+                {
+                    <li>@line</li>
+                }
+            </ul>
+        </div>
+        <div class="field">
             <label>Picture / map</label>
             <ImageUploader Value="_editImage" ValueChanged="v => _editImage = v" />
         </div>
