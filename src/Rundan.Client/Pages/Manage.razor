@@ -45,6 +45,31 @@ else
             }
         </div>
 
+        @* Test it out: play through it yourself, then wipe the test scores back to a draft. *@
+        @if (_activity.Status == ActivityStatus.Draft)
+        {
+            <div class="row wrap" style="align-items:center">
+                <button class="btn secondary" @onclick="TestRunAsync" disabled="@_busy">▶ Test run</button>
+                <span class="muted" style="font-size:.82rem">Opens it (briefly live) and takes you to the player view to try it — reset it back to a draft when you're done.</span>
+            </div>
+        }
+        else if (_activity.Status is ActivityStatus.Open or ActivityStatus.Live)
+        {
+            <div class="row wrap" style="align-items:center">
+                @if (!_confirmReset)
+                {
+                    <button class="btn ghost" @onclick="() => _confirmReset = true" disabled="@_busy">↺ Reset to draft</button>
+                    <span class="muted" style="font-size:.82rem">Clears all scores and returns it to a draft (finishes a test run).</span>
+                }
+                else
+                {
+                    <span class="muted grow">Clear all scores and go back to draft?</span>
+                    <button class="btn danger small" @onclick="FinishTestAsync" disabled="@_busy">Yes, reset</button>
+                    <button class="btn ghost small" @onclick="() => _confirmReset = false">Cancel</button>
+                }
+            </div>
+        }
+
         <div class="row">
             @if (!_confirmDelete)
             {
@@ -288,6 +313,7 @@ else
     private bool _loading = true;
     private bool _busy;
     private bool _confirmDelete;
+    private bool _confirmReset;
     private bool _copied;
     private string? _error;
 
@@ -518,6 +544,47 @@ else
         try
         {
             _activity = await Api.SetStatusAsync(Id, status);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    // Open the activity and jump to the player view so the host can play through it as a test.
+    private async Task TestRunAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            await Api.SetStatusAsync(Id, ActivityStatus.Open);
+            await Api.SetStatusAsync(Id, ActivityStatus.Live);
+            Nav.NavigateTo($"a/{Id}");
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    // Wipe the test results and put it back to a draft.
+    private async Task FinishTestAsync()
+    {
+        _busy = true;
+        _error = null;
+        _confirmReset = false;
+        try
+        {
+            _activity = await Api.ResetActivityResultsAsync(Id);
         }
         catch (ApiException ex)
         {
