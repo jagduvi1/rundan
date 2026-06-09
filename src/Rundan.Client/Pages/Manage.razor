@@ -198,9 +198,10 @@ else
         {
             @if (_activity.UsesMap)
             {
-                <StationsEditor Activity="_activity" @key="_activity.Id" RefreshKey="_qVersion" OnChanged="BumpQuestions" />
+                @* Distinct keys: these two render as siblings for a tipspromenad, so they can't share a key. *@
+                <StationsEditor Activity="_activity" @key="(1, _activity.Id)" RefreshKey="_qVersion" OnChanged="BumpQuestions" />
             }
-            <QuestionEditor Activity="_activity" @key="_activity.Id" RefreshKey="_qVersion" OnChanged="BumpQuestions" />
+            <QuestionEditor Activity="_activity" @key="(2, _activity.Id)" RefreshKey="_qVersion" OnChanged="BumpQuestions" />
         }
         else
         {
