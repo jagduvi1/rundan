@@ -72,7 +72,7 @@ else
     @<div class="card stack">
         @if (!string.IsNullOrEmpty(ev.ImageUrl))
         {
-            <img src="@ev.ImageUrl" alt="" style="width:100%;border-radius:var(--radius-md)" />
+            <img src="@ev.ImageUrl" alt="" class="media-img" />
         }
         <h2>@ev.Name</h2>
         @if (ev.IsComplete)
