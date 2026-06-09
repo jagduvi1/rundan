@@ -24,6 +24,13 @@ public class Event
     /// <summary>How the combined event total is calculated.</summary>
     public EventScoring Scoring { get; set; } = EventScoring.Cumulative;
 
+    /// <summary>How teams are formed across the event's activities.</summary>
+    public TeamShuffle TeamShuffle { get; set; } = TeamShuffle.EveryActivity;
+
+    /// <summary>The locked partner-mixer seed used when <see cref="TeamShuffle"/> is FixedForEvent
+    /// (0 until the host shuffles). Ignored in EveryActivity mode.</summary>
+    public int FixedTeamSeed { get; set; }
+
     /// <summary>The optional "slap" twist (off by default).</summary>
     public SlapMode SlapMode { get; set; } = SlapMode.Off;
 

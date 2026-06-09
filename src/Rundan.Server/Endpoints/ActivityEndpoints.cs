@@ -301,6 +301,16 @@ internal static class ActivityEndpoints
             .Where(c => c.ActivityId == id).OrderBy(c => c.Order)
             .Select(c => new CourtDto { Id = c.Id, Order = c.Order, Name = c.Name })
             .ToListAsync(ct);
-        return activity.ToDto(pc, qc, courts);
+
+        var dto = activity.ToDto(pc, qc, courts);
+        if (activity.EventId is { } evId)
+        {
+            // Participants are teams when the event pairs players up (TeamSize > 1).
+            var teamSize = await db.Events.AsNoTracking()
+                .Where(e => e.Id == evId).Select(e => (int?)e.TeamSize).FirstOrDefaultAsync(ct);
+            dto.IsTeamBased = teamSize > 1;
+        }
+
+        return dto;
     }
 }

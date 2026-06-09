@@ -10,6 +10,9 @@ public class EventDto
     public int TeamSize { get; set; } = 2;
     public EventScoring Scoring { get; set; } = EventScoring.Cumulative;
 
+    /// <summary>How teams are formed across the event's activities (re-mix each activity vs fixed for the event).</summary>
+    public TeamShuffle TeamShuffle { get; set; } = TeamShuffle.EveryActivity;
+
     /// <summary>The "slap" twist mode (Off by default).</summary>
     public SlapMode SlapMode { get; set; } = SlapMode.Off;
 
@@ -120,6 +123,7 @@ public class UpdateEventRequest
     public string? ImageUrl { get; set; }
     public int TeamSize { get; set; } = 2;
     public EventScoring Scoring { get; set; } = EventScoring.Cumulative;
+    public TeamShuffle TeamShuffle { get; set; } = TeamShuffle.EveryActivity;
     public SlapMode SlapMode { get; set; } = SlapMode.Off;
 }
 

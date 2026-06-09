@@ -125,6 +125,15 @@ public sealed class RundanApi(HttpClient http, AppState state)
     public Task<List<TeamDto>> GetTeamsAsync(int activityId) =>
         GetListAsync<TeamDto>($"api/activities/{activityId}/teams");
 
+    /// <summary>The team line-up an event's roster currently forms (host view; the locked set in fixed mode).</summary>
+    public Task<List<TeamDto>> GetEventTeamsAsync(int eventId) =>
+        GetListAsync<TeamDto>($"api/events/{eventId}/teams", admin: true);
+
+    /// <summary>Host re-rolls the locked fixed teams; returns the new line-up.</summary>
+    public async Task<List<TeamDto>> ReshuffleTeamsAsync(int eventId) =>
+        await SendAsync<List<TeamDto>>(HttpMethod.Post, $"api/events/{eventId}/teams/reshuffle", admin: true)
+            ?? new();
+
     public Task<EventDto?> GetEventByCodeAsync(string code) =>
         TryGetAsync<EventDto>($"api/events/by-code/{Uri.EscapeDataString(code.Trim())}");
 

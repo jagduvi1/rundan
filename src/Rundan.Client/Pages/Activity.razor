@@ -109,7 +109,7 @@ else
             <p class="muted">You're in as <b>@_session.DisplayName</b>.</p>
         </div>
         <div class="card">
-            <h2>Players (@_participants.Count)</h2>
+            <h2>@(_activity.IsTeamBased ? "Teams" : "Players") (@_participants.Count)</h2>
             <ul class="list">
                 @foreach (var p in _participants)
                 {
