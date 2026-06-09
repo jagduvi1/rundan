@@ -356,19 +356,23 @@ else
                 }
             }
 
-            <h3 style="margin-top:.5rem">Dry run</h3>
-            <p class="muted" style="font-size:.85rem">Fill the activities with random results to check the scoreboards, bracket and standings work — then clear it before the real day.</p>
+            <h3 style="margin-top:.5rem">Restart &amp; dry run</h3>
+            <p class="muted" style="font-size:.85rem">
+                <b>Restart event</b> sends every activity back to Draft and clears all scores, so you can run the
+                day fresh — teams and players stay in. <b>Simulate all</b> fills random results first, to check
+                the scoreboards and standings before the real thing.
+            </p>
             <div class="row wrap">
                 <button class="btn small secondary" @onclick="SimulateEventAsync" disabled="@_busy">Simulate all</button>
-                @if (!_confirmClear)
+                @if (!_confirmRestart)
                 {
-                    <button class="btn small ghost danger" @onclick="() => _confirmClear = true" disabled="@_busy">Clear all results</button>
+                    <button class="btn small ghost danger" @onclick="() => _confirmRestart = true" disabled="@_busy">Restart event</button>
                 }
                 else
                 {
-                    <span class="muted">Clear every result?</span>
-                    <button class="btn small danger" @onclick="ClearAllResultsAsync" disabled="@_busy">Yes, clear</button>
-                    <button class="btn small ghost" @onclick="() => _confirmClear = false">Cancel</button>
+                    <span class="muted">Back to Draft and clear every score?</span>
+                    <button class="btn small danger" @onclick="RestartEventAsync" disabled="@_busy">Yes, restart</button>
+                    <button class="btn small ghost" @onclick="() => _confirmRestart = false">Cancel</button>
                 }
             </div>
         </div>
@@ -552,7 +556,7 @@ else
 
     private List<ActivityDto> _library = new();
     private int _libSourceId;
-    private bool _confirmClear;
+    private bool _confirmRestart;
     private int? _confirmDeleteId;
     private bool _isViewer;
     private string _viewerName = string.Empty;
@@ -1322,9 +1326,9 @@ else
 
     private async Task SimulateEventAsync() => await HostActionAsync(() => Api.SimulateEventAsync(Id));
 
-    private async Task ClearAllResultsAsync()
+    private async Task RestartEventAsync()
     {
-        _confirmClear = false;
+        _confirmRestart = false;
         await HostActionAsync(() => Api.ResetEventResultsAsync(Id));
     }
 
