@@ -1,6 +1,6 @@
-using Rundan.Server;
 using Rundan.Server.Security;
 using Rundan.Server.Services;
+using Rundan.Shared.Contracts;
 
 namespace Rundan.Server.Endpoints;
 
@@ -9,17 +9,16 @@ internal static class MaintenanceEndpoints
 {
     public static void MapMaintenanceEndpoints(this IEndpointRouteBuilder app)
     {
-        // Wipe all data and re-seed the demo day. Destructive — fails closed.
+        // Wipe all data and re-seed the demo day. Destructive — guarded by a hardcoded confirmation
+        // code the host must type (a deliberate barrier; for real protection configure an admin code).
         app.MapPost("/api/admin/clean-and-seed", async (
-            MaintenanceService maintenance, RundanOptions options, CancellationToken ct) =>
+            CleanAndSeedRequest req, MaintenanceService maintenance, CancellationToken ct) =>
         {
-            // The admin filter is a no-op when no admin code is configured (dev-open). A total,
-            // irreversible wipe must never run on an open deployment, so require a real admin code.
-            if (!options.RequiresAdminCode)
+            if (!string.Equals(req.Code?.Trim(), SeedCodes.CleanAndSeed, StringComparison.Ordinal))
             {
                 return Results.Problem(
-                    title: "Disabled",
-                    detail: "Clean & seed requires a configured admin code.",
+                    title: "Wrong code",
+                    detail: $"Enter the code \"{SeedCodes.CleanAndSeed}\" to clean & seed.",
                     statusCode: StatusCodes.Status403Forbidden);
             }
 
