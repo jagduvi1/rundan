@@ -25,7 +25,7 @@ else
             <h1 class="grow">@_activity.Title</h1>
             <StatusBadge Status="_activity.Status" />
         </div>
-        <div class="muted">@Fmt.TypeLabel(_activity.Type) · @_activity.ParticipantCount player(s)</div>
+        <div class="muted">@Fmt.TypeLabel(_activity.Type) · @CountSummary()</div>
 
         <div class="row wrap" style="align-items:center">
             <span class="join-code">@_activity.JoinCode</span>
@@ -67,7 +67,7 @@ else
         </div>
         <div class="field">
             <label>Rules / info</label>
-            <RichTextEditor @key="_activity.Id" Value="_editDescription" ValueChanged="v => _editDescription = v"
+            <RichTextEditor @key="_activity.Id" Value="@_editDescription" ValueChanged="v => _editDescription = v"
                             Placeholder="Explain how this game works — use the toolbar for bullet lists" />
         </div>
         <div class="field">
@@ -325,6 +325,20 @@ else
         {
             _busy = false;
         }
+    }
+
+    // "4 teams · 8 players" for a team event activity, otherwise just the player count.
+    private string CountSummary()
+    {
+        if (_activity is null)
+        {
+            return string.Empty;
+        }
+
+        var players = $"{_activity.PlayerCount} player{(_activity.PlayerCount == 1 ? "" : "s")}";
+        return _activity.IsTeamBased
+            ? $"{_activity.TeamCount} team{(_activity.TeamCount == 1 ? "" : "s")} · {players}"
+            : players;
     }
 
     private void OnLocationChanged((double? Lat, double? Lng, int Radius) loc)

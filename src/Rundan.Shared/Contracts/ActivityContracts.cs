@@ -64,6 +64,14 @@ public class ActivityDto
     public List<CourtDto> Courts { get; set; } = new();
 
     public int ParticipantCount { get; set; }
+
+    /// <summary>Number of individual players: the parent event's roster size for event activities,
+    /// or the count of joined participants for a standalone activity.</summary>
+    public int PlayerCount { get; set; }
+
+    /// <summary>Number of teams for a team-based event activity (roster ÷ team size); 0 otherwise.</summary>
+    public int TeamCount { get; set; }
+
     public int QuestionCount { get; set; }
     public DateTimeOffset CreatedUtc { get; set; }
     public DateTimeOffset? StartedUtc { get; set; }
