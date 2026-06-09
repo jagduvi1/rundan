@@ -117,7 +117,7 @@ else
         {
             <div class="field">
                 <label>What you record</label>
-                <select @bind="_editMeasurement">
+                <select @bind="_editMeasurement" @bind:after="OnRecordTypeChanged">
                     <option value="@Measurement.Points">Points / count</option>
                     <option value="@Measurement.TimeSeconds">Time (mm:ss)</option>
                     <option value="@Measurement.Millimetres">Length (millimetres)</option>
@@ -361,6 +361,16 @@ else
         return _activity.IsTeamBased
             ? $"{_activity.TeamCount} team{(_activity.TeamCount == 1 ? "" : "s")} · {players}"
             : players;
+    }
+
+    // Timed games are almost always "fastest wins", so default Who-wins to lowest when Time is picked —
+    // otherwise a host can leave it on the (Highest-wins) default and have the slowest time rank first.
+    private void OnRecordTypeChanged()
+    {
+        if (_editMeasurement == Measurement.TimeSeconds && _editScoringMode == ScoringMode.HigherWins)
+        {
+            _editScoringMode = ScoringMode.LowerWins;
+        }
     }
 
     private void OnLocationChanged((double? Lat, double? Lng, int Radius) loc)
