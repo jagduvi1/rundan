@@ -54,21 +54,17 @@
     private List<QuestionAdminDto> _tracks = new();
     private bool _busy;
     private string? _error;
-    private int _lastKey = -1;
+    private int _loadedId = -1;
 
+    // Load once per activity — never re-fetch on a RefreshKey bump, which would clobber unsaved in-place edits.
     protected override async Task OnParametersSetAsync()
     {
-        if (RefreshKey != _lastKey)
+        if (_loadedId != Activity.Id)
         {
-            _lastKey = RefreshKey;
-            await LoadAsync();
+            _loadedId = Activity.Id;
+            try { _tracks = await Api.GetAdminQuestionsAsync(Activity.Id); }
+            catch (ApiException ex) { _error = ex.Message; }
         }
-    }
-
-    private async Task LoadAsync()
-    {
-        try { _tracks = await Api.GetAdminQuestionsAsync(Activity.Id); }
-        catch (ApiException ex) { _error = ex.Message; }
     }
 
     private async Task AddAsync()
@@ -78,14 +74,14 @@
         try
         {
             var order = _tracks.Count == 0 ? 1 : _tracks.Max(t => t.Order) + 1;
-            await Api.AddQuestionAsync(Activity.Id, new QuestionUpsertRequest
+            var created = await Api.AddQuestionAsync(Activity.Id, new QuestionUpsertRequest
             {
                 Order = order,
                 Text = $"Track {order}",
                 Kind = QuestionKind.FreeText,
                 Points = 1,
             });
-            await LoadAsync();
+            _tracks.Add(created); // append locally — don't reload (would drop other rows' unsaved edits)
             await OnChanged.InvokeAsync();
         }
         catch (ApiException ex) { _error = ex.Message; }
@@ -108,7 +104,6 @@
                 AcceptedFreeTextAnswer = t.AcceptedFreeTextAnswer,
                 AcceptedArtist = t.AcceptedArtist,
             });
-            await OnChanged.InvokeAsync();
         }
         catch (ApiException ex) { _error = ex.Message; }
         finally { _busy = false; }
@@ -121,7 +116,7 @@
         try
         {
             await Api.DeleteQuestionAsync(Activity.Id, t.Id);
-            await LoadAsync();
+            _tracks.Remove(t);
             await OnChanged.InvokeAsync();
         }
         catch (ApiException ex) { _error = ex.Message; }

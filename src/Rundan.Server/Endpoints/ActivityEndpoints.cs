@@ -140,6 +140,23 @@ internal static class ActivityEndpoints
                 }
             }
 
+            // A music quiz needs each track to have a Spotify link plus the song and artist answers.
+            if (activity.Status == ActivityStatus.Draft && req.Status is ActivityStatus.Open or ActivityStatus.Live
+                && activity.Type == ActivityType.MusicQuiz)
+            {
+                var tracks = await db.Questions.Where(q => q.ActivityId == id).ToListAsync(ct);
+                var incomplete = tracks.Count(q => string.IsNullOrWhiteSpace(q.SpotifyUrl)
+                    || string.IsNullOrWhiteSpace(q.AcceptedFreeTextAnswer) || string.IsNullOrWhiteSpace(q.AcceptedArtist));
+                if (tracks.Count == 0 || incomplete > 0)
+                {
+                    throw new RuleViolationException(
+                        tracks.Count == 0
+                            ? "Add at least one track before starting."
+                            : $"{incomplete} track{(incomplete == 1 ? "" : "s")} still need a Spotify link, song and artist.",
+                        StatusCodes.Status409Conflict);
+                }
+            }
+
             // Slap twist: a pending slap must be resolved before the next activity starts.
             if (req.Status == ActivityStatus.Live && activity.EventId is { } slapEventId)
             {
@@ -219,7 +236,8 @@ internal static class ActivityEndpoints
                 ? req.TargetValue
                 : null;
             activity.RandomizeQuestions = req.RandomizeQuestions;
-            activity.HideQuestionsFromHost = req.HideQuestionsFromHost;
+            // A music host must always see the Spotify links to play them — never hide them.
+            activity.HideQuestionsFromHost = req.HideQuestionsFromHost && activity.Type != ActivityType.MusicQuiz;
             activity.IsPublic = req.IsPublic;
             activity.ScoreEntryMode = req.ScoreEntryMode;
             activity.Latitude = req.Latitude;

@@ -40,6 +40,13 @@ internal static class QuestionEndpoints
                     StatusCodes.Status409Conflict);
             }
 
+            // MusicQuiz answers stay host-only — the song would otherwise leak here via ToResultDto.
+            // Players already get the per-track reveal at answer time, so nothing legitimate reads this.
+            if (activity.Type == ActivityType.MusicQuiz)
+            {
+                return Results.Ok(Array.Empty<QuestionResultDto>());
+            }
+
             var questions = await LoadOrderedAsync(db, id, ct);
             return Results.Ok(questions.Select(q => q.ToResultDto()));
         });
@@ -65,7 +72,7 @@ internal static class QuestionEndpoints
             var activity = await db.Activities.FirstOrDefaultAsync(a => a.Id == id, ct)
                 ?? throw new RuleViolationException("Activity not found.", StatusCodes.Status404NotFound);
             EnsureQuestionEditable(activity);
-            Validate(req);
+            Validate(req, activity.Type);
 
             var question = BuildQuestion(id, req);
             if (question.Order <= 0)
@@ -86,7 +93,7 @@ internal static class QuestionEndpoints
             var activity = await db.Activities.FirstOrDefaultAsync(a => a.Id == id, ct)
                 ?? throw new RuleViolationException("Activity not found.", StatusCodes.Status404NotFound);
             EnsureQuestionEditable(activity);
-            Validate(req);
+            Validate(req, activity.Type);
 
             var question = await db.Questions.Include(q => q.Options)
                 .FirstOrDefaultAsync(q => q.Id == questionId && q.ActivityId == id, ct);
@@ -297,7 +304,7 @@ internal static class QuestionEndpoints
         }
     }
 
-    private static void Validate(QuestionUpsertRequest req)
+    private static void Validate(QuestionUpsertRequest req, ActivityType type)
     {
         if (string.IsNullOrWhiteSpace(req.Text))
         {
@@ -306,7 +313,9 @@ internal static class QuestionEndpoints
 
         if (req.Kind == QuestionKind.FreeText)
         {
-            if (string.IsNullOrWhiteSpace(req.AcceptedFreeTextAnswer))
+            // A music track may be added blank and filled in afterwards — completeness is enforced
+            // when the activity opens, not on every save.
+            if (type != ActivityType.MusicQuiz && string.IsNullOrWhiteSpace(req.AcceptedFreeTextAnswer))
             {
                 throw new RuleViolationException("A free-text question needs an accepted answer.");
             }
