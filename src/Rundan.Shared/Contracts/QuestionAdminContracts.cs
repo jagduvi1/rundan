@@ -23,4 +23,25 @@ public class QuestionAdminDto
     public int? RadiusMeters { get; set; }
     public string? AcceptedFreeTextAnswer { get; set; }
     public List<AnswerOptionAdminDto> Options { get; set; } = new();
+
+    /// <summary>This question has a geofence (a placed tipspromenad station).</summary>
+    public bool HasLocation => Latitude.HasValue && Longitude.HasValue;
+
+    /// <summary>
+    /// True once the question has enough content to be played — some text plus a valid answer key.
+    /// Blank stations (created by setting a station count) are incomplete until the host fills them in.
+    /// </summary>
+    public bool IsComplete =>
+        !string.IsNullOrWhiteSpace(Text) &&
+        (Kind == QuestionKind.FreeText
+            ? !string.IsNullOrWhiteSpace(AcceptedFreeTextAnswer)
+            : Options.Count >= 2
+              && Options.Count(o => o.IsCorrect) == 1
+              && Options.All(o => !string.IsNullOrWhiteSpace(o.Text)));
+}
+
+/// <summary>Sets how many stations (questions) a tipspromenad has; adds blank stations or trims empty ones.</summary>
+public class SetStationCountRequest
+{
+    public int Count { get; set; }
 }

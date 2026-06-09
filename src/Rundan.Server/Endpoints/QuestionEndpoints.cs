@@ -160,7 +160,72 @@ internal static class QuestionEndpoints
             await db.SaveChangesAsync(ct);
             return Results.NoContent();
         }).AddEndpointFilter<ActivityManagerFilter>();
+
+        // Set how many stations a tipspromenad (or quiz) has. Adds blank stations — placed on the map
+        // and filled with a question later — or trims trailing blank ones. Authored questions (anything
+        // with real content) are never auto-deleted. Returns the renumbered station list.
+        app.MapPut("/api/activities/{id:int}/stations/count", async (
+            int id, SetStationCountRequest req, AppDbContext db, CancellationToken ct) =>
+        {
+            var activity = await db.Activities.FirstOrDefaultAsync(a => a.Id == id, ct)
+                ?? throw new RuleViolationException("Activity not found.", StatusCodes.Status404NotFound);
+            EnsureQuestionEditable(activity);
+
+            var target = Math.Clamp(req.Count, 0, 100);
+            var questions = await db.Questions.Include(q => q.Options)
+                .Where(q => q.ActivityId == id).OrderBy(q => q.Order).ToListAsync(ct);
+
+            if (target > questions.Count)
+            {
+                for (var i = questions.Count; i < target; i++)
+                {
+                    db.Questions.Add(new Question
+                    {
+                        ActivityId = id,
+                        Order = i + 1,
+                        Text = string.Empty, // blank station — content added later
+                        Kind = QuestionKind.MultipleChoice,
+                        Points = 1,
+                    });
+                }
+            }
+            else
+            {
+                // Trim from the end, but stop at the first authored question so nothing real is lost.
+                for (var i = questions.Count - 1; i >= target; i--)
+                {
+                    if (IsPlayable(questions[i]))
+                    {
+                        break;
+                    }
+
+                    db.Questions.Remove(questions[i]);
+                }
+            }
+
+            await db.SaveChangesAsync(ct);
+
+            // Renumber to a clean, contiguous 1..N.
+            var remaining = await db.Questions.Include(q => q.Options)
+                .Where(q => q.ActivityId == id).OrderBy(q => q.Order).ToListAsync(ct);
+            for (var i = 0; i < remaining.Count; i++)
+            {
+                remaining[i].Order = i + 1;
+            }
+
+            await db.SaveChangesAsync(ct);
+            return Results.Ok(remaining.Select(q => q.ToAdminDto()));
+        }).AddEndpointFilter<ActivityManagerFilter>();
     }
+
+    /// <summary>True once a question has enough content to be played: some text plus a valid answer key.</summary>
+    internal static bool IsPlayable(Question q) =>
+        !string.IsNullOrWhiteSpace(q.Text) &&
+        (q.Kind == QuestionKind.FreeText
+            ? !string.IsNullOrWhiteSpace(q.AcceptedFreeTextAnswer)
+            : q.Options.Count >= 2
+              && q.Options.Count(o => o.IsCorrect) == 1
+              && q.Options.All(o => !string.IsNullOrWhiteSpace(o.Text)));
 
     private static Task<List<Question>> LoadOrderedAsync(AppDbContext db, int activityId, CancellationToken ct) =>
         db.Questions.AsNoTracking()
