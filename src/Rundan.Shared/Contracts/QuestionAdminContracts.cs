@@ -24,20 +24,25 @@ public class QuestionAdminDto
     public string? AcceptedFreeTextAnswer { get; set; }
     public List<AnswerOptionAdminDto> Options { get; set; } = new();
 
+    /// <summary>The text/answers are blanked because the activity hides questions from the host (host plays too).</summary>
+    public bool Hidden { get; set; }
+
     /// <summary>This question has a geofence (a placed tipspromenad station).</summary>
     public bool HasLocation => Latitude.HasValue && Longitude.HasValue;
 
     /// <summary>
     /// True once the question has enough content to be played — some text plus a valid answer key.
     /// Blank stations (created by setting a station count) are incomplete until the host fills them in.
+    /// A hidden question is assumed complete (its content is just blanked for the host).
     /// </summary>
     public bool IsComplete =>
-        !string.IsNullOrWhiteSpace(Text) &&
-        (Kind == QuestionKind.FreeText
-            ? !string.IsNullOrWhiteSpace(AcceptedFreeTextAnswer)
-            : Options.Count >= 2
-              && Options.Count(o => o.IsCorrect) == 1
-              && Options.All(o => !string.IsNullOrWhiteSpace(o.Text)));
+        Hidden ||
+        (!string.IsNullOrWhiteSpace(Text) &&
+         (Kind == QuestionKind.FreeText
+             ? !string.IsNullOrWhiteSpace(AcceptedFreeTextAnswer)
+             : Options.Count >= 2
+               && Options.Count(o => o.IsCorrect) == 1
+               && Options.All(o => !string.IsNullOrWhiteSpace(o.Text))));
 }
 
 /// <summary>Sets how many stations (questions) a tipspromenad has; adds blank stations or trims empty ones.</summary>

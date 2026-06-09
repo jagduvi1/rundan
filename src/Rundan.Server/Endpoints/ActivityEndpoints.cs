@@ -189,6 +189,7 @@ internal static class ActivityEndpoints
                 ? req.TargetValue
                 : null;
             activity.RandomizeQuestions = req.RandomizeQuestions;
+            activity.HideQuestionsFromHost = req.HideQuestionsFromHost;
             activity.IsPublic = req.IsPublic;
             activity.ScoreEntryMode = req.ScoreEntryMode;
             activity.Latitude = req.Latitude;

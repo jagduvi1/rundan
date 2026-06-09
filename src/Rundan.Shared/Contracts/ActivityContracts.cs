@@ -54,6 +54,9 @@ public class ActivityDto
     /// <summary>Serve question activities in a random order per player.</summary>
     public bool RandomizeQuestions { get; set; }
 
+    /// <summary>Hide question text/answers from the host's management view (host plays too). Players still see them.</summary>
+    public bool HideQuestionsFromHost { get; set; }
+
     /// <summary>Reusable from the library in other events.</summary>
     public bool IsPublic { get; set; }
 
@@ -133,6 +136,7 @@ public class UpdateActivityRequest
     public Measurement Measurement { get; set; } = Measurement.Points;
     public int? TargetValue { get; set; }
     public bool RandomizeQuestions { get; set; }
+    public bool HideQuestionsFromHost { get; set; }
     public bool IsPublic { get; set; }
     public ScoreEntryMode ScoreEntryMode { get; set; } = ScoreEntryMode.Team;
     public double? Latitude { get; set; }

@@ -48,8 +48,23 @@ internal static class QuestionEndpoints
 
         app.MapGet("/api/activities/{id:int}/questions/admin", async (int id, AppDbContext db, CancellationToken ct) =>
         {
+            var activity = await db.Activities.AsNoTracking().FirstOrDefaultAsync(a => a.Id == id, ct);
+            if (activity is null)
+            {
+                return Results.NotFound();
+            }
+
             var questions = await LoadOrderedAsync(db, id, ct);
-            return Results.Ok(questions.Select(q => q.ToAdminDto()));
+            var dtos = questions.Select(q => q.ToAdminDto());
+
+            // When the host plays too, blank the text/answers server-side so the real content never
+            // reaches their browser — they can still reorder, place, and delete by number.
+            if (activity.HideQuestionsFromHost)
+            {
+                dtos = dtos.Select(Mask);
+            }
+
+            return Results.Ok(dtos.ToList());
         }).AddEndpointFilter<ActivityManagerFilter>();
 
         app.MapPost("/api/activities/{id:int}/questions", async (
@@ -226,6 +241,24 @@ internal static class QuestionEndpoints
             : q.Options.Count >= 2
               && q.Options.Count(o => o.IsCorrect) == 1
               && q.Options.All(o => !string.IsNullOrWhiteSpace(o.Text)));
+
+    // Blanks a question's content for the host's view (text, answers, options, image) while keeping
+    // what's needed to manage it (order, kind, points, geofence).
+    private static QuestionAdminDto Mask(QuestionAdminDto q) => new()
+    {
+        Id = q.Id,
+        Order = q.Order,
+        Kind = q.Kind,
+        Points = q.Points,
+        Latitude = q.Latitude,
+        Longitude = q.Longitude,
+        RadiusMeters = q.RadiusMeters,
+        Hidden = true,
+        Text = string.Empty,
+        ImageUrl = null,
+        AcceptedFreeTextAnswer = null,
+        Options = new(),
+    };
 
     private static Task<List<Question>> LoadOrderedAsync(AppDbContext db, int activityId, CancellationToken ct) =>
         db.Questions.AsNoTracking()
