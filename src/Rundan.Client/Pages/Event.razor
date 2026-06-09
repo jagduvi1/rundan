@@ -253,39 +253,47 @@ else
             {
                 var a = _event.Activities[i];
                 var index = i;
-                <div class="row wrap" style="border-bottom:1px solid var(--line);padding:.4rem 0;gap:.3rem">
-                    <span class="grow"><b>@a.Order. @a.Title</b> <StatusBadge Status="a.Status" /></span>
+                <div style="border-bottom:1px solid var(--line);padding:.55rem 0;display:flex;flex-direction:column;gap:.45rem">
+                    @* Row 1: number + title across the full width, reorder arrows right-aligned *@
+                    <div class="row">
+                        <span class="grow"><b>@a.Order. @a.Title</b></span>
+                        <button class="btn small ghost" title="Move up" @onclick="() => MoveAsync(a.Id, -1)"
+                                disabled="@(_busy || index == 0)">↑</button>
+                        <button class="btn small ghost" title="Move down" @onclick="() => MoveAsync(a.Id, 1)"
+                                disabled="@(_busy || index == _event.Activities.Count - 1)">↓</button>
+                    </div>
 
-                    <button class="btn small ghost" title="Move up" @onclick="() => MoveAsync(a.Id, -1)"
-                            disabled="@(_busy || index == 0)">↑</button>
-                    <button class="btn small ghost" title="Move down" @onclick="() => MoveAsync(a.Id, 1)"
-                            disabled="@(_busy || index == _event.Activities.Count - 1)">↓</button>
+                    @* Row 2: status action(s) + simulate *@
+                    <div class="row wrap">
+                        @foreach (var (label, status) in HostActions(a.Status))
+                        {
+                            <button class="btn small success" @onclick="() => SetStatusAsync(a.Id, status)"
+                                    disabled="@(_busy || (status == ActivityStatus.Live && _event.PendingSlap is not null && _event.PendingSlap.ActivityId != a.Id))">
+                                @label
+                            </button>
+                        }
+                        @if (a.Status != ActivityStatus.Draft)
+                        {
+                            <button class="btn small ghost" title="Deactivate but keep in the event"
+                                    @onclick="() => SetStatusAsync(a.Id, ActivityStatus.Draft)" disabled="@_busy">Pause</button>
+                        }
+                        <button class="btn small secondary" @onclick="() => SimulateActivityAsync(a.Id)" disabled="@_busy">Simulate</button>
+                    </div>
 
-                    @foreach (var (label, status) in HostActions(a.Status))
-                    {
-                        <button class="btn small success" @onclick="() => SetStatusAsync(a.Id, status)"
-                                disabled="@(_busy || (status == ActivityStatus.Live && _event.PendingSlap is not null && _event.PendingSlap.ActivityId != a.Id))">
-                            @label
-                        </button>
-                    }
-                    @if (a.Status != ActivityStatus.Draft)
-                    {
-                        <button class="btn small ghost" title="Deactivate but keep in the event"
-                                @onclick="() => SetStatusAsync(a.Id, ActivityStatus.Draft)" disabled="@_busy">Pause</button>
-                    }
-
-                    <button class="btn small secondary" @onclick="() => SimulateActivityAsync(a.Id)" disabled="@_busy">Simulate</button>
-                    <a class="btn small ghost" href="@($"manage/{a.Id}")">Edit</a>
-
-                    @if (_confirmDeleteId == a.Id)
-                    {
-                        <button class="btn small danger" @onclick="() => RemoveActivityAsync(a.Id)" disabled="@_busy">Remove?</button>
-                        <button class="btn small ghost" @onclick="() => _confirmDeleteId = null">Cancel</button>
-                    }
-                    else
-                    {
-                        <button class="btn small ghost danger" @onclick="() => _confirmDeleteId = a.Id" disabled="@_busy">Remove</button>
-                    }
+                    @* Row 3: status badge + edit + remove *@
+                    <div class="row wrap">
+                        <StatusBadge Status="a.Status" />
+                        <a class="btn small ghost" href="@($"manage/{a.Id}")">Edit</a>
+                        @if (_confirmDeleteId == a.Id)
+                        {
+                            <button class="btn small danger" @onclick="() => RemoveActivityAsync(a.Id)" disabled="@_busy">Remove?</button>
+                            <button class="btn small ghost" @onclick="() => _confirmDeleteId = null">Cancel</button>
+                        }
+                        else
+                        {
+                            <button class="btn small ghost danger" @onclick="() => _confirmDeleteId = a.Id" disabled="@_busy">Remove</button>
+                        }
+                    </div>
                 </div>
             }
 
