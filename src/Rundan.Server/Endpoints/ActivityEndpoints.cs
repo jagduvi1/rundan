@@ -194,6 +194,9 @@ internal static class ActivityEndpoints
             activity.Latitude = req.Latitude;
             activity.Longitude = req.Longitude;
             activity.RadiusMeters = req.RadiusMeters;
+            activity.MatchFormat = req.MatchFormat;
+            activity.BestOfSets = req.BestOfSets is 1 or 3 or 5 ? req.BestOfSets : 3;
+            activity.GamesToWinSet = Math.Clamp(req.GamesToWinSet, 1, 100);
             await db.SaveChangesAsync(ct);
             return Results.Ok(await LoadDtoAsync(db, id, ct));
         }).AddEndpointFilter<ActivityManagerFilter>();

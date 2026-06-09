@@ -134,7 +134,7 @@ public sealed class SimulationService(AppDbContext db, TeamService teams, Bracke
             }
 
             var winner = Random.Shared.Next(2) == 0 ? match.ParticipantAId!.Value : match.ParticipantBId!.Value;
-            await brackets.RecordResultAsync(activityId, match.Id, winner, ct);
+            await brackets.RecordResultAsync(activityId, match.Id, sets: null, explicitWinnerId: winner, ct);
         }
     }
 

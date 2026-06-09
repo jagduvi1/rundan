@@ -36,6 +36,15 @@ public class Activity
     /// <summary>Target value for <see cref="ScoringMode.ClosestToTarget"/> (e.g. 147 seconds = 2:27).</summary>
     public int? TargetValue { get; set; }
 
+    /// <summary>Boule: how a match result is entered (free single score vs best-of sets).</summary>
+    public MatchFormat MatchFormat { get; set; } = MatchFormat.Free;
+
+    /// <summary>Boule sets mode: how many sets a match is (best of N — 1, 3 or 5).</summary>
+    public int BestOfSets { get; set; } = 3;
+
+    /// <summary>Boule sets mode: games needed to win a set (guidance for the result popup, e.g. 13 for pétanque).</summary>
+    public int GamesToWinSet { get; set; } = 13;
+
     /// <summary>For question activities: serve the questions in a random order per player.</summary>
     public bool RandomizeQuestions { get; set; }
 

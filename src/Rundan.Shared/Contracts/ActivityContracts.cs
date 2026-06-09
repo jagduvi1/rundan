@@ -42,6 +42,15 @@ public class ActivityDto
     /// <summary>Target value for ClosestToTarget scoring (e.g. 147 = 2:27 in seconds).</summary>
     public int? TargetValue { get; set; }
 
+    /// <summary>Boule: how a match result is entered (free single score vs best-of sets).</summary>
+    public MatchFormat MatchFormat { get; set; }
+
+    /// <summary>Boule sets mode: sets per match (best of N — 1, 3 or 5).</summary>
+    public int BestOfSets { get; set; } = 3;
+
+    /// <summary>Boule sets mode: games to win a set (e.g. 13 for pétanque).</summary>
+    public int GamesToWinSet { get; set; } = 13;
+
     /// <summary>Serve question activities in a random order per player.</summary>
     public bool RandomizeQuestions { get; set; }
 
@@ -121,6 +130,11 @@ public class UpdateActivityRequest
     public double? Latitude { get; set; }
     public double? Longitude { get; set; }
     public int? RadiusMeters { get; set; }
+
+    /// <summary>Boule match result format + sets settings.</summary>
+    public MatchFormat MatchFormat { get; set; }
+    public int BestOfSets { get; set; } = 3;
+    public int GamesToWinSet { get; set; } = 13;
 }
 
 /// <summary>Admin request to change activity status (open / start / finish / reset).</summary>

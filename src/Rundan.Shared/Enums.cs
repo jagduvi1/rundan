@@ -67,6 +67,16 @@ public enum EventScoring
     Placement = 1,
 }
 
+/// <summary>How a Boule (bracket) match result is entered.</summary>
+public enum MatchFormat
+{
+    /// <summary>A single score per match — higher wins (football-style free scoring).</summary>
+    Free = 0,
+
+    /// <summary>Best-of-N sets; each set is a score, the match goes to whoever wins the most sets (tennis-style).</summary>
+    Sets = 1,
+}
+
 /// <summary>How an event forms its teams across its activities.</summary>
 public enum TeamShuffle
 {
