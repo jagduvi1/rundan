@@ -46,7 +46,7 @@ else
         <div class="card stack">
             @if (!string.IsNullOrEmpty(_activity.ImageUrl))
             {
-                <img src="@_activity.ImageUrl" alt="" style="width:100%;border-radius:var(--radius-md)" />
+                <img src="@_activity.ImageUrl" alt="" class="media-img" />
             }
             @if (!string.IsNullOrWhiteSpace(_activity.Description))
             {

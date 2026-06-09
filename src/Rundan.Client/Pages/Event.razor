@@ -31,7 +31,7 @@ else
         </div>
         @if (!string.IsNullOrEmpty(_event.ImageUrl))
         {
-            <img src="@_event.ImageUrl" alt="" style="width:100%;border-radius:var(--radius-md)" />
+            <img src="@_event.ImageUrl" alt="" class="media-img" />
         }
         @if (!string.IsNullOrWhiteSpace(_event.Description))
         {
