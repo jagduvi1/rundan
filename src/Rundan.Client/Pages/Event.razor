@@ -41,7 +41,18 @@ else
             <span>Event code @_event.JoinCode</span>
             <span>·</span>
             <span>Teams of @_event.TeamSize</span>
+            @if (ScheduleText() is { } sched)
+            {
+                <span>·</span>
+                <span>📅 @sched</span>
+            }
         </div>
+        @if (!EventOpenForMe)
+        {
+            <div class="alert" style="background:var(--coral-50);color:var(--coral-700);border:1px solid var(--coral-100)">
+                @AvailabilityMessage()
+            </div>
+        }
     </div>
 
     @if (_event.PendingSlap is { } slap)
@@ -229,15 +240,15 @@ else
                             <img src="@a.ImageUrl" alt="" class="media-img" />
                         }
 
-                        @* Status + the action (Join lobby / Play now / Join anyway / See results) on its own row. *@
+                        @* Status + the action — join/play only while the event window is open (host always passes). *@
                         <div class="row wrap">
                             <StatusBadge Status="a.Status" />
-                            @if (IsLocked(a))
+                            @if (IsLocked(a) && EventOpenForMe)
                             {
                                 @* The geofence is a nudge, not a hard lock — let players in even if they're not at the spot. *@
                                 <a class="btn ghost small" href="@($"a/{a.Id}")">Join anyway</a>
                             }
-                            else if (a.Status is ActivityStatus.Live or ActivityStatus.Open or ActivityStatus.Finished)
+                            else if (a.Status == ActivityStatus.Finished || (EventOpenForMe && a.Status is ActivityStatus.Live or ActivityStatus.Open))
                             {
                                 <a class="btn small @(a.Status == ActivityStatus.Live ? "" : "secondary")" href="@($"a/{a.Id}")">
                                     @ActionLabel(a.Status)
@@ -475,6 +486,15 @@ else
                 <input @bind="_editName" maxlength="200" />
             </div>
             <div class="field">
+                <label>Available (optional — when players can join &amp; play)</label>
+                <div class="row wrap">
+                    <input type="datetime-local" value="@LocalInput(_editStartsAt)" @onchange="e => _editStartsAt = ParseLocal(e.Value)" />
+                    <span class="muted">to</span>
+                    <input type="datetime-local" value="@LocalInput(_editEndsAt)" @onchange="e => _editEndsAt = ParseLocal(e.Value)" />
+                </div>
+                <p class="muted" style="font-size:.8rem">Outside this window players see "starts at…/ended" and can't join or play — you always have access. Leave blank for always-on.</p>
+            </div>
+            <div class="field">
                 <label>Rules / info</label>
                 <RichTextEditor @key="_event.Id" Value="@_editDescription" ValueChanged="v => _editDescription = v"
                                 Placeholder="Explain how the event works — use the toolbar for bullet lists" />
@@ -591,7 +611,75 @@ else
     private TeamShuffle _editTeamShuffle = TeamShuffle.EveryActivity;
     private List<TeamDto> _fixedTeams = new();
     private SlapMode _editSlapMode = SlapMode.Off;
+    private DateTime? _editStartsAt;
+    private DateTime? _editEndsAt;
     private string _editCode = string.Empty;
+
+    // --- Availability window ---------------------------------------------------------------
+    // True when "now" is inside the event's window (or it has no window).
+    private bool EventAvailableNow => _event is null
+        || ((_event.StartsAt is not { } s || DateTime.Now >= s)
+            && (_event.EndsAt is not { } e || DateTime.Now <= e));
+
+    // The window gates players only — the host (CanManage) always has access.
+    private bool EventOpenForMe => EventAvailableNow || CanManage;
+
+    // Fixed culture so the English copy around these labels isn't mixed with browser-localised names.
+    private static readonly System.Globalization.CultureInfo Inv = System.Globalization.CultureInfo.InvariantCulture;
+
+    private static string LocalInput(DateTime? d) => d?.ToString("yyyy-MM-ddTHH:mm", Inv) ?? string.Empty;
+    private static DateTime? ParseLocal(object? v) =>
+        DateTime.TryParse(v?.ToString(), out var d) ? d : null;
+
+    // "Sat 9 Jun, 10:00–16:00" / "From …" / "Until …", or null if no window set.
+    private string? ScheduleText()
+    {
+        if (_event is null || (_event.StartsAt is null && _event.EndsAt is null))
+        {
+            return null;
+        }
+
+        if (_event.StartsAt is { } st && _event.EndsAt is { } en)
+        {
+            return st.Date == en.Date
+                ? $"{st.ToString("ddd d MMM, HH:mm", Inv)}–{en.ToString("HH:mm", Inv)}"
+                : $"{st.ToString("ddd d MMM HH:mm", Inv)} – {en.ToString("ddd d MMM HH:mm", Inv)}";
+        }
+
+        return _event.StartsAt is { } s
+            ? $"From {s.ToString("ddd d MMM, HH:mm", Inv)}"
+            : $"Until {_event!.EndsAt!.Value.ToString("ddd d MMM, HH:mm", Inv)}";
+    }
+
+    // Shown to players who are outside the window (the host never sees this).
+    private string AvailabilityMessage() => _event?.StartsAt is { } s && DateTime.Now < s
+        ? $"This event opens {s.ToString("dddd d MMM 'at' HH:mm", Inv)} — you'll be able to join then."
+        : "This event has ended — you can look around, but can't join or play.";
+
+    // DateTime.Now is only read at render, and nothing re-renders purely on the clock — so while a window
+    // boundary is still ahead, tick every 30s to lift/close the gate on time, then stop.
+    private System.Threading.Timer? _clock;
+
+    private bool BoundaryPending => _event is not null
+        && ((_event.StartsAt is { } s2 && DateTime.Now < s2) || (_event.EndsAt is { } e2 && DateTime.Now < e2));
+
+    private void EnsureClock()
+    {
+        if (!BoundaryPending || _clock is not null)
+        {
+            return;
+        }
+
+        _clock = new System.Threading.Timer(_ => _ = InvokeAsync(() =>
+        {
+            StateHasChanged();
+            if (!BoundaryPending)
+            {
+                _clock?.Dispose();
+                _clock = null;
+            }
+        }), null, 30_000, 30_000);
+    }
 
     private int _slapTarget;
     private int _slapRecipient;
@@ -721,6 +809,7 @@ else
             _standings = await Api.GetEventStandingsAsync(Id);
             await StartConnectionAsync();
             await StartGeoAsync();
+            EnsureClock();
         }
 
         _loading = false;
@@ -839,6 +928,8 @@ else
         _editScoring = _event.Scoring;
         _editTeamShuffle = _event.TeamShuffle;
         _editSlapMode = _event.SlapMode;
+        _editStartsAt = _event.StartsAt;
+        _editEndsAt = _event.EndsAt;
         _editCode = _event.JoinCode;
     }
 
@@ -927,6 +1018,7 @@ else
         }
 
         CheckArrivals();
+        EnsureClock();
 
         if (_conn is not null && _event is not null)
         {
@@ -1175,6 +1267,8 @@ else
                 Scoring = _editScoring,
                 TeamShuffle = _editTeamShuffle,
                 SlapMode = _editSlapMode,
+                StartsAt = _editStartsAt,
+                EndsAt = _editEndsAt,
             });
             SyncEditFields();
             await LoadFixedTeamsAsync();
@@ -1445,6 +1539,8 @@ else
         _pos = null;
         _geoFailed = false;
         _arrivedPromptId = null;
+        _clock?.Dispose();
+        _clock = null;
     }
 
     public async ValueTask DisposeAsync() => await TeardownAsync();

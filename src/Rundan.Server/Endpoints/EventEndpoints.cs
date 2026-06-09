@@ -137,6 +137,11 @@ internal static class EventEndpoints
                 throw new RuleViolationException("Give the event a name.");
             }
 
+            if (req.StartsAt is { } start && req.EndsAt is { } end && end <= start)
+            {
+                throw new RuleViolationException("The event's end time must be after its start.");
+            }
+
             var teamModeChanged = ev.TeamShuffle != req.TeamShuffle;
 
             ev.Name = req.Name.Trim();
@@ -152,6 +157,8 @@ internal static class EventEndpoints
             }
 
             ev.SlapMode = req.SlapMode;
+            ev.StartsAt = req.StartsAt;
+            ev.EndsAt = req.EndsAt;
             await db.SaveChangesAsync(ct);
 
             // Switching how teams are formed re-forms the not-yet-played activities' teams.
