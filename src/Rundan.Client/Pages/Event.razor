@@ -212,30 +212,32 @@ else
             <ul class="list">
                 @foreach (var a in _event.Activities)
                 {
-                    <li>
-                        <span class="grow">
-                            <b>@a.Order. @a.Title</b>
-                            <span class="muted" style="font-size:.8rem"> · @Fmt.TypeLabel(a.Type)</span>
+                    <li style="flex-direction:column;align-items:stretch;gap:.3rem">
+                        @* Row 1: number + title, status, and the action — one tidy line. *@
+                        <div class="row">
+                            <b class="grow">@a.Order. @a.Title</b>
+                            <StatusBadge Status="a.Status" />
+                            @if (!IsLocked(a) && a.Status is ActivityStatus.Live or ActivityStatus.Open or ActivityStatus.Finished)
+                            {
+                                <a class="btn small @(a.Status == ActivityStatus.Live ? "" : "secondary")" href="@($"a/{a.Id}")">
+                                    @ActionLabel(a.Status)
+                                </a>
+                            }
+                        </div>
+                        @* Row 2: type · your team · (walk-there directions while it's location-locked). *@
+                        <div class="row wrap" style="font-size:.8rem;gap:.4rem">
+                            <span class="muted">@Fmt.TypeLabel(a.Type)</span>
                             @if (_teamByActivity.TryGetValue(a.Id, out var team) && !string.IsNullOrEmpty(team))
                             {
-                                <span class="sub" style="display:block;font-size:.8rem;color:var(--sea-600)">Your team: @team</span>
+                                <span style="color:var(--sea-600)">Your team: @team</span>
                             }
-                        </span>
-                        <StatusBadge Status="a.Status" />
-                        @if ((a.Status is ActivityStatus.Live or ActivityStatus.Open) && a.HasLocation
-                             && !_geoFailed && _distances.ContainsKey(a.Id) && !WithinRadius(a))
-                        {
-                            @* Only lock when we actually have a fix that's out of range — never trap a
-                               player who denied location / is on desktop / hasn't got a fix yet. *@
-                            <a class="btn ghost small" href="@ActivityMapsUrl(a)" target="_blank" rel="noopener">Maps</a>
-                            <span class="muted" style="font-size:.82rem">@LockText(a)</span>
-                        }
-                        else if (a.Status is ActivityStatus.Live or ActivityStatus.Open or ActivityStatus.Finished)
-                        {
-                            <a class="btn small @(a.Status == ActivityStatus.Live ? "" : "secondary")" href="@($"a/{a.Id}")">
-                                @ActionLabel(a.Status)
-                            </a>
-                        }
+                            @if (IsLocked(a))
+                            {
+                                <span class="grow"></span>
+                                <a class="btn ghost small" href="@ActivityMapsUrl(a)" target="_blank" rel="noopener">Maps</a>
+                                <span class="muted">@LockText(a)</span>
+                            }
+                        </div>
                     </li>
                 }
             </ul>
@@ -513,7 +515,7 @@ else
             </div>
             <div class="field">
                 <label>Picture / map</label>
-                <ImageUploader Value="_editImage" ValueChanged="v => _editImage = v" />
+                <ImageUploader Value="@_editImage" ValueChanged="v => _editImage = v" />
             </div>
             <button class="btn block success" @onclick="SaveEventAsync" disabled="@_busy">Save event details</button>
         </div>
@@ -800,6 +802,11 @@ else
 
     private static int RadiusOf(ActivityDto a) => a.RadiusMeters is > 0 ? a.RadiusMeters.Value : 25;
     private bool WithinRadius(ActivityDto a) => _distances.TryGetValue(a.Id, out var d) && d <= RadiusOf(a);
+
+    // Open/Live activity with a geofence the player has a fix for but isn't inside yet (so it's "walk there").
+    private bool IsLocked(ActivityDto a) =>
+        (a.Status is ActivityStatus.Live or ActivityStatus.Open) && a.HasLocation
+        && !_geoFailed && _distances.ContainsKey(a.Id) && !WithinRadius(a);
     private string LockText(ActivityDto a) => _distances.TryGetValue(a.Id, out var d)
         ? $"Walk closer · {(int)Math.Round(d)} m"
         : "Walk to the spot";
