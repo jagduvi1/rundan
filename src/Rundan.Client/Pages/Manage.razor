@@ -430,6 +430,7 @@ else
                 break;
             case ActivityStatus.Live:
                 yield return ("Finish", ActivityStatus.Finished, "");
+                yield return ("Back to draft", ActivityStatus.Draft, "secondary");
                 break;
             case ActivityStatus.Finished:
                 yield return ("Re-open", ActivityStatus.Live, "secondary");
