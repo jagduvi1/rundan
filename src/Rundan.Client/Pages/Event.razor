@@ -229,18 +229,21 @@ else
                                 </a>
                             }
                         </div>
-                        @* Row 2: type · your team · (walk-there directions while it's location-locked). *@
+                        @* Row 2: type · your team · (map link for any geofenced activity + distance when locked). *@
                         <div class="row wrap" style="font-size:.8rem;gap:.4rem">
                             <span class="muted">@Fmt.TypeLabel(a.Type)</span>
                             @if (_teamByActivity.TryGetValue(a.Id, out var team) && !string.IsNullOrEmpty(team))
                             {
                                 <span style="color:var(--sea-600)">Your team: @team</span>
                             }
-                            @if (IsLocked(a))
+                            @if (a.HasLocation)
                             {
                                 <span class="grow"></span>
-                                <a class="btn ghost small" href="@ActivityMapsUrl(a)" target="_blank" rel="noopener">Maps</a>
-                                <span class="muted">@LockText(a)</span>
+                                <a class="btn ghost small" href="@ActivityMapsUrl(a)" target="_blank" rel="noopener" title="See where it is on a map">Map</a>
+                                @if (IsLocked(a))
+                                {
+                                    <span class="muted">@LockText(a)</span>
+                                }
                             }
                         </div>
                     </li>
