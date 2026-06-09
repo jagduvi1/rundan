@@ -66,6 +66,30 @@ else
             <input @bind="_editTitle" maxlength="200" />
         </div>
         <div class="field">
+            <label>Activity type</label>
+            @if (_activity.Status == ActivityStatus.Draft)
+            {
+                <select @bind="_editType" @bind:after="OnTypeChanged">
+                    <option value="@ActivityType.Quiz">Quiz</option>
+                    <option value="@ActivityType.Tipspromenad">Tipspromenad (quiz walk)</option>
+                    <option value="@ActivityType.Boule">Boule (knockout)</option>
+                    <option value="@ActivityType.ScoreGame">Other score game</option>
+                    <option value="@ActivityType.WordGame">Word game</option>
+                    <option value="@ActivityType.MapPin">Pin the city (map)</option>
+                    <option value="@ActivityType.MusicQuiz">Music quiz</option>
+                </select>
+                @if (_editType != _activity.Type)
+                {
+                    <p style="font-size:.82rem;color:var(--coral-700)">⚠ Changing the type clears this activity's questions/content — it applies when you save the details below.</p>
+                }
+            }
+            else
+            {
+                <input value="@Fmt.TypeLabel(_activity.Type)" disabled />
+                <p class="muted" style="font-size:.8rem">Locked once the activity has opened — set it back to Draft to change it.</p>
+            }
+        </div>
+        <div class="field">
             <label>Rules / info</label>
             <RichTextEditor @key="_activity.Id" Value="@_editDescription" ValueChanged="v => _editDescription = v"
                             Placeholder="Explain how this game works — use the toolbar for bullet lists" />
@@ -267,6 +291,7 @@ else
     private bool _copied;
     private string? _error;
 
+    private ActivityType _editType = ActivityType.Quiz;
     private string _editTitle = string.Empty;
     private string? _editDescription;
     private string? _editImage;
@@ -312,6 +337,7 @@ else
         _activity = await Api.GetActivityAsync(Id);
         if (_activity is not null)
         {
+            _editType = _activity.Type;
             _editTitle = _activity.Title;
             _editDescription = _activity.Description;
             _editImage = _activity.ImageUrl;
@@ -400,6 +426,13 @@ else
         }
     }
 
+    // Switching type resets scoring to that type's sensible default (distance/MapPin is lowest-wins).
+    private void OnTypeChanged()
+    {
+        _editScoringMode = _editType == ActivityType.MapPin ? ScoringMode.LowerWins : ScoringMode.HigherWins;
+        _editMeasurement = Measurement.Points;
+    }
+
     private void OnLocationChanged((double? Lat, double? Lng, int Radius) loc)
     {
         _editLat = loc.Lat;
@@ -418,6 +451,7 @@ else
         {
             _activity = await Api.UpdateActivityAsync(Id, new UpdateActivityRequest
             {
+                Type = _editType,
                 Title = _editTitle.Trim(),
                 Description = _editDescription,
                 ImageUrl = _editImage,

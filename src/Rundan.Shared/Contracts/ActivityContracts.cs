@@ -132,6 +132,9 @@ public class CreateActivityRequest
 /// <summary>Admin request to update an activity's details (title / rules / picture / scoring / geofence).</summary>
 public class UpdateActivityRequest
 {
+    /// <summary>The activity type. Changing it is only allowed while Draft and clears the old type's content.</summary>
+    public ActivityType Type { get; set; } = ActivityType.Quiz;
+
     public string Title { get; set; } = string.Empty;
     public string? Description { get; set; }
     public string? ImageUrl { get; set; }

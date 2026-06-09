@@ -227,6 +227,24 @@ internal static class ActivityEndpoints
                 throw new RuleViolationException("Give the activity a title.");
             }
 
+            // Changing the type is only allowed while Draft, and abandons the old type's authored
+            // content (questions, courts, drawn cities, bracket) — safe since nothing has been played.
+            if (req.Type != activity.Type)
+            {
+                if (activity.Status != ActivityStatus.Draft)
+                {
+                    throw new RuleViolationException(
+                        "Change the activity's type only while it's a draft.", StatusCodes.Status409Conflict);
+                }
+
+                db.Questions.RemoveRange(db.Questions.Where(q => q.ActivityId == id));
+                db.Courts.RemoveRange(db.Courts.Where(c => c.ActivityId == id));
+                db.MapCities.RemoveRange(db.MapCities.Where(c => c.ActivityId == id));
+                db.BracketMatches.RemoveRange(db.BracketMatches.Where(m => m.ActivityId == id));
+                db.ScoreEntries.RemoveRange(db.ScoreEntries.Where(s => s.ActivityId == id));
+                activity.Type = req.Type;
+            }
+
             activity.Title = req.Title.Trim();
             activity.Description = TextHelpers.Clean(req.Description);
             activity.ImageUrl = TextHelpers.Clean(req.ImageUrl);
