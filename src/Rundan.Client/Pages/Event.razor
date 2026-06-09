@@ -228,9 +228,22 @@ else
                         <div>
                             <b>@a.Order. @a.Title</b>
                             <div class="muted" style="font-size:.85rem">@Fmt.TypeLabel(a.Type)</div>
-                            @if (_teamByActivity.TryGetValue(a.Id, out var team) && !string.IsNullOrEmpty(team))
+                            @{
+                                var ownTeam = _teamByActivity.TryGetValue(a.Id, out var ot) && !string.IsNullOrEmpty(ot) ? ot : null;
+                                var proxyTeam = ProxyTeam(a.Id);
+                            }
+                            @if (proxyTeam is not null)
                             {
-                                <div style="font-size:.8rem;color:var(--sea-600)">Your team: @team</div>
+                                @* Playing as someone else: show their team (primary) and your own (secondary). *@
+                                <div style="font-size:.8rem;color:var(--sea-600)">@State.Proxy!.Name's team: @proxyTeam</div>
+                                @if (ownTeam is not null)
+                                {
+                                    <div style="font-size:.75rem;color:var(--sea-400)">Your own team: @ownTeam</div>
+                                }
+                            }
+                            else if (ownTeam is not null)
+                            {
+                                <div style="font-size:.8rem;color:var(--sea-600)">Your team: @ownTeam</div>
                             }
                         </div>
 
@@ -701,6 +714,12 @@ else
 
     // The user id we're acting as: the proxied player if covering one, else our own claim.
     private int? ActingUserId => ProxyHere ? State.Proxy!.UserId : _userId;
+
+    // The team the proxied player is on for this activity (null when not proxying or not covered).
+    private string? ProxyTeam(int activityId) =>
+        ProxyHere && State.Proxy!.Sessions.TryGetValue(activityId, out var s) && !string.IsNullOrEmpty(s.DisplayName)
+            ? s.DisplayName
+            : null;
 
     private bool IsMe(string name) =>
         string.Equals(name, _eventName, StringComparison.Ordinal)
