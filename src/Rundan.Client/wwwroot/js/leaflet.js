@@ -119,6 +119,57 @@ export function createPicker(elementId, lat, lng, radius, dotNetRef) {
     return handle;
 }
 
+// ---- MapPin "guesser": a label-free map; tap to drop a guess pin, then reveal the real spot ----
+export function createGuesser(elementId, dotNetRef) {
+    const map = L.map(elementId, { zoomControl: true }).setView([62.5, 16.5], 4); // Sweden
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
+        maxZoom: 12, minZoom: 3, subdomains: 'abcd',
+        attribution: '&copy; <a href="https://carto.com/">CARTO</a> &copy; OpenStreetMap'
+    }).addTo(map);
+
+    const handle = { map, guess: null, real: null, line: null, dotNetRef, locked: false };
+    map.on('click', e => {
+        if (handle.locked) return;
+        if (!handle.guess) {
+            handle.guess = L.marker(e.latlng, { draggable: true }).addTo(map);
+            handle.guess.on('dragend', () => {
+                const p = handle.guess.getLatLng();
+                handle.dotNetRef.invokeMethodAsync('OnPinned', p.lat, p.lng);
+            });
+        } else {
+            handle.guess.setLatLng(e.latlng);
+        }
+        handle.dotNetRef.invokeMethodAsync('OnPinned', e.latlng.lat, e.latlng.lng);
+    });
+    setTimeout(() => map.invalidateSize(), 200);
+    return handle;
+}
+
+export function guesserReveal(handle, realLat, realLng) {
+    handle.locked = true;
+    if (handle.guess && handle.guess.dragging) handle.guess.dragging.disable();
+    handle.real = L.circleMarker([realLat, realLng], {
+        radius: 8, color: '#16a34a', fillColor: '#16a34a', fillOpacity: 0.9, weight: 2
+    }).addTo(handle.map).bindPopup('Actual location').openPopup();
+    if (handle.guess) {
+        const g = handle.guess.getLatLng();
+        handle.line = L.polyline([[g.lat, g.lng], [realLat, realLng]], {
+            color: '#dc2626', weight: 2, dashArray: '5 5'
+        }).addTo(handle.map);
+        handle.map.fitBounds(L.latLngBounds([[g.lat, g.lng], [realLat, realLng]]), { padding: [50, 50], maxZoom: 9 });
+    }
+}
+
+export function guesserReset(handle) {
+    handle.locked = false;
+    for (const k of ['guess', 'real', 'line']) {
+        if (handle[k]) { handle.map.removeLayer(handle[k]); handle[k] = null; }
+    }
+    handle.map.setView([62.5, 16.5], 4);
+}
+
+export function disposeGuesser(handle) { if (handle && handle.map) handle.map.remove(); }
+
 export function pickerSetRadius(handle, r) { handle.radius = r; if (handle.circle) handle.circle.setRadius(r); }
 export function pickerSetCenter(handle, lat, lng) { handle.place([lat, lng]); handle.map.setView([lat, lng], 16); }
 export function pickerClear(handle) {

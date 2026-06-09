@@ -242,6 +242,14 @@ public sealed class RundanApi(HttpClient http, AppState state)
         (await SendAsync<ScoreEntryDto>(
             HttpMethod.Post, $"api/activities/{id}/scores", body: request, participantToken: token))!;
 
+    // ---- MapPin (player) ---------------------------------------------------
+    public Task<List<MapCityDto>> GetMapCitiesAsync(int id, Guid token) =>
+        GetListAsync<MapCityDto>($"api/activities/{id}/map-cities", participantToken: token);
+
+    public async Task<MapPinResultDto> SubmitMapPinAsync(int id, MapPinRequest request, Guid token) =>
+        (await SendAsync<MapPinResultDto>(
+            HttpMethod.Post, $"api/activities/{id}/map-pin", body: request, participantToken: token))!;
+
     // ---- Dry run (simulate / clear results) --------------------------------
     public async Task<ActivityDto> SimulateActivityAsync(int id) =>
         (await SendAsync<ActivityDto>(HttpMethod.Post, $"api/activities/{id}/simulate", admin: true))!;

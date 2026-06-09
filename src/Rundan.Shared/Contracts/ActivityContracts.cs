@@ -29,6 +29,9 @@ public class ActivityDto
     public double? Longitude { get; set; }
     public int? RadiusMeters { get; set; }
 
+    /// <summary>MapPin only: how many cities to draw (defaults to 5 when null).</summary>
+    public int? MapCityCount { get; set; }
+
     public bool HasLocation => Latitude.HasValue && Longitude.HasValue;
 
     /// <summary>Short human-friendly code people type in to join (e.g. "FOX-417").</summary>
@@ -143,10 +146,44 @@ public class UpdateActivityRequest
     public double? Longitude { get; set; }
     public int? RadiusMeters { get; set; }
 
+    /// <summary>MapPin only: how many cities to draw (defaults to 5 when null).</summary>
+    public int? MapCityCount { get; set; }
+
     /// <summary>Boule match result format + sets settings.</summary>
     public MatchFormat MatchFormat { get; set; }
     public int BestOfSets { get; set; } = 3;
     public int GamesToWinSet { get; set; } = 13;
+}
+
+/// <summary>One city in a MapPin game as the player sees it — the real location is never sent until pinned.</summary>
+public class MapCityDto
+{
+    public int Id { get; set; }
+    public int Order { get; set; }
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>True once the team has placed a pin for this city.</summary>
+    public bool Pinned { get; set; }
+
+    /// <summary>The team's distance for this city, km (set only when Pinned).</summary>
+    public double? DistanceKm { get; set; }
+}
+
+/// <summary>Player places (or re-places) a pin for one city.</summary>
+public class MapPinRequest
+{
+    public int CityId { get; set; }
+    public double Lat { get; set; }
+    public double Lng { get; set; }
+}
+
+/// <summary>Result of a pin: the real location is revealed so the client can show it + the distance.</summary>
+public class MapPinResultDto
+{
+    public int CityId { get; set; }
+    public double DistanceKm { get; set; }
+    public double RealLat { get; set; }
+    public double RealLng { get; set; }
 }
 
 /// <summary>Admin request to change activity status (open / start / finish / reset).</summary>

@@ -121,6 +121,7 @@ app.MapActivityEndpoints();
 app.MapParticipantEndpoints();
 app.MapQuestionEndpoints();
 app.MapGameplayEndpoints();
+app.MapMapPinEndpoints();
 app.MapBracketEndpoints();
 app.MapWordGameEndpoints();
 app.MapSimulationEndpoints();

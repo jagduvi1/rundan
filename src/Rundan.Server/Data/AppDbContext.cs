@@ -22,6 +22,7 @@ public class AppDbContext : DbContext
     public DbSet<AnswerOption> AnswerOptions => Set<AnswerOption>();
     public DbSet<Answer> Answers => Set<Answer>();
     public DbSet<ScoreEntry> ScoreEntries => Set<ScoreEntry>();
+    public DbSet<MapCity> MapCities => Set<MapCity>();
     public DbSet<BracketMatch> BracketMatches => Set<BracketMatch>();
     public DbSet<Court> Courts => Set<Court>();
     public DbSet<EventViewer> EventViewers => Set<EventViewer>();
@@ -161,6 +162,16 @@ public class AppDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(x => x.UserId)
                 .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        b.Entity<MapCity>(e =>
+        {
+            e.Property(x => x.Name).HasMaxLength(120).IsRequired();
+            e.HasIndex(x => new { x.ActivityId, x.Order });
+            e.HasOne(x => x.Activity)
+                .WithMany(a => a.MapCities)
+                .HasForeignKey(x => x.ActivityId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         b.Entity<EventViewer>(e =>

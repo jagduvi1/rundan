@@ -22,7 +22,7 @@ else
                         <span class="sub">@entry.Entries of @Board.TotalQuestions answered</span>
                     }
                 </div>
-                <div class="score-row__score">@Fmt.Num(entry.TotalPoints)</div>
+                <div class="score-row__score">@Fmt.Num(entry.TotalPoints)@(IsMapPin ? " km" : "")</div>
             </div>
         }
     </div>
@@ -34,4 +34,6 @@ else
 
     private bool IsQuestionGame =>
         Board?.Type is ActivityType.Quiz or ActivityType.Tipspromenad;
+
+    private bool IsMapPin => Board?.Type is ActivityType.MapPin;
 }

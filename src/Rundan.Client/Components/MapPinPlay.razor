@@ -1,0 +1,146 @@
+@implements IAsyncDisposable
+@inject RundanApi Api
+@inject IJSRuntime JS
+
+<div class="card stack">
+    <h2 style="margin:0">Pin the city</h2>
+
+    @if (_error is not null)
+    {
+        <div class="alert error">@_error</div>
+    }
+
+    @if (_loading)
+    {
+        <div class="center muted"><div class="spinner" style="margin:1rem auto"></div></div>
+    }
+    else if (_current is { } city)
+    {
+        <p class="muted" style="margin:0">
+            City @(city.Order + 1) of @_cities.Count — drop a pin where you think
+            <b style="color:var(--ink)">@city.Name</b> is (the map has no place names).
+        </p>
+        <div id="@MapId" style="height:380px;border-radius:var(--radius-md);overflow:hidden;border:1px solid var(--line)"></div>
+
+        @if (_result is null)
+        {
+            <button class="btn block success" @onclick="SubmitAsync" disabled="@(_pin is null || _busy)">
+                @(_pin is null ? "Tap the map to place your pin" : _busy ? "Checking…" : $"Lock in {city.Name}")
+            </button>
+        }
+        else
+        {
+            <div class="alert" style="background:var(--sea-50);color:var(--sea-700);border:1px solid var(--sea-100)">
+                <b>@city.Name</b> is the green dot — you were <b>@Fmt.Num(_result.DistanceKm) km</b> away.
+            </div>
+            <button class="btn block accent" @onclick="NextAsync">
+                @(AllPinned ? "Finish" : "Next city →")
+            </button>
+        }
+    }
+    else
+    {
+        <div class="alert success">
+            All @_cities.Count cities pinned! Your total is <b>@Fmt.Num(TotalKm) km</b> —
+            lowest total wins, see the scoreboard above.
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public ActivityDto Activity { get; set; } = default!;
+    [Parameter] public PlayerSession Session { get; set; } = default!;
+
+    private LeafletInterop? _map;
+    private DotNetObjectReference<MapPinPlay>? _ref;
+    private List<MapCityDto> _cities = new();
+    private MapCityDto? _current;
+    private (double Lat, double Lng)? _pin;
+    private MapPinResultDto? _result;
+    private bool _loading = true;
+    private bool _busy;
+    private bool _mapReady;
+    private string? _error;
+
+    private string MapId => $"mappin-{Activity.Id}";
+    private bool AllPinned => _cities.Count > 0 && _cities.TrueForAll(c => c.Pinned);
+    private double TotalKm => _cities.Where(c => c.DistanceKm is not null).Sum(c => c.DistanceKm!.Value);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _cities = await Api.GetMapCitiesAsync(Activity.Id, Session.Token);
+            _current = _cities.FirstOrDefault(c => !c.Pinned);
+        }
+        catch (ApiException ex) { _error = ex.Message; }
+        _loading = false;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Create the map once, the first time there's a city to place (the element now exists).
+        if (!_mapReady && !_loading && _current is not null)
+        {
+            _mapReady = true;
+            _ref ??= DotNetObjectReference.Create(this);
+            _map = new LeafletInterop(JS);
+            await _map.InitGuesserAsync(MapId, _ref);
+        }
+    }
+
+    [JSInvokable]
+    public void OnPinned(double lat, double lng)
+    {
+        _pin = (lat, lng);
+        StateHasChanged();
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (_pin is not { } p || _current is not { } city)
+        {
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            _result = await Api.SubmitMapPinAsync(
+                Activity.Id, new MapPinRequest { CityId = city.Id, Lat = p.Lat, Lng = p.Lng }, Session.Token);
+            city.Pinned = true;
+            city.DistanceKm = _result.DistanceKm;
+            if (_map is not null)
+            {
+                await _map.GuesserRevealAsync(_result.RealLat, _result.RealLng);
+            }
+        }
+        catch (ApiException ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task NextAsync()
+    {
+        _result = null;
+        _pin = null;
+        _current = _cities.FirstOrDefault(c => !c.Pinned);
+
+        if (_current is not null && _map is not null)
+        {
+            await _map.GuesserResetAsync();
+        }
+        else if (_current is null)
+        {
+            // Done — the map element is gone from the markup, so tear the map down.
+            if (_map is not null) { await _map.DisposeAsync(); _map = null; }
+            _mapReady = false;
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_map is not null) { await _map.DisposeAsync(); _map = null; }
+        _ref?.Dispose();
+    }
+}

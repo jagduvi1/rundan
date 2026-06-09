@@ -18,6 +18,7 @@ public sealed class LeafletInterop(IJSRuntime js) : IAsyncDisposable
     private IJSObjectReference? _module;
     private IJSObjectReference? _handle;
     private IJSObjectReference? _picker;
+    private IJSObjectReference? _guesser;
 
     public async Task InitAsync(string elementId, double lat, double lng, int zoom = 16)
     {
@@ -88,10 +89,43 @@ public sealed class LeafletInterop(IJSRuntime js) : IAsyncDisposable
         }
     }
 
+    // ---- MapPin guesser ----
+    public async Task InitGuesserAsync(string elementId, object dotNetRef)
+    {
+        _module ??= await js.InvokeAsync<IJSObjectReference>("import", "./js/leaflet.js");
+        _guesser = await _module.InvokeAsync<IJSObjectReference>("createGuesser", elementId, dotNetRef);
+    }
+
+    public async Task GuesserRevealAsync(double lat, double lng)
+    {
+        if (_module is not null && _guesser is not null)
+        {
+            await _module.InvokeVoidAsync("guesserReveal", _guesser, lat, lng);
+        }
+    }
+
+    public async Task GuesserResetAsync()
+    {
+        if (_module is not null && _guesser is not null)
+        {
+            await _module.InvokeVoidAsync("guesserReset", _guesser);
+        }
+    }
+
     public async ValueTask DisposeAsync()
     {
         try
         {
+            if (_module is not null && _guesser is not null)
+            {
+                await _module.InvokeVoidAsync("disposeGuesser", _guesser);
+            }
+
+            if (_guesser is not null)
+            {
+                await _guesser.DisposeAsync();
+            }
+
             if (_module is not null && _picker is not null)
             {
                 await _module.InvokeVoidAsync("disposePicker", _picker);
@@ -124,6 +158,7 @@ public sealed class LeafletInterop(IJSRuntime js) : IAsyncDisposable
             // call (e.g. an in-flight geolocation callback) into a no-op.
             _handle = null;
             _picker = null;
+            _guesser = null;
             _module = null;
         }
     }
