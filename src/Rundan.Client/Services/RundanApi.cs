@@ -272,9 +272,9 @@ public sealed class RundanApi(HttpClient http, AppState state)
     public async Task<BracketDto> DrawBracketAsync(int id) =>
         (await SendAsync<BracketDto>(HttpMethod.Post, $"api/activities/{id}/bracket/draw", admin: true))!;
 
-    public async Task<BracketDto> RecordBracketResultAsync(int id, int matchId, int winnerParticipantId) =>
+    public async Task<BracketDto> RecordBracketResultAsync(int id, int matchId, List<MatchSetInputDto> sets) =>
         (await SendAsync<BracketDto>(HttpMethod.Post, $"api/activities/{id}/bracket/result",
-            body: new RecordBracketResultRequest { MatchId = matchId, WinnerParticipantId = winnerParticipantId }, admin: true))!;
+            body: new RecordBracketResultRequest { MatchId = matchId, Sets = sets }, admin: true))!;
 
     public async Task<BracketDto> ResetBracketAsync(int id) =>
         (await SendAsync<BracketDto>(HttpMethod.Post, $"api/activities/{id}/bracket/reset", admin: true))!;

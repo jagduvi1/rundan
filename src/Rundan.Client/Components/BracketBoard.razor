@@ -75,7 +75,9 @@
                     <span class="grow">@(m.AName ?? "—") vs @(m.IsBye ? "(walkover)" : m.BName ?? "—")</span>
                     @if (m.Decided)
                     {
-                        <span class="muted" style="font-size:.85rem">@WinnerName(m)</span>
+                        <span class="muted" style="font-size:.85rem">
+                            @WinnerName(m)@(string.IsNullOrEmpty(m.Score) ? "" : $" · {m.Score}")
+                        </span>
                     }
                     else if (!m.IsBye)
                     {
@@ -89,6 +91,55 @@
     }
 </div>
 
+@if (_resultMatch is { } rm)
+{
+    <div style="position:fixed;inset:0;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;padding:1rem;z-index:60"
+         @onclick="CancelResult">
+        <div class="card stack" style="max-width:440px;width:100%" @onclick:stopPropagation="true">
+            <div class="row">
+                <h3 class="grow">Enter result</h3>
+                <button class="btn ghost small" @onclick="CancelResult">Close</button>
+            </div>
+            <div class="row" style="font-weight:600">
+                <span class="grow">@(rm.AName ?? "—")</span>
+                <span class="muted">vs</span>
+                <span class="grow" style="text-align:right">@(rm.BName ?? "—")</span>
+            </div>
+
+            @if (Activity.MatchFormat == MatchFormat.Sets)
+            {
+                <p class="muted" style="font-size:.8rem">
+                    Best of @Activity.BestOfSets sets · first to @Activity.GamesToWinSet wins a set · @SetsToWin to take the match.
+                </p>
+            }
+
+            @if (_resultError is not null)
+            {
+                <div class="alert error">@_resultError</div>
+            }
+
+            @for (var i = 0; i < RowCount; i++)
+            {
+                var idx = i;
+                <div class="row" style="align-items:center;gap:.5rem">
+                    @if (Activity.MatchFormat == MatchFormat.Sets)
+                    {
+                        <span class="muted" style="width:52px;font-size:.85rem">Set @(idx + 1)</span>
+                    }
+                    <input class="grow" type="number" min="0" max="100" style="text-align:center" @bind="_scoreA[idx]" />
+                    <span class="muted">–</span>
+                    <input class="grow" type="number" min="0" max="100" style="text-align:center" @bind="_scoreB[idx]" />
+                </div>
+            }
+
+            <div class="row" style="align-items:center">
+                <span class="grow muted" style="font-size:.9rem">@WinnerPreviewText</span>
+                <button class="btn success" @onclick="SaveResultAsync" disabled="@(_busy || WinnerId() is null)">Save result</button>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     [Parameter] public ActivityDto Activity { get; set; } = default!;
     [Parameter] public int RefreshKey { get; set; }
@@ -99,6 +150,15 @@
     private int _loadedActivityId = -1;
     private int _lastRefreshKey = -1;
 
+    // Result-entry popup state.
+    private BracketMatchDto? _resultMatch;
+    private int[] _scoreA = Array.Empty<int>();
+    private int[] _scoreB = Array.Empty<int>();
+    private string? _resultError;
+
+    private int RowCount => Activity.MatchFormat == MatchFormat.Sets ? Math.Max(1, Activity.BestOfSets) : 1;
+    private int SetsToWin => Math.Max(1, Activity.BestOfSets) / 2 + 1;
+
     private RenderFragment RenderMatch(BracketMatchDto m) =>
     @<div class="match">
         @if (!string.IsNullOrEmpty(m.CourtName))
@@ -107,13 +167,17 @@
         }
         @RenderTeam(m, m.AId, m.AName)
         @RenderTeam(m, m.BId, m.BName)
+        @if (!string.IsNullOrEmpty(m.Score))
+        {
+            <div class="bk-score muted" style="font-size:.78rem;text-align:center">@m.Score</div>
+        }
     </div>;
 
     private RenderFragment RenderTeam(BracketMatchDto m, int? id, string? name) =>
     @<text>
         @if (CanPick(m, id))
         {
-            <button class="bk-team pick" @onclick="() => PickWinnerAsync(m.Id, id!.Value)">@(name ?? "—")</button>
+            <button class="bk-team pick" @onclick="() => OpenResult(m)">@(name ?? "—")</button>
         }
         else
         {
@@ -146,6 +210,95 @@
     private string WinnerName(BracketMatchDto m) =>
         (m.WinnerParticipantId == m.AId ? m.AName : m.BName) ?? "—";
 
+    private void OpenResult(BracketMatchDto m)
+    {
+        _resultMatch = m;
+        _scoreA = new int[RowCount];
+        _scoreB = new int[RowCount];
+        _resultError = null;
+    }
+
+    private void CancelResult()
+    {
+        _resultMatch = null;
+        _resultError = null;
+    }
+
+    // The winner implied by the current inputs, or null if not yet decided (mirrors the server rule).
+    private int? WinnerId()
+    {
+        if (_resultMatch is not { } m)
+        {
+            return null;
+        }
+
+        if (Activity.MatchFormat == MatchFormat.Sets)
+        {
+            int a = 0, b = 0;
+            for (var i = 0; i < RowCount; i++)
+            {
+                if (_scoreA[i] > _scoreB[i]) a++;
+                else if (_scoreB[i] > _scoreA[i]) b++;
+            }
+
+            if (a >= SetsToWin) return m.AId;
+            if (b >= SetsToWin) return m.BId;
+            return null;
+        }
+
+        if (_scoreA[0] == _scoreB[0]) return null;
+        return _scoreA[0] > _scoreB[0] ? m.AId : m.BId;
+    }
+
+    private string WinnerPreviewText
+    {
+        get
+        {
+            var id = WinnerId();
+            if (id is null)
+            {
+                return Activity.MatchFormat == MatchFormat.Sets ? "Enter the set scores" : "Enter the score";
+            }
+
+            var name = id == _resultMatch!.AId ? _resultMatch.AName : _resultMatch.BName;
+            return $"Winner: {name}";
+        }
+    }
+
+    private async Task SaveResultAsync()
+    {
+        if (_resultMatch is not { } m || WinnerId() is null)
+        {
+            return;
+        }
+
+        var sets = new List<MatchSetInputDto>();
+        for (var i = 0; i < RowCount; i++)
+        {
+            // Skip unplayed trailing sets (0–0); a real set always has a score.
+            if (_scoreA[i] != 0 || _scoreB[i] != 0)
+            {
+                sets.Add(new MatchSetInputDto { A = _scoreA[i], B = _scoreB[i] });
+            }
+        }
+
+        _busy = true;
+        _resultError = null;
+        try
+        {
+            _bracket = await Api.RecordBracketResultAsync(Activity.Id, m.Id, sets);
+            _resultMatch = null;
+        }
+        catch (ApiException ex)
+        {
+            _resultError = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
     protected override async Task OnParametersSetAsync()
     {
         if (Activity.Id != _loadedActivityId || RefreshKey != _lastRefreshKey)
@@ -164,8 +317,6 @@
 
     private async Task DrawAsync() => await RunAsync(() => Api.DrawBracketAsync(Activity.Id));
     private async Task ResetAsync() => await RunAsync(() => Api.ResetBracketAsync(Activity.Id));
-    private async Task PickWinnerAsync(int matchId, int teamId) =>
-        await RunAsync(() => Api.RecordBracketResultAsync(Activity.Id, matchId, teamId));
 
     private async Task RunAsync(Func<Task<BracketDto>> action)
     {
