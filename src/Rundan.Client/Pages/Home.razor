@@ -5,155 +5,81 @@
 
 <PageTitle>Rundan</PageTitle>
 
-<div class="card hero stack center">
-    <img src="img/rundan-mark.svg" width="64" height="64" alt="" style="margin:0 auto" />
-    <h1>Welcome to Rundan</h1>
-    <p style="color:rgba(255,255,255,.9)">A day out with your people — quiz walks, games and a friendly scoreboard.</p>
-</div>
-
 @if (_loading)
 {
+    @* Past the access gate we send people straight to their event, so this is just a brief beat. *@
     <div class="card center muted"><div class="spinner" style="margin:1rem auto"></div></div>
 }
 else
 {
-    @if (_events.Count == 0)
-    {
-        <div class="card stack">
-            <h2>Nothing scheduled just yet</h2>
-            <p class="muted">When your host sets up a day, it'll show up right here. Got a code? Open the menu (top-left ☰) to jump in.</p>
-        </div>
-    }
-    else
-    {
-        @if (_events.Count > 1)
-        {
-            <h2 style="margin:.25rem 0 -.25rem">What's on</h2>
-        }
-        @foreach (var ev in _events)
-        {
-            @EventCard(ev)
-        }
-    }
+    @* Only reached when there's nothing to jump to. *@
+    <WelcomeHero />
+    <div class="card stack">
+        <h2>Nothing scheduled just yet</h2>
+        <p class="muted">When your host sets up a day, it'll show up right here. Got a code? Open the menu (top-left ☰) to jump in.</p>
+    </div>
 }
 
 @code {
-    private List<EventDto> _events = new();
-    private readonly Dictionary<int, string> _names = new();
-    private readonly Dictionary<int, string> _winners = new();
     private bool _loading = true;
 
-    private RenderFragment EventCard(EventDto ev) =>
-    @<div class="card stack">
-        @if (!string.IsNullOrEmpty(ev.ImageUrl))
-        {
-            <img src="@ev.ImageUrl" alt="" class="media-img" />
-        }
-        <h2>@ev.Name</h2>
-        @if (ev.IsComplete)
-        {
-            <div class="row" style="gap:.5rem;align-items:center">
-                <span class="final-badge">Completed</span>
-                @if (_winners.TryGetValue(ev.Id, out var win))
-                {
-                    <span><b>Winner: @win</b></span>
-                }
-            </div>
-        }
-        @if (ev.SlapMode != SlapMode.Off)
-        {
-            <div class="row" style="gap:.5rem;align-items:center">
-                <span class="final-badge">Slaps on</span>
-                <span class="muted" style="font-size:.85rem">After each activity, @SlapBlurb(ev.SlapMode)</span>
-            </div>
-        }
-        @if (!string.IsNullOrWhiteSpace(ev.Description))
-        {
-            <div class="rte-content muted">@((MarkupString)Fmt.RichHtml(ev.Description))</div>
-        }
-        <div class="row wrap muted" style="font-size:.85rem;gap:.5rem">
-            <span>@ev.Activities.Count activit@(ev.Activities.Count == 1 ? "y" : "ies")</span>
-            <span>·</span>
-            <span>teams of @ev.TeamSize</span>
-            <span>·</span>
-            <span>@(ev.Scoring == EventScoring.Placement ? "placement scoring" : "points scoring")</span>
-            @if (ev.EstimatedMeters is { } m)
-            {
-                <span>·</span>
-                <span>≈ @FormatDistance(m) on foot</span>
-            }
-        </div>
-
-        @if (ev.Activities.Count > 0)
-        {
-            <ul class="list">
-                @foreach (var a in ev.Activities.OrderBy(a => a.Order))
-                {
-                    <li>
-                        <span class="grow">
-                            <b>@a.Order.</b> @a.Title
-                            <span class="muted" style="font-size:.8rem"> · @Fmt.TypeLabel(a.Type)</span>
-                        </span>
-                        <StatusBadge Status="a.Status" />
-                    </li>
-                }
-            </ul>
-        }
-
-        <button class="btn block success" @onclick="() => Enter(ev.Id)">
-            @(ev.IsComplete
-                ? "See final results"
-                : _names.TryGetValue(ev.Id, out var name) ? $"Continue as {name}" : $"Enter {ev.Name}")
-        </button>
-    </div>;
-
+    // The landing page is a router: once a returning visitor is past the access gate we send them
+    // straight to their event (the one they last opened, or the single one still in play). The full
+    // list lives on /events, reached from the header menu and the logo. We only render the
+    // welcome/empty state when there's genuinely nowhere to send them — or a load failed.
     protected override async Task OnInitializedAsync()
     {
-        await State.EnsureInitializedAsync(Api);
         try
         {
-            _events = await Api.GetActiveEventsAsync();
-            foreach (var ev in _events)
-            {
-                var saved = await State.GetEventNameAsync(ev.Id);
-                if (saved is not null)
-                {
-                    _names[ev.Id] = saved;
-                }
+            await State.EnsureInitializedAsync(Api);
+            var events = await Api.GetActiveEventsAsync();
 
-                if (ev.IsComplete)
-                {
-                    var standings = await Api.GetEventStandingsAsync(ev.Id);
-                    var winners = standings?.Entries.Where(e => e.Rank == 1).Select(e => e.DisplayName).ToList();
-                    if (winners is { Count: > 0 })
-                    {
-                        _winners[ev.Id] = string.Join(" & ", winners);
-                    }
-                }
+            if (await PickLandingEventAsync(events) is { } eventId)
+            {
+                Nav.NavigateTo($"e/{eventId}", replace: true);
+                return;
+            }
+
+            if (events.Count > 1)
+            {
+                // Several to choose from and no clear one — let them pick from the list.
+                Nav.NavigateTo("events", replace: true);
+                return;
             }
         }
-        catch (ApiException)
+        catch (Exception)
         {
-            // Couldn't load the event list — fall through to the empty state. Code entry now
-            // lives in the header menu (☰), so there's nothing else to render here.
+            // Network / parse failure — fall through to the welcome/empty state rather than hang on
+            // the spinner. (ApiException only covers HTTP error codes, not transport drops, which
+            // are exactly what flaky mobile signal throws.)
         }
-        finally
-        {
-            _loading = false;
-        }
+
+        _loading = false; // zero events, or a load failure → show the welcome state
     }
 
-    private void Enter(int eventId) => Nav.NavigateTo($"e/{eventId}");
-
-    private static string SlapBlurb(SlapMode mode) => mode switch
+    // The event to drop a returning visitor on: the one they last opened (if it still exists),
+    // otherwise the single event that's still open to play. Null means "can't decide — don't redirect".
+    private async Task<int?> PickLandingEventAsync(List<EventDto> events)
     {
-        SlapMode.Vanish => "the winner can slap a rival, halving their lead — those points vanish.",
-        SlapMode.SendToPlayer => "the winner can slap a rival, halving their lead — and hand the points to someone.",
-        SlapMode.Random => "the winner can slap a rival, halving their lead — points vanish or get passed on (random).",
-        _ => "",
-    };
+        if (events.Count == 0)
+        {
+            return null;
+        }
 
-    private static string FormatDistance(int meters) =>
-        meters >= 1000 ? $"{meters / 1000.0:0.0} km" : $"{meters} m";
+        var lastId = await State.GetLastEventIdAsync();
+        if (lastId is { } id && events.Any(e => e.Id == id))
+        {
+            return id;
+        }
 
+        // No history: ignore finished past days and land on the one event still in play, if there's
+        // exactly one. (If the only event there is has finished, still open it — it's all there is.)
+        var inPlay = events.Where(e => !e.IsComplete).ToList();
+        if (inPlay.Count == 1)
+        {
+            return inPlay[0].Id;
+        }
+
+        return inPlay.Count == 0 && events.Count == 1 ? events[0].Id : null;
+    }
 }

@@ -13,7 +13,9 @@
                 <span></span><span></span><span></span>
             </button>
         }
-        <a href="" class="brand">
+        @* "/" is just the cold-start launcher (it auto-redirects), so the logo points at the
+           events overview — a real destination instead of a screen that forwards straight back. *@
+        <a href="events" class="brand">
             <img src="img/rundan-mark.svg" alt="" />
             <span class="wordmark">@AppName</span>
         </a>
@@ -121,10 +123,19 @@
             return;
         }
 
-        if (State.Bootstrap.RequiresAccessCode)
+        try
         {
-            _needAccess = string.IsNullOrEmpty(State.AccessCode)
-                          || !await Api.VerifyAccessCodeAsync(State.AccessCode!);
+            if (State.Bootstrap.RequiresAccessCode)
+            {
+                _needAccess = string.IsNullOrEmpty(State.AccessCode)
+                              || !await Api.VerifyAccessCodeAsync(State.AccessCode!);
+            }
+        }
+        catch
+        {
+            // Re-verifying the stored code hit a transport error (flaky signal). Surface the
+            // retry screen instead of hanging on the loading spinner forever.
+            _unreachable = true;
         }
 
         _ready = true;

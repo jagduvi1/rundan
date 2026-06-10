@@ -16,7 +16,7 @@ else if (_event is null)
     <div class="card">
         <h1>Not found</h1>
         <p class="muted">No event with that code or id.</p>
-        <a class="btn" href="">Back to start</a>
+        <a class="btn" href="events">Back to events</a>
     </div>
 }
 else
@@ -815,6 +815,9 @@ else
 
         if (_event is not null)
         {
+            // Remember this as the device's event so the landing page sends us straight back here.
+            await State.SaveLastEventIdAsync(Id);
+
             // Decide the blurb's collapsed state ONCE, from the state at load: already underway
             // → start collapsed; not yet → start open and stay open (a later activity going Live
             // via SignalR must not yank the blurb closed while someone is reading it).

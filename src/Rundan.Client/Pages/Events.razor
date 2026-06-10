@@ -1,0 +1,149 @@
+@page "/events"
+@inject RundanApi Api
+@inject AppState State
+@inject NavigationManager Nav
+
+<PageTitle>Events · Rundan</PageTitle>
+
+<div class="card stack">
+    <h1>Events</h1>
+    <p class="muted">Every day on Rundan — pick one to jump in.</p>
+</div>
+
+@if (_loading)
+{
+    <div class="card center muted"><div class="spinner" style="margin:1rem auto"></div></div>
+}
+else if (_events.Count == 0)
+{
+    <div class="card stack">
+        <h2>Nothing scheduled just yet</h2>
+        <p class="muted">When your host sets up a day, it'll show up right here. Got a code? Open the menu (top-left ☰) to jump in.</p>
+    </div>
+}
+else
+{
+    @foreach (var ev in _events)
+    {
+        @EventCard(ev)
+    }
+}
+
+@code {
+    private List<EventDto> _events = new();
+    private readonly Dictionary<int, string> _names = new();
+    private readonly Dictionary<int, string> _winners = new();
+    private bool _loading = true;
+
+    private RenderFragment EventCard(EventDto ev) =>
+    @<div class="card stack">
+        @if (!string.IsNullOrEmpty(ev.ImageUrl))
+        {
+            <img src="@ev.ImageUrl" alt="" class="media-img" />
+        }
+        <h2>@ev.Name</h2>
+        @if (ev.IsComplete)
+        {
+            <div class="row" style="gap:.5rem;align-items:center">
+                <span class="final-badge">Completed</span>
+                @if (_winners.TryGetValue(ev.Id, out var win))
+                {
+                    <span><b>Winner: @win</b></span>
+                }
+            </div>
+        }
+        @if (ev.SlapMode != SlapMode.Off)
+        {
+            <div class="row" style="gap:.5rem;align-items:center">
+                <span class="final-badge">Slaps on</span>
+                <span class="muted" style="font-size:.85rem">After each activity, @SlapBlurb(ev.SlapMode)</span>
+            </div>
+        }
+        @if (!string.IsNullOrWhiteSpace(ev.Description))
+        {
+            <div class="rte-content muted">@((MarkupString)Fmt.RichHtml(ev.Description))</div>
+        }
+        <div class="row wrap muted" style="font-size:.85rem;gap:.5rem">
+            <span>@ev.Activities.Count activit@(ev.Activities.Count == 1 ? "y" : "ies")</span>
+            <span>·</span>
+            <span>teams of @ev.TeamSize</span>
+            <span>·</span>
+            <span>@(ev.Scoring == EventScoring.Placement ? "placement scoring" : "points scoring")</span>
+            @if (ev.EstimatedMeters is { } m)
+            {
+                <span>·</span>
+                <span>≈ @FormatDistance(m) on foot</span>
+            }
+        </div>
+
+        @if (ev.Activities.Count > 0)
+        {
+            <ul class="list">
+                @foreach (var a in ev.Activities.OrderBy(a => a.Order))
+                {
+                    <li>
+                        <span class="grow">
+                            <b>@a.Order.</b> @a.Title
+                            <span class="muted" style="font-size:.8rem"> · @Fmt.TypeLabel(a.Type)</span>
+                        </span>
+                        <StatusBadge Status="a.Status" />
+                    </li>
+                }
+            </ul>
+        }
+
+        <button class="btn block success" @onclick="() => Enter(ev.Id)">
+            @(ev.IsComplete
+                ? "See final results"
+                : _names.TryGetValue(ev.Id, out var name) ? $"Continue as {name}" : $"Enter {ev.Name}")
+        </button>
+    </div>;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await State.EnsureInitializedAsync(Api);
+        try
+        {
+            _events = await Api.GetActiveEventsAsync();
+            foreach (var ev in _events)
+            {
+                var saved = await State.GetEventNameAsync(ev.Id);
+                if (saved is not null)
+                {
+                    _names[ev.Id] = saved;
+                }
+
+                if (ev.IsComplete)
+                {
+                    var standings = await Api.GetEventStandingsAsync(ev.Id);
+                    var winners = standings?.Entries.Where(e => e.Rank == 1).Select(e => e.DisplayName).ToList();
+                    if (winners is { Count: > 0 })
+                    {
+                        _winners[ev.Id] = string.Join(" & ", winners);
+                    }
+                }
+            }
+        }
+        catch (ApiException)
+        {
+            // Couldn't load the list — show the empty state; the code entry lives in the menu.
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void Enter(int eventId) => Nav.NavigateTo($"e/{eventId}");
+
+    private static string SlapBlurb(SlapMode mode) => mode switch
+    {
+        SlapMode.Vanish => "the winner can slap a rival, halving their lead — those points vanish.",
+        SlapMode.SendToPlayer => "the winner can slap a rival, halving their lead — and hand the points to someone.",
+        SlapMode.Random => "the winner can slap a rival, halving their lead — points vanish or get passed on (random).",
+        _ => "",
+    };
+
+    private static string FormatDistance(int meters) =>
+        meters >= 1000 ? $"{meters / 1000.0:0.0} km" : $"{meters} m";
+}
