@@ -47,7 +47,7 @@ internal static class MapPinEndpoints
         // score for that city (one entry per city, replaced on a re-pin).
         app.MapPost("/api/activities/{id:int}/map-pin", async (
             int id, MapPinRequest req, AppDbContext db, ScoreboardNotifier notifier,
-            HttpContext http, TimeProvider clock, CancellationToken ct) =>
+            GameService game, HttpContext http, TimeProvider clock, CancellationToken ct) =>
         {
             var participant = await http.ResolveForActivityAsync(db, id, ct);
 
@@ -88,6 +88,12 @@ internal static class MapPinEndpoints
             entry.Points = distanceKm;
             await db.SaveChangesAsync(ct);
             await notifier.PushScoreboardAsync(id, ct);
+
+            // Auto-finalize once every participant has dropped a pin for every city.
+            if (await game.TryAutoFinishMapPinAsync(activity, ct))
+            {
+                await notifier.PushStatusAsync(id, ActivityStatus.Finished);
+            }
 
             return Results.Ok(new MapPinResultDto
             {

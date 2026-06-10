@@ -386,4 +386,71 @@ public sealed class GameService(AppDbContext db, TimeProvider clock)
         await db.SaveChangesAsync(ct);
         return true;
     }
+
+    /// <summary>Quiz / tipspromenad / music quiz: finish once every team has answered every question.
+    /// Roster team games only (a fixed set of teams) — open-join free-name games are finished by the
+    /// host, since "everyone" isn't bounded. Returns true when it just transitioned to Finished.</summary>
+    public async Task<bool> TryAutoFinishQuestionsAsync(Activity activity, CancellationToken ct = default)
+    {
+        if (activity.Type is not (ActivityType.Quiz or ActivityType.Tipspromenad or ActivityType.MusicQuiz)
+            || activity.Status != ActivityStatus.Live)
+        {
+            return false;
+        }
+
+        var teamIds = await db.Participants
+            .Where(p => p.ActivityId == activity.Id && p.IsTeam)
+            .Select(p => p.Id)
+            .ToListAsync(ct);
+        var questionCount = await db.Questions.CountAsync(q => q.ActivityId == activity.Id, ct);
+        var expected = teamIds.Count * questionCount;
+        if (expected <= 0)
+        {
+            return false;
+        }
+
+        var recorded = await db.Answers.CountAsync(a => teamIds.Contains(a.ParticipantId), ct);
+        if (recorded < expected)
+        {
+            return false;
+        }
+
+        activity.Status = ActivityStatus.Finished;
+        activity.FinishedUtc = clock.GetUtcNow();
+        await db.SaveChangesAsync(ct);
+        return true;
+    }
+
+    /// <summary>MapPin: finish once every team has dropped a pin for every city. Roster team games
+    /// only. Returns true when it just transitioned to Finished.</summary>
+    public async Task<bool> TryAutoFinishMapPinAsync(Activity activity, CancellationToken ct = default)
+    {
+        if (activity.Type != ActivityType.MapPin || activity.Status != ActivityStatus.Live)
+        {
+            return false;
+        }
+
+        var teamIds = await db.Participants
+            .Where(p => p.ActivityId == activity.Id && p.IsTeam)
+            .Select(p => p.Id)
+            .ToListAsync(ct);
+        var cityCount = await db.MapCities.CountAsync(c => c.ActivityId == activity.Id, ct);
+        var expected = teamIds.Count * cityCount;
+        if (expected <= 0)
+        {
+            return false;
+        }
+
+        // Each dropped pin is one ScoreEntry (one per team per city).
+        var recorded = await db.ScoreEntries.CountAsync(s => s.ActivityId == activity.Id && teamIds.Contains(s.ParticipantId), ct);
+        if (recorded < expected)
+        {
+            return false;
+        }
+
+        activity.Status = ActivityStatus.Finished;
+        activity.FinishedUtc = clock.GetUtcNow();
+        await db.SaveChangesAsync(ct);
+        return true;
+    }
 }
