@@ -125,6 +125,22 @@ public enum SlapMode
     Random = 3,
 }
 
+/// <summary>The slap state of one finished activity (for the per-activity ceremony in the player flow).</summary>
+public enum SlapState
+{
+    /// <summary>No slap applies (slaps off, not finished, or no winner).</summary>
+    None = 0,
+
+    /// <summary>The winners still owe a slap — it can be taken now.</summary>
+    Pending = 1,
+
+    /// <summary>A slap was taken.</summary>
+    Taken = 2,
+
+    /// <summary>The host skipped the slap.</summary>
+    Skipped = 3,
+}
+
 /// <summary>Which side of a knockout bracket a match belongs to.</summary>
 public enum BracketSide
 {

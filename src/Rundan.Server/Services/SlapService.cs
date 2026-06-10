@@ -78,6 +78,71 @@ public sealed class SlapService(AppDbContext db, ScoreboardService scoreboard, E
         return null;
     }
 
+    /// <summary>The slap for one activity as the player flow sees it: pending (winners owe one),
+    /// taken (who slapped whom + who got the points), skipped, or none. Independent of order, so it
+    /// surfaces as each activity finishes regardless of the running order.</summary>
+    public async Task<ActivitySlapDto> ActivitySlapAsync(int activityId, CancellationToken ct = default)
+    {
+        var result = new ActivitySlapDto { ActivityId = activityId };
+
+        var activity = await db.Activities.AsNoTracking().FirstOrDefaultAsync(a => a.Id == activityId, ct);
+        if (activity?.EventId is not int eventId)
+        {
+            return result; // standalone activity → no slaps
+        }
+
+        result.EventId = eventId;
+        result.ActivityTitle = activity.Title;
+
+        var ev = await db.Events.AsNoTracking().FirstOrDefaultAsync(e => e.Id == eventId, ct);
+        if (ev is null || ev.SlapMode == SlapMode.Off || activity.Status != ActivityStatus.Finished)
+        {
+            return result; // None
+        }
+
+        result.EffectiveMode = EffectiveMode(ev.SlapMode, activityId);
+
+        var slap = await db.Slaps.AsNoTracking().FirstOrDefaultAsync(s => s.ActivityId == activityId, ct);
+        if (slap is not null)
+        {
+            if (slap.Skipped)
+            {
+                result.State = SlapState.Skipped;
+                return result;
+            }
+
+            var ids = new[] { slap.SlapperUserId, slap.SlappedUserId }
+                .Concat(slap.RecipientUserId is int r ? new[] { r } : Array.Empty<int>())
+                .Distinct().ToList();
+            var names = await db.Users.AsNoTracking().Where(u => ids.Contains(u.Id))
+                .ToDictionaryAsync(u => u.Id, u => u.Name, ct);
+
+            result.State = SlapState.Taken;
+            result.SlapperName = names.GetValueOrDefault(slap.SlapperUserId);
+            result.SlappedName = names.GetValueOrDefault(slap.SlappedUserId);
+            result.RecipientName = slap.RecipientUserId is int rid ? names.GetValueOrDefault(rid) : null;
+            result.Penalty = slap.Penalty;
+            return result;
+        }
+
+        // Not resolved yet → pending, but only if the activity has a winner to slap with.
+        var winner = await WinnerAsync(activityId, ct);
+        if (winner is null)
+        {
+            return result; // None — no team winner (e.g. nobody played)
+        }
+
+        result.State = SlapState.Pending;
+        result.WinnerName = winner.Value.Name;
+        result.WinnerUserIds = winner.Value.MemberIds;
+        result.Members = await db.EventMembers.AsNoTracking()
+            .Where(m => m.EventId == eventId)
+            .Select(m => new SlapPersonDto { UserId = m.UserId, Name = m.User!.Name })
+            .ToListAsync(ct);
+        result.Members = result.Members.OrderBy(m => m.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        return result;
+    }
+
     public async Task PerformAsync(int eventId, int activityId, int slapperUserId, int slappedUserId, int? recipientUserId, CancellationToken ct = default)
     {
         var ev = await db.Events.FirstOrDefaultAsync(e => e.Id == eventId, ct)

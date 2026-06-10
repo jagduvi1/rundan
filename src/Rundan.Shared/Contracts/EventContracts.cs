@@ -73,6 +73,32 @@ public class PendingSlapDto
     public List<SlapPersonDto> Members { get; set; } = new();
 }
 
+/// <summary>The slap for one finished activity, as the player flow sees it — pending (to take) or a
+/// resolved result (who slapped whom, and who got the points).</summary>
+public class ActivitySlapDto
+{
+    public int EventId { get; set; }
+    public int ActivityId { get; set; }
+    public string ActivityTitle { get; set; } = string.Empty;
+    public SlapState State { get; set; }
+    public SlapMode EffectiveMode { get; set; }
+
+    // --- Pending: who owes the slap + who they can pick ---
+    public string? WinnerName { get; set; }
+    public List<int> WinnerUserIds { get; set; } = new();
+    public List<SlapPersonDto> Members { get; set; } = new();
+
+    // --- Taken: the outcome ---
+    public string? SlapperName { get; set; }
+    public string? SlappedName { get; set; }
+
+    /// <summary>Who received the points on a "send" slap (null = the points vanished).</summary>
+    public string? RecipientName { get; set; }
+
+    /// <summary>Points removed from the slapped player.</summary>
+    public double Penalty { get; set; }
+}
+
 /// <summary>The winning player performs the slap.</summary>
 public class PerformSlapRequest
 {
