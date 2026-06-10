@@ -1,0 +1,115 @@
+@inject RundanApi Api
+@inject NavigationManager Nav
+
+@* The global "jump in with a code" + nav sheet. Rendered at the layout root (NOT inside the
+   frosted .app-header, which is its own stacking context) so the fixed backdrop/sheet reliably
+   paint above the header and proxy-bar. The hamburger that toggles it lives in the header. *@
+@if (Open)
+{
+    <div class="menu-backdrop" @onclick="CloseAsync"></div>
+    <div id="app-menu-sheet" class="menu-sheet" role="dialog" aria-modal="true" aria-labelledby="app-menu-title"
+         tabindex="-1" @ref="_sheet" @onkeydown="OnSheetKeyDown">
+        <div class="menu-section">
+            <h3 id="app-menu-title" style="margin:0">Got a code?</h3>
+            <p class="muted" style="font-size:.85rem;margin:0">Type the code your host shared to jump straight in.</p>
+
+            @if (_error is not null)
+            {
+                <div class="alert error">@_error</div>
+            }
+
+            <input class="code-input" type="text" inputmode="text" autocomplete="off" maxlength="16"
+                   placeholder="CODE" @bind="_code" @bind:event="oninput" @onkeydown="OnCodeKeyDown" />
+
+            <button class="btn block" @onclick="GoAsync" disabled="@_busy">
+                @(_busy ? "Looking…" : "Let's go")
+            </button>
+        </div>
+
+        <nav class="menu-links">
+            <a href="" @onclick="CloseAsync">Home</a>
+            <a href="admin" @onclick="CloseAsync">Host panel</a>
+        </nav>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private ElementReference _sheet;
+    private bool _wasOpen;
+    private string _code = string.Empty;
+    private string? _error;
+    private bool _busy;
+
+    // Move focus into the sheet when it opens (so Escape works and keyboard users land inside it);
+    // reset the field state when it closes so the next open starts fresh.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (Open && !_wasOpen)
+        {
+            _wasOpen = true;
+            try { await _sheet.FocusAsync(); } catch { /* element gone; ignore */ }
+        }
+        else if (!Open && _wasOpen)
+        {
+            _wasOpen = false;
+            _code = string.Empty;
+            _error = null;
+        }
+    }
+
+    private Task CloseAsync() => OnClose.InvokeAsync();
+
+    private async Task OnSheetKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            await CloseAsync();
+        }
+    }
+
+    private async Task OnCodeKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await GoAsync();
+        }
+    }
+
+    private async Task GoAsync()
+    {
+        var code = _code.Trim().ToUpperInvariant();
+        if (code.Length == 0)
+        {
+            _error = "Enter a code first.";
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+
+        // A code can be an event (a whole day of activities) or a single activity.
+        var ev = await Api.GetEventByCodeAsync(code);
+        if (ev is not null)
+        {
+            _busy = false;
+            await CloseAsync();
+            Nav.NavigateTo($"e/{ev.Id}");
+            return;
+        }
+
+        var activity = await Api.GetActivityByCodeAsync(code);
+        _busy = false;
+
+        if (activity is null)
+        {
+            _error = "No event or activity found with that code.";
+            return;
+        }
+
+        await CloseAsync();
+        Nav.NavigateTo($"a/{activity.Id}");
+    }
+}

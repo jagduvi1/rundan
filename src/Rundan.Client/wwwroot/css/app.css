@@ -127,6 +127,42 @@ button { font-family: inherit; }
 }
 .app-header .spacer { flex: 1; }
 
+/* Header hamburger — opens the global "jump in with a code" + nav sheet. */
+.hamburger {
+    display: inline-flex; flex-direction: column; justify-content: center; gap: 4px;
+    width: 38px; height: 38px; padding: 0 9px; flex: none;
+    border: 1px solid var(--line); border-radius: var(--radius-md);
+    background: #fff; cursor: pointer;
+}
+.hamburger span { display: block; height: 2px; border-radius: 2px; background: var(--text-strong); }
+.hamburger:hover { background: var(--sea-50); }
+
+.menu-backdrop { position: fixed; inset: 0; z-index: 30; background: rgba(11, 63, 88, 0.28); }
+.menu-sheet {
+    position: fixed; z-index: 31;
+    top: calc(var(--safe-top) + 3.7rem); left: 1rem;
+    width: min(calc(100vw - 2rem), 28rem);
+    background: var(--color-surface); border: 1px solid var(--line);
+    border-radius: var(--radius-lg); box-shadow: var(--shadow-lg);
+    padding: 1.1rem; display: flex; flex-direction: column; gap: .9rem;
+    outline: none;
+}
+.menu-section { display: flex; flex-direction: column; gap: .6rem; }
+.menu-links { display: flex; flex-direction: column; }
+.menu-links a {
+    padding: .65rem .2rem; border-top: 1px solid var(--divider);
+    text-decoration: none; color: var(--text-link); font-weight: 600;
+}
+
+/* Accordion toggle for the event-info blurb once an event is underway. */
+.ei-toggle {
+    display: inline-flex; align-items: center; gap: .5rem; width: 100%;
+    background: none; border: none; padding: 0; margin: 0;
+    font: inherit; text-align: left; color: inherit; cursor: pointer;
+}
+.ei-chevron { flex: none; font-size: 1.5rem; line-height: 1; color: var(--muted); transition: transform .18s ease; }
+.ei-chevron.open { transform: rotate(180deg); }
+
 /* Rich-text editor (host "Rules / info"). */
 .rte { border: 1px solid var(--line); border-radius: var(--radius-md); overflow: hidden; background: #fff; }
 .rte__toolbar {
