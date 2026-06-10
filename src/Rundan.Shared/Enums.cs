@@ -123,6 +123,10 @@ public enum SlapMode
 
     /// <summary>The system randomly picks Vanish or SendToPlayer for each activity.</summary>
     Random = 3,
+
+    /// <summary>The slapped player themselves passes the lost points to someone — never the
+    /// slapper and never themselves.</summary>
+    SlappedSends = 4,
 }
 
 /// <summary>The slap state of one finished activity (for the per-activity ceremony in the player flow).</summary>
@@ -139,6 +143,10 @@ public enum SlapState
 
     /// <summary>The host skipped the slap.</summary>
     Skipped = 3,
+
+    /// <summary>The slap landed; now the slapped player must pass their lost points to someone
+    /// (the SlappedSends mode). Resolved once they pick a recipient.</summary>
+    AwaitingRecipient = 4,
 }
 
 /// <summary>Which side of a knockout bracket a match belongs to.</summary>

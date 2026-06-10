@@ -117,11 +117,22 @@ public sealed class SlapService(AppDbContext db, ScoreboardService scoreboard, E
             var names = await db.Users.AsNoTracking().Where(u => ids.Contains(u.Id))
                 .ToDictionaryAsync(u => u.Id, u => u.Name, ct);
 
-            result.State = SlapState.Taken;
+            result.SlapperUserId = slap.SlapperUserId;
             result.SlapperName = names.GetValueOrDefault(slap.SlapperUserId);
+            result.SlappedUserId = slap.SlappedUserId;
             result.SlappedName = names.GetValueOrDefault(slap.SlappedUserId);
-            result.RecipientName = slap.RecipientUserId is int rid ? names.GetValueOrDefault(rid) : null;
             result.Penalty = slap.Penalty;
+
+            // SlappedSends: the slap landed but the slapped player hasn't passed the points on yet.
+            if (result.EffectiveMode == SlapMode.SlappedSends && slap.RecipientUserId is null)
+            {
+                result.State = SlapState.AwaitingRecipient;
+                result.Members = await MembersAsync(eventId, ct);
+                return result;
+            }
+
+            result.State = SlapState.Taken;
+            result.RecipientName = slap.RecipientUserId is int rid ? names.GetValueOrDefault(rid) : null;
             return result;
         }
 
@@ -135,12 +146,62 @@ public sealed class SlapService(AppDbContext db, ScoreboardService scoreboard, E
         result.State = SlapState.Pending;
         result.WinnerName = winner.Value.Name;
         result.WinnerUserIds = winner.Value.MemberIds;
-        result.Members = await db.EventMembers.AsNoTracking()
+        result.Members = await MembersAsync(eventId, ct);
+        return result;
+    }
+
+    private async Task<List<SlapPersonDto>> MembersAsync(int eventId, CancellationToken ct)
+    {
+        var members = await db.EventMembers.AsNoTracking()
             .Where(m => m.EventId == eventId)
             .Select(m => new SlapPersonDto { UserId = m.UserId, Name = m.User!.Name })
             .ToListAsync(ct);
-        result.Members = result.Members.OrderBy(m => m.Name, StringComparer.OrdinalIgnoreCase).ToList();
-        return result;
+        return members.OrderBy(m => m.Name, StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    /// <summary>SlappedSends mode: the slapped player passes their lost points to a recipient
+    /// (never themselves, never the slapper).</summary>
+    public async Task SendPointsAsync(int eventId, int activityId, int senderUserId, int recipientUserId, CancellationToken ct = default)
+    {
+        var ev = await db.Events.FirstOrDefaultAsync(e => e.Id == eventId, ct)
+            ?? throw new RuleViolationException("Event not found.", StatusCodes.Status404NotFound);
+
+        var slap = await db.Slaps.FirstOrDefaultAsync(s => s.EventId == eventId && s.ActivityId == activityId, ct)
+            ?? throw new RuleViolationException("There's no slap to pass on here.", StatusCodes.Status404NotFound);
+
+        if (slap.Skipped || EffectiveMode(ev.SlapMode, activityId) != SlapMode.SlappedSends)
+        {
+            throw new RuleViolationException("These points aren't yours to pass on.");
+        }
+
+        if (slap.SlappedUserId != senderUserId)
+        {
+            throw new RuleViolationException("Only the slapped player can pass on the points.", StatusCodes.Status403Forbidden);
+        }
+
+        if (slap.RecipientUserId is not null)
+        {
+            throw new RuleViolationException("You've already passed the points on.", StatusCodes.Status409Conflict);
+        }
+
+        if (recipientUserId == senderUserId)
+        {
+            throw new RuleViolationException("You can't keep the points yourself.");
+        }
+
+        if (recipientUserId == slap.SlapperUserId)
+        {
+            throw new RuleViolationException("You can't give them to whoever slapped you.");
+        }
+
+        var members = await db.EventMembers.Where(m => m.EventId == eventId).Select(m => m.UserId).ToListAsync(ct);
+        if (!members.Contains(recipientUserId))
+        {
+            throw new RuleViolationException("Pick a player in this event.");
+        }
+
+        slap.RecipientUserId = recipientUserId;
+        await db.SaveChangesAsync(ct);
     }
 
     public async Task PerformAsync(int eventId, int activityId, int slapperUserId, int slappedUserId, int? recipientUserId, CancellationToken ct = default)

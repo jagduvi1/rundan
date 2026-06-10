@@ -88,8 +88,10 @@ public class ActivitySlapDto
     public List<int> WinnerUserIds { get; set; } = new();
     public List<SlapPersonDto> Members { get; set; } = new();
 
-    // --- Taken: the outcome ---
+    // --- Taken / AwaitingRecipient: the people involved ---
+    public int? SlapperUserId { get; set; }
     public string? SlapperName { get; set; }
+    public int? SlappedUserId { get; set; }
     public string? SlappedName { get; set; }
 
     /// <summary>Who received the points on a "send" slap (null = the points vanished).</summary>
@@ -97,6 +99,13 @@ public class ActivitySlapDto
 
     /// <summary>Points removed from the slapped player.</summary>
     public double Penalty { get; set; }
+}
+
+/// <summary>The slapped player passes their lost points to a recipient (SlappedSends mode).</summary>
+public class SendSlapPointsRequest
+{
+    public int ActivityId { get; set; }
+    public int RecipientUserId { get; set; }
 }
 
 /// <summary>The winning player performs the slap.</summary>

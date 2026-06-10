@@ -175,6 +175,11 @@ public sealed class RundanApi(HttpClient http, AppState state)
         await SendAsync<object>(HttpMethod.Post, $"api/events/{eventId}/slap/skip",
             body: new SkipSlapRequest { ActivityId = activityId }, admin: true);
 
+    /// <summary>SlappedSends mode: the slapped player passes their lost points to a recipient.</summary>
+    public async Task SendSlapPointsAsync(int eventId, int activityId, int recipientUserId) =>
+        await SendAsync<object>(HttpMethod.Post, $"api/events/{eventId}/slap/send-points",
+            body: new SendSlapPointsRequest { ActivityId = activityId, RecipientUserId = recipientUserId });
+
     public async Task<ViewerDto> RegisterViewerAsync(int eventId, string name, Guid? token) =>
         (await SendAsync<ViewerDto>(HttpMethod.Post, $"api/events/{eventId}/viewers",
             body: new RegisterViewerRequest { Name = name, Token = token }))!;
