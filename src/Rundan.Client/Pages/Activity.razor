@@ -261,11 +261,15 @@ else
             _board = await Api.GetScoreboardAsync(Id);
             _participants = await Api.GetParticipantsAsync(Id);
 
-            // For the slap ceremony: who this device is in the event roster, and the member token
-            // that lets them act (claimed earlier on the event page; restore it if not in memory).
+            // For the slap ceremony: who this device is acting as in the event roster — the proxied
+            // player when the host is "playing as" someone, otherwise this device's own claim — plus
+            // the member token that lets them act (the ActiveMemberToken getter already prefers the
+            // proxied player's token, so the server attributes the slap to them too).
             if (_activity.EventId is { } evId2)
             {
-                _eventUserId = await State.GetEventUserIdAsync(evId2);
+                _eventUserId = State.IsProxying && State.Proxy!.EventId == evId2
+                    ? State.Proxy.UserId
+                    : await State.GetEventUserIdAsync(evId2);
                 State.ActiveMemberToken ??= await State.GetEventMemberTokenAsync(evId2);
             }
 
