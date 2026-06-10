@@ -74,6 +74,10 @@ public sealed class SimulationService(AppDbContext db, TeamService teams, Bracke
         // Drop the drawn MapPin cities too, so re-opening draws a fresh set instead of replaying them.
         db.MapCities.RemoveRange(db.MapCities.Where(c => c.ActivityId == activityId));
         await db.SaveChangesAsync(ct);
+
+        // Slaps reference the activity by a loose int (no FK), so clear them too — otherwise the
+        // penalties linger in the standings after a reset.
+        await db.Slaps.Where(s => s.ActivityId == activityId).ExecuteDeleteAsync(ct);
     }
 
     private async Task SimulateAnswersAsync(int activityId, List<int> participants, CancellationToken ct)
