@@ -76,57 +76,7 @@ else
         }
     </div>
 
-    @if (_event.PendingSlap is { } slap)
-    {
-        <div class="card stack accent">
-            <h2>Slap time!</h2>
-            <p><b>@slap.WinnerName</b> won “@slap.ActivityTitle” — @SlapBlurb(_event.SlapMode) The next activity can't start until this is done.</p>
-
-            @if (CanSlap(slap))
-            {
-                @if (_adminError is not null)
-                {
-                    <div class="alert error">@_adminError</div>
-                }
-                <div class="field">
-                    <label>Slap a rival</label>
-                    <select @bind="_slapTarget">
-                        <option value="0">Pick someone…</option>
-                        @foreach (var p in SlapTargets(slap))
-                        {
-                            <option value="@p.UserId">@p.Name</option>
-                        }
-                    </select>
-                </div>
-                @if (slap.EffectiveMode == SlapMode.SendToPlayer)
-                {
-                    <div class="field">
-                        <label>Give the points to</label>
-                        <select @bind="_slapRecipient">
-                            <option value="0">Pick someone…</option>
-                            @foreach (var p in SlapRecipients(slap))
-                            {
-                                <option value="@p.UserId">@p.Name</option>
-                            }
-                        </select>
-                    </div>
-                }
-                <button class="btn block success" @onclick="() => PerformSlapAsync(slap)"
-                        disabled="@(_busy || _slapTarget == 0 || (slap.EffectiveMode == SlapMode.SendToPlayer && _slapRecipient == 0))">
-                    Slap!
-                </button>
-            }
-            else
-            {
-                <p class="muted">Waiting for @(slap.SlapperName ?? slap.WinnerName) to take the slap…</p>
-            }
-
-            @if (CanManage && !ProxyHere)
-            {
-                <button class="btn ghost small" @onclick="() => SkipSlapAsync(slap)" disabled="@_busy">Skip slap (host)</button>
-            }
-        </div>
-    }
+    @* The slap ceremony now lives inline under each finished activity in the running order below. *@
 
     @if (_event.IsComplete && _standings is not null && _standings.Entries.Count > 0)
     {
@@ -300,6 +250,14 @@ else
                                     <span class="muted">@LockText(a)</span>
                                 }
                             </div>
+                        }
+
+                        @* Slap ceremony for this finished activity: the dialog while it's open to slap,
+                           a small summary once the slap (and any points pass) is done. *@
+                        @if (_slapByActivity.TryGetValue(a.Id, out var slap))
+                        {
+                            <SlapCeremony @key="a.Id" Slap="slap" ActingUserId="ActingUserId"
+                                          CanManage="@(CanManage && !ProxyHere)" OnChanged="OnInlineSlapChangedAsync" />
                         }
                     </li>
                 }
@@ -611,6 +569,9 @@ else
 
     private EventDto? _event;
     private EventStandingsDto? _standings;
+
+    // Per-activity slap ceremony shown inline under each finished activity (activityId → slap).
+    private readonly Dictionary<int, ActivitySlapDto> _slapByActivity = new();
     private string? _eventName;
     private int? _userId;
     private readonly Dictionary<int, string> _teamByActivity = new();
@@ -877,6 +838,7 @@ else
             await RefreshProxyAsync();
 
             _standings = await Api.GetEventStandingsAsync(Id);
+            await LoadSlapsAsync();
             await StartConnectionAsync();
             await StartGeoAsync();
             EnsureClock();
@@ -1095,10 +1057,41 @@ else
 
     private void RefreshSoon() => _ = InvokeAsync(RefreshAsync);
 
+    // Fetch the slap ceremony for each finished activity so it can show inline in the running order.
+    private async Task LoadSlapsAsync()
+    {
+        _slapByActivity.Clear();
+        if (_event is null || _event.SlapMode == SlapMode.Off)
+        {
+            return;
+        }
+
+        foreach (var a in _event.Activities.Where(a => a.Status == ActivityStatus.Finished))
+        {
+            try
+            {
+                var slap = await Api.GetActivitySlapAsync(a.Id);
+                if (slap is { State: not SlapState.None })
+                {
+                    _slapByActivity[a.Id] = slap;
+                }
+            }
+            catch (ApiException) { /* skip this one on a transient error */ }
+        }
+    }
+
+    private async Task OnInlineSlapChangedAsync()
+    {
+        await LoadSlapsAsync();
+        _standings = await Api.GetEventStandingsAsync(Id); // the slap shifted the standings
+        StateHasChanged();
+    }
+
     private async Task RefreshAsync()
     {
         _event = await Api.GetEventAsync(Id) ?? _event;
         _standings = await Api.GetEventStandingsAsync(Id);
+        await LoadSlapsAsync();
 
         // An activity may have just opened (or gained a location) — start tracking if needed and
         // re-check arrivals so a player already at the spot is prompted right away.
