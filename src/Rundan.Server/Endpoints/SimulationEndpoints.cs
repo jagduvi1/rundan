@@ -42,13 +42,19 @@ internal static class SimulationEndpoints
         }).AddEndpointFilter<EventManagerFilter>();
 
         app.MapPost("/api/events/{id:int}/reset-results", async (
-            int id, SimulationService sim, ScoreboardNotifier notifier, CancellationToken ct) =>
+            int id, bool clearChat, SimulationService sim, ScoreboardNotifier notifier, CancellationToken ct) =>
+            // clearChat comes from the query string (?clearChat=true); the client always sends it.
         {
             foreach (var activityId in await sim.EventActivityIdsAsync(id, ct))
             {
                 await sim.ResetAsync(activityId, ct);
                 await notifier.PushStatusAsync(activityId, ActivityStatus.Draft);
                 await notifier.PushScoreboardAsync(activityId, ct);
+            }
+
+            if (clearChat)
+            {
+                await sim.ClearEventChatAsync(id, ct);
             }
 
             return Results.Ok(new { ok = true });

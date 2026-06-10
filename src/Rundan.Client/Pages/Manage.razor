@@ -97,7 +97,7 @@ else
                 <select @bind="_editType" @bind:after="OnTypeChanged">
                     <option value="@ActivityType.Quiz">Quiz</option>
                     <option value="@ActivityType.Tipspromenad">Tipspromenad (quiz walk)</option>
-                    <option value="@ActivityType.Boule">Boule (knockout)</option>
+                    <option value="@ActivityType.Boule">Tournament (knockout)</option>
                     <option value="@ActivityType.ScoreGame">Other score game</option>
                     <option value="@ActivityType.WordGame">Word game</option>
                     <option value="@ActivityType.MapPin">Pin the city (map)</option>
@@ -275,7 +275,7 @@ else
 
     <div class="card stack">
         <h2>Courts / lanes</h2>
-        <p class="muted" style="font-size:.85rem">Add the playing surfaces (courts, fields, tracks, lanes). For Boule they're used to schedule the order of play.</p>
+        <p class="muted" style="font-size:.85rem">Add the playing surfaces (courts, fields, tracks, lanes). For a knockout tournament they're used to schedule the order of play.</p>
         <div class="field">
             <label>What they're called</label>
             <input @bind="_editCourtLabel" maxlength="30" placeholder="Court" style="width:180px" />
