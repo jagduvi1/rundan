@@ -70,13 +70,6 @@ else
         <Scoreboard Board="_board" MyParticipantId="_session?.ParticipantId" />
     </div>
 
-    @if (State.IsHost && _activity.Type == ActivityType.MusicQuiz && _activity.Status != ActivityStatus.Draft)
-    {
-        @* Distinct key: a host playing a live music quiz renders this AND <MusicQuizPlay> as
-           siblings, and @key must be unique across all keyed siblings (even of different types). *@
-        <MusicHostPanel @key='$"musichost-{_activity.Id}"' Activity="_activity" />
-    }
-
     @if (_activity.Status == ActivityStatus.Draft)
     {
         <div class="card muted">This activity hasn't opened yet. The host is still setting it up.</div>
@@ -190,6 +183,14 @@ else
                 <p class="muted">See the scoreboard above.</p>
             </div>
         }
+    }
+
+    @if (State.IsHost && _activity.Type == ActivityType.MusicQuiz && _activity.Status != ActivityStatus.Draft)
+    {
+        @* Host's "tracks to play" panel — kept at the end so the scoreboard and play form sit on top.
+           Distinct key: a host playing a live music quiz renders this AND <MusicQuizPlay> into the
+           same parent, and @key must be unique across all keyed siblings (even of different types). *@
+        <MusicHostPanel @key='$"musichost-{_activity.Id}"' Activity="_activity" />
     }
 
     @if (_activity.EventId is { } backId)
