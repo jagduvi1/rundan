@@ -45,7 +45,7 @@
         }
         else
         {
-            <p class="muted">Waiting for @Slap.WinnerName to take their slap…</p>
+            <p class="muted">Waiting for @(Slap.SlapperName ?? Slap.WinnerName) to take the slap…</p>
         }
 
         @if (CanManage)
@@ -124,7 +124,8 @@ else if (Slap.State == SlapState.Skipped)
     private bool _busy;
     private string? _error;
 
-    private bool CanSlap => ActingUserId is { } uid && Slap.WinnerUserIds.Contains(uid);
+    // Only the designated slapper (lowest overall score on the winning team) takes the slap.
+    private bool CanSlap => ActingUserId is { } uid && Slap.SlapperUserId == uid;
 
     // SlappedSends: the device of the slapped player gets to choose where the points go.
     private bool IsSlapped => ActingUserId is { } uid && Slap.SlappedUserId == uid;

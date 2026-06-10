@@ -118,7 +118,7 @@ else
             }
             else
             {
-                <p class="muted">Waiting for @slap.WinnerName to take the slap…</p>
+                <p class="muted">Waiting for @(slap.SlapperName ?? slap.WinnerName) to take the slap…</p>
             }
 
             @if (CanManage && !ProxyHere)
@@ -755,7 +755,8 @@ else
         string.Equals(name, _eventName, StringComparison.Ordinal)
         || (ProxyHere && string.Equals(name, State.Proxy!.Name, StringComparison.Ordinal));
 
-    private bool CanSlap(PendingSlapDto slap) => ActingUserId is { } uid && slap.WinnerUserIds.Contains(uid);
+    // Only the designated slapper (lowest overall score on the winning team) takes the slap.
+    private bool CanSlap(PendingSlapDto slap) => ActingUserId is { } uid && slap.SlapperUserId == uid;
     private IEnumerable<SlapPersonDto> SlapTargets(PendingSlapDto slap) =>
         slap.Members.Where(m => !slap.WinnerUserIds.Contains(m.UserId));
     private IEnumerable<SlapPersonDto> SlapRecipients(PendingSlapDto slap) =>
