@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.SignalR;
+using Rundan.Shared.Contracts;
 using Rundan.Shared.Realtime;
 
 namespace Rundan.Server.Hubs;
@@ -33,4 +34,15 @@ public sealed class ScoreboardHub : Hub<IScoreboardClient>
     /// <summary>Stop receiving event-level updates.</summary>
     public Task LeaveEvent(int eventId)
         => Groups.RemoveFromGroupAsync(Context.ConnectionId, ScoreboardGroups.ForEvent(eventId));
+
+    /// <summary>Relay a live-stopwatch start to everyone watching the activity, stamped with the
+    /// server time so they all tick from the same reference.</summary>
+    public Task StartTimer(int activityId, string key)
+        => Clients.Group(ScoreboardGroups.For(activityId)).TimerStarted(
+            new TimerStateDto { ActivityId = activityId, Key = key, StartedUtc = DateTimeOffset.UtcNow });
+
+    /// <summary>Relay a live-stopwatch stop.</summary>
+    public Task StopTimer(int activityId, string key)
+        => Clients.Group(ScoreboardGroups.For(activityId)).TimerStopped(
+            new TimerStateDto { ActivityId = activityId, Key = key });
 }

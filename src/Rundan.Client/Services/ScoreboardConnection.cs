@@ -21,6 +21,8 @@ public sealed class ScoreboardConnection(NavigationManager nav, AppState state) 
     public event Action<EventViewersDto>? ViewersChanged;
     public event Action<int>? EventChanged;
     public event Action<ChatMessageDto>? ChatPosted;
+    public event Action<TimerStateDto>? TimerStarted;
+    public event Action<TimerStateDto>? TimerStopped;
     public event Action? ConnectionStateChanged;
 
     public bool IsConnected => _connection?.State == HubConnectionState.Connected;
@@ -51,6 +53,8 @@ public sealed class ScoreboardConnection(NavigationManager nav, AppState state) 
         _connection.On<EventViewersDto>(ScoreboardMessages.ViewersChanged, v => ViewersChanged?.Invoke(v));
         _connection.On<int>(ScoreboardMessages.EventChanged, id => EventChanged?.Invoke(id));
         _connection.On<ChatMessageDto>(ScoreboardMessages.ChatPosted, m => ChatPosted?.Invoke(m));
+        _connection.On<TimerStateDto>(ScoreboardMessages.TimerStarted, t => TimerStarted?.Invoke(t));
+        _connection.On<TimerStateDto>(ScoreboardMessages.TimerStopped, t => TimerStopped?.Invoke(t));
 
         _connection.Reconnecting += _ => { ConnectionStateChanged?.Invoke(); return Task.CompletedTask; };
         _connection.Reconnected += async _ =>
@@ -132,6 +136,19 @@ public sealed class ScoreboardConnection(NavigationManager nav, AppState state) 
             {
                 /* re-joined on next reconnect */
             }
+        }
+    }
+
+    /// <summary>Tell everyone watching the activity that a live stopwatch just started (or stopped).</summary>
+    public Task StartTimerAsync(int activityId, string key) => InvokeTimerAsync(ScoreboardHubMethods.StartTimer, activityId, key);
+    public Task StopTimerAsync(int activityId, string key) => InvokeTimerAsync(ScoreboardHubMethods.StopTimer, activityId, key);
+
+    private async Task InvokeTimerAsync(string method, int activityId, string key)
+    {
+        if (_connection is { State: HubConnectionState.Connected } connection)
+        {
+            try { await connection.InvokeAsync(method, activityId, key); }
+            catch { /* best effort — the timer is just a live indicator */ }
         }
     }
 

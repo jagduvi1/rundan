@@ -20,6 +20,8 @@ public static class ScoreboardMessages
     public const string ViewersChanged = nameof(IScoreboardClient.ViewersChanged);
     public const string EventChanged = nameof(IScoreboardClient.EventChanged);
     public const string ChatPosted = nameof(IScoreboardClient.ChatPosted);
+    public const string TimerStarted = nameof(IScoreboardClient.TimerStarted);
+    public const string TimerStopped = nameof(IScoreboardClient.TimerStopped);
 }
 
 /// <summary>Client → server method names (hub invocations).</summary>
@@ -29,6 +31,8 @@ public static class ScoreboardHubMethods
     public const string LeaveActivity = "LeaveActivity";
     public const string JoinEvent = "JoinEvent";
     public const string LeaveEvent = "LeaveEvent";
+    public const string StartTimer = "StartTimer";
+    public const string StopTimer = "StopTimer";
 }
 
 /// <summary>
@@ -54,4 +58,10 @@ public interface IScoreboardClient
 
     /// <summary>A new message was posted to the event's group chat.</summary>
     Task ChatPosted(ChatMessageDto message);
+
+    /// <summary>A scorekeeper started a live stopwatch — everyone watching should tick it.</summary>
+    Task TimerStarted(TimerStateDto timer);
+
+    /// <summary>A live stopwatch was stopped/recorded.</summary>
+    Task TimerStopped(TimerStateDto timer);
 }

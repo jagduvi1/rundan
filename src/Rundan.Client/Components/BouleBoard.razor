@@ -47,18 +47,23 @@
                     <span class="grow"><b>@u.Name</b>@(has ? $" · {Format(UnitValue(u.Id))}" : "")</span>
                     @if (Activity.MeasuresTime)
                     {
-                        <button class="btn ghost small" @onclick="() => ToggleStopwatch(key)">@(IsRunning(key) ? "Stop" : "Start")</button>
+                        <button class="btn ghost small" @onclick="() => ToggleStopwatch(key)" disabled="@RemoteRunning(key)">@(IsRunning(key) ? "Stop" : "Start")</button>
                     }
                     @if (Activity.MeasuresTime && IsRunning(key))
                     {
                         <span style="font-variant-numeric:tabular-nums;font-size:1.15rem;font-weight:600;min-width:60px;text-align:right">@Clock(Elapsed(key))</span>
+                    }
+                    else if (Activity.MeasuresTime && RemoteRunning(key))
+                    {
+                        @* Another scorekeeper is timing this now — tick along, read-only. *@
+                        <span style="font-variant-numeric:tabular-nums;font-size:1.15rem;font-weight:600;min-width:60px;text-align:right;color:var(--green-700)" title="Someone is timing this now">⏱ @Clock(RemoteElapsed(key))</span>
                     }
                     else
                     {
                         <input type="number" min="0" max="100000" step="any" style="width:84px" value="@Fmt.Num(pending)" @onchange="e => SetPending(key, e)" />
                         <span class="muted">@UnitSuffix</span>
                     }
-                    <button class="btn small success" @onclick="() => RecordSingleAsync(u.Id, key)" disabled="@(_busy || pending <= 0)">Set</button>
+                    <button class="btn small success" @onclick="() => RecordSingleAsync(u.Id, key)" disabled="@(_busy || pending <= 0 || RemoteRunning(key))">Set</button>
                 </div>
             }
         }
@@ -147,6 +152,10 @@
     [Parameter] public List<ParticipantDto> Participants { get; set; } = new();
     [Parameter] public int RefreshKey { get; set; }
 
+    /// <summary>The activity's live connection — used to broadcast/receive the running stopwatch so
+    /// everyone watching sees the time-counter tick, not just the scorekeeper running it.</summary>
+    [Parameter] public ScoreboardConnection? Connection { get; set; }
+
     private int _round = 1;
     private readonly Dictionary<string, double> _pending = new();
     private List<ScoreEntryDto> _history = new();
@@ -157,6 +166,14 @@
     private int _loadedActivityId = -1;
 
     private readonly Dictionary<string, DateTimeOffset> _swStart = new();
+
+    // Stopwatches other scorekeepers are running, relayed live so we can tick them too (key → start).
+    private readonly Dictionary<string, DateTimeOffset> _remoteStart = new();
+    private ScoreboardConnection? _subscribedConn;
+
+    private bool RemoteRunning(string key) => !IsRunning(key) && _remoteStart.ContainsKey(key);
+    private double RemoteElapsed(string key) =>
+        _remoteStart.TryGetValue(key, out var start) ? (DateTimeOffset.UtcNow - start).TotalSeconds : 0;
 
     private bool PerPlayer => Activity.ScoreEntryMode == ScoreEntryMode.PerPlayer;
     private bool IsPoints => Activity.Measurement == Measurement.Points;
@@ -248,7 +265,7 @@
     private void EnsureTicking() =>
         _ticker ??= new System.Threading.Timer(_ => _ = InvokeAsync(() =>
         {
-            if (_swStart.Count == 0)
+            if (_swStart.Count == 0 && _remoteStart.Count == 0)
             {
                 _ticker?.Dispose();
                 _ticker = null;
@@ -258,7 +275,52 @@
             StateHasChanged();
         }), null, 250, 250);
 
-    public void Dispose() => _ticker?.Dispose();
+    public void Dispose()
+    {
+        _ticker?.Dispose();
+        if (_subscribedConn is not null)
+        {
+            _subscribedConn.TimerStarted -= OnTimerStarted;
+            _subscribedConn.TimerStopped -= OnTimerStopped;
+        }
+    }
+
+    // Subscribe to the live timer relay once we have a connection (and re-subscribe if it changes).
+    private void EnsureTimerSubscription()
+    {
+        if (ReferenceEquals(_subscribedConn, Connection))
+        {
+            return;
+        }
+
+        if (_subscribedConn is not null)
+        {
+            _subscribedConn.TimerStarted -= OnTimerStarted;
+            _subscribedConn.TimerStopped -= OnTimerStopped;
+        }
+
+        _subscribedConn = Connection;
+        if (_subscribedConn is not null)
+        {
+            _subscribedConn.TimerStarted += OnTimerStarted;
+            _subscribedConn.TimerStopped += OnTimerStopped;
+        }
+    }
+
+    private void OnTimerStarted(TimerStateDto t) => _ = InvokeAsync(() =>
+    {
+        if (t.ActivityId != Activity.Id) return;
+        _remoteStart[t.Key] = t.StartedUtc;
+        EnsureTicking();
+        StateHasChanged();
+    });
+
+    private void OnTimerStopped(TimerStateDto t) => _ = InvokeAsync(() =>
+    {
+        if (t.ActivityId != Activity.Id) return;
+        _remoteStart.Remove(t.Key);
+        StateHasChanged();
+    });
 
     private void ToggleStopwatch(string key)
     {
@@ -266,11 +328,13 @@
         {
             _pending[key] = Math.Clamp(Math.Round((DateTimeOffset.UtcNow - start).TotalSeconds), 0d, 100000d);
             _swStart.Remove(key);
+            _ = Connection?.StopTimerAsync(Activity.Id, key); // tell viewers it stopped
         }
         else
         {
             _swStart[key] = DateTimeOffset.UtcNow;
             EnsureTicking();
+            _ = Connection?.StartTimerAsync(Activity.Id, key); // let viewers tick along
         }
     }
 
@@ -344,6 +408,8 @@
 
     protected override async Task OnParametersSetAsync()
     {
+        EnsureTimerSubscription();
+
         if (Activity.Id != _loadedActivityId)
         {
             _loadedActivityId = Activity.Id;

@@ -17,6 +17,19 @@ public class ScoreEntryDto
     public DateTimeOffset RecordedUtc { get; set; }
 }
 
+/// <summary>Ephemeral live-stopwatch state relayed between scorekeepers so everyone watching an
+/// activity sees the running time-counter tick. Not persisted — only the final recorded time is.</summary>
+public class TimerStateDto
+{
+    public int ActivityId { get; set; }
+
+    /// <summary>Which row the timer belongs to (the BouleBoard unit key, e.g. a team's participant id).</summary>
+    public string Key { get; set; } = string.Empty;
+
+    /// <summary>Server time the timer started (so all viewers tick from the same reference).</summary>
+    public DateTimeOffset StartedUtc { get; set; }
+}
+
 /// <summary>Request to record (or correct) a score line. Acts as a scorekeeper action.</summary>
 public class RecordScoreRequest
 {
