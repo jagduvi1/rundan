@@ -30,6 +30,7 @@ public class AppDbContext : DbContext
     public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
     public DbSet<ActivityPhoto> ActivityPhotos => Set<ActivityPhoto>();
     public DbSet<PushSubscription> PushSubscriptions => Set<PushSubscription>();
+    public DbSet<MemoryCard> MemoryCards => Set<MemoryCard>();
     public DbSet<QuestionTemplate> QuestionTemplates => Set<QuestionTemplate>();
     public DbSet<QuestionTemplateOption> QuestionTemplateOptions => Set<QuestionTemplateOption>();
     public DbSet<QuestionTemplateTag> QuestionTemplateTags => Set<QuestionTemplateTag>();
@@ -240,6 +241,14 @@ public class AppDbContext : DbContext
             e.Property(x => x.Author).HasMaxLength(60).IsRequired();
             e.Property(x => x.Url).HasMaxLength(500).IsRequired();
             e.HasIndex(x => new { x.ActivityId, x.Id });
+            e.HasOne(x => x.Activity).WithMany()
+                .HasForeignKey(x => x.ActivityId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<MemoryCard>(e =>
+        {
+            e.Property(x => x.Text).HasMaxLength(120).IsRequired();
+            e.HasIndex(x => new { x.ActivityId, x.Order });
             e.HasOne(x => x.Activity).WithMany()
                 .HasForeignKey(x => x.ActivityId).OnDelete(DeleteBehavior.Cascade);
         });

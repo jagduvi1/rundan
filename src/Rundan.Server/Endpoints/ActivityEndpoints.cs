@@ -64,6 +64,13 @@ internal static class ActivityEndpoints
                 activity.MapCityCount = 5;
             }
 
+            // Memory races each team's board — fastest time (or fewest flips) wins.
+            if (req.Type == ActivityType.Memory)
+            {
+                activity.ScoringMode = ScoringMode.LowerWins;
+                activity.Measurement = Measurement.TimeSeconds;
+            }
+
             db.Activities.Add(activity);
             await db.SaveChangesAsync(ct);
 
@@ -272,6 +279,10 @@ internal static class ActivityEndpoints
             {
                 activity.MapCityCount = req.MapCityCount is int n ? Math.Clamp(n, 1, SwedishCities.All.Count) : 5;
                 activity.ScoringMode = ScoringMode.LowerWins; // distance — lowest total wins, always
+            }
+            if (activity.Type == ActivityType.Memory)
+            {
+                activity.ScoringMode = ScoringMode.LowerWins; // fastest time / fewest flips wins, always
             }
             activity.MatchFormat = req.MatchFormat;
             activity.BestOfSets = req.BestOfSets is 1 or 3 or 5 ? req.BestOfSets : 3;

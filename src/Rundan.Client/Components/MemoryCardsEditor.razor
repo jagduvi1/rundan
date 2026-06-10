@@ -1,0 +1,57 @@
+@inject RundanApi Api
+
+<div class="card stack">
+    <h2>Memory cards (@_words.Count pair@(_words.Count == 1 ? "" : "s"))</h2>
+    <p class="muted" style="font-size:.85rem">One label per line — each becomes two matching cards. Words, names or emoji all work.</p>
+    @if (_error is not null)
+    {
+        <div class="alert error">@_error</div>
+    }
+    <textarea rows="7" @bind="_text" placeholder="apple&#10;banana&#10;🐱&#10;Sweden" style="width:100%;font-family:inherit;line-height:1.5"></textarea>
+    <button class="btn small success" @onclick="SaveAsync" disabled="@_busy">@(_busy ? "Saving…" : "Save cards")</button>
+</div>
+
+@code {
+    [Parameter] public ActivityDto Activity { get; set; } = default!;
+
+    private string _text = string.Empty;
+    private List<string> _words = new();
+    private bool _busy;
+    private string? _error;
+    private int _loadedId = -1;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedId != Activity.Id)
+        {
+            _loadedId = Activity.Id;
+            await LoadAsync();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            var cards = await Api.GetMemoryCardsAsync(Activity.Id);
+            _words = cards.Select(c => c.Text).ToList();
+            _text = string.Join("\n", _words);
+        }
+        catch (ApiException ex) { _error = ex.Message; }
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var words = _text.Split('\n').Select(w => w.Trim()).Where(w => w.Length > 0).ToList();
+            var cards = await Api.SetMemoryCardsAsync(Activity.Id, words);
+            _words = cards.Select(c => c.Text).ToList();
+            _text = string.Join("\n", _words);
+        }
+        catch (ApiException ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+}

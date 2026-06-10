@@ -255,7 +255,7 @@ public sealed class GameService(AppDbContext db, TimeProvider clock)
     public async Task<ScoreEntryDto> RecordScoreAsync(
         Activity activity, RecordScoreRequest req, CancellationToken ct = default)
     {
-        if (activity.Type is not (ActivityType.Boule or ActivityType.ScoreGame))
+        if (activity.Type is not (ActivityType.Boule or ActivityType.ScoreGame or ActivityType.Memory))
         {
             throw new RuleViolationException("This activity does not use score rounds.");
         }
@@ -337,7 +337,7 @@ public sealed class GameService(AppDbContext db, TimeProvider clock)
     /// well-defined (a fixed set of teams/players); standalone games are still finished by the host.</summary>
     public async Task<bool> TryAutoFinishScoreGameAsync(Activity activity, CancellationToken ct = default)
     {
-        if (activity.Type != ActivityType.ScoreGame || activity.Status != ActivityStatus.Live || activity.EventId is null)
+        if (activity.Type is not (ActivityType.ScoreGame or ActivityType.Memory) || activity.Status != ActivityStatus.Live || activity.EventId is null)
         {
             return false;
         }

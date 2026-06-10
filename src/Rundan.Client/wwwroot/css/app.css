@@ -687,3 +687,21 @@ input:focus, select:focus, textarea:focus { outline: 3px solid var(--focus-ring)
     .diploma { box-shadow: 0 0 0 6px #fff, 0 0 0 8px var(--coral-500); margin: 0; border-radius: 0; }
     body { background: #fff; }
 }
+
+/* ---- Memory (card flip) ------------------------------------------------ */
+.memory-card {
+    aspect-ratio: 3 / 4;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--line);
+    font-size: 1rem; font-weight: 700;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    padding: .25rem; text-align: center; word-break: break-word; line-height: 1.1;
+    transition: background .15s ease, transform .08s ease;
+}
+.memory-card.down { background: radial-gradient(120% 120% at 70% 0%, var(--sea-500), var(--sea-700)); }
+.memory-card.down::after { content: "?"; color: rgba(255, 255, 255, .9); font-size: 1.5rem; font-family: var(--font-display); }
+.memory-card.up { background: #fff; color: var(--text-strong); box-shadow: 0 1px 4px rgba(0,0,0,.12); }
+.memory-card.matched { background: var(--green-50); color: var(--green-700); border-color: var(--green-100); }
+.memory-card:active:not(:disabled) { transform: scale(.97); }
+.memory-card:disabled { cursor: default; }

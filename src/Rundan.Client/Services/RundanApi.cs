@@ -311,6 +311,14 @@ public sealed class RundanApi(HttpClient http, AppState state)
         (await SendAsync<ScoreEntryDto>(
             HttpMethod.Post, $"api/activities/{id}/scores", body: request, participantToken: token))!;
 
+    // ---- Memory (card flip) ------------------------------------------------
+    public Task<List<MemoryCardDto>> GetMemoryCardsAsync(int id) =>
+        GetListAsync<MemoryCardDto>($"api/activities/{id}/memory-cards");
+
+    public async Task<List<MemoryCardDto>> SetMemoryCardsAsync(int id, List<string> words) =>
+        await SendAsync<List<MemoryCardDto>>(HttpMethod.Put, $"api/activities/{id}/memory-cards",
+            body: new SetMemoryCardsRequest { Words = words }, admin: true) ?? new();
+
     // ---- MapPin (player) ---------------------------------------------------
     public Task<List<MapCityDto>> GetMapCitiesAsync(int id, Guid token) =>
         GetListAsync<MapCityDto>($"api/activities/{id}/map-cities", participantToken: token);

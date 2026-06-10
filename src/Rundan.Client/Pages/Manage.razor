@@ -102,6 +102,7 @@ else
                     <option value="@ActivityType.WordGame">Word game</option>
                     <option value="@ActivityType.MapPin">Pin the city (map)</option>
                     <option value="@ActivityType.MusicQuiz">Music quiz</option>
+                    <option value="@ActivityType.Memory">Memory (card flip)</option>
                 </select>
                 @if (_editType != _activity.Type)
                 {
@@ -323,6 +324,27 @@ else
         else
         {
             <div class="card muted">Tracks are locked while the activity is @_activity.Status. Set it back to <b>Draft</b> to edit them.</div>
+        }
+    }
+
+    @if (_activity.Type == ActivityType.Memory)
+    {
+        <div class="card stack">
+            <div class="field">
+                <label>Scored by</label>
+                <select @bind="_editMeasurement" @bind:after="SaveDetailsAsync">
+                    <option value="@Measurement.TimeSeconds">Fastest time wins</option>
+                    <option value="@Measurement.Points">Fewest flips wins</option>
+                </select>
+            </div>
+        </div>
+        @if (_activity.Status == ActivityStatus.Draft)
+        {
+            <MemoryCardsEditor Activity="_activity" @key="(4, _activity.Id)" />
+        }
+        else
+        {
+            <div class="card muted">Cards are locked while the activity is @_activity.Status. Set it back to <b>Draft</b> to edit them.</div>
         }
     }
 }
