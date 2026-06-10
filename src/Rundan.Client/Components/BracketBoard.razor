@@ -457,21 +457,27 @@
 
     protected override async Task OnParametersSetAsync()
     {
-        if (Activity.Id != _loadedActivityId || RefreshKey != _lastRefreshKey)
+        var activityChanged = Activity.Id != _loadedActivityId;
+        if (activityChanged || RefreshKey != _lastRefreshKey)
         {
             _loadedActivityId = Activity.Id;
             _lastRefreshKey = RefreshKey;
-            await LoadAsync();
+            // A RefreshKey bump is a background SignalR scoreboard push — refresh the bracket but DON'T
+            // refetch the seed order, or it would wipe the host's in-progress drag ordering (which lives
+            // only client-side until they press Draw) every time a player joins the lobby.
+            await LoadAsync(reloadSeeds: activityChanged);
         }
     }
 
-    private async Task LoadAsync()
+    private async Task LoadAsync(bool reloadSeeds = true)
     {
         try { _bracket = await Api.GetBracketAsync(Activity.Id); }
         catch (ApiException ex) { _error = ex.Message; }
 
-        // Load the seed order for the pre-draw editor (host + manual seeding only).
-        if (State.IsHost && Activity.UseManualSeeding && _bracket is { Drawn: false })
+        // Load the seed order for the pre-draw editor (host + manual seeding only). Only on a genuine
+        // (re)load or when we have nothing yet — never on a background RefreshKey refresh.
+        if (State.IsHost && Activity.UseManualSeeding && _bracket is { Drawn: false }
+            && (reloadSeeds || _seeds.Count == 0))
         {
             try { _seeds = await Api.GetSeedsAsync(Activity.Id); } catch (ApiException) { _seeds = new(); }
         }

@@ -42,8 +42,9 @@ internal static class SimulationEndpoints
         }).AddEndpointFilter<EventManagerFilter>();
 
         app.MapPost("/api/events/{id:int}/reset-results", async (
-            int id, bool clearChat, SimulationService sim, ScoreboardNotifier notifier, CancellationToken ct) =>
-            // clearChat comes from the query string (?clearChat=true); the client always sends it.
+            int id, bool? clearChat, SimulationService sim, ScoreboardNotifier notifier, CancellationToken ct) =>
+            // clearChat is an optional query param (?clearChat=true); omitting it defaults to "don't clear"
+            // rather than 400ing (a non-nullable bool query param would be required).
         {
             foreach (var activityId in await sim.EventActivityIdsAsync(id, ct))
             {
@@ -52,7 +53,7 @@ internal static class SimulationEndpoints
                 await notifier.PushScoreboardAsync(activityId, ct);
             }
 
-            if (clearChat)
+            if (clearChat == true)
             {
                 await sim.ClearEventChatAsync(id, ct);
             }
