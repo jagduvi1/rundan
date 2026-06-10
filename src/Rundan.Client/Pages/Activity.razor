@@ -203,7 +203,7 @@ else
     @* Shared photo wall — once the activity is under way (not a draft). *@
     @if (_activity.Status != ActivityStatus.Draft)
     {
-        <PhotoWall @key="_activity.Id" ActivityId="_activity.Id" Session="_session" />
+        <PhotoWall @key="_activity.Id" ActivityId="_activity.Id" Session="_session" CanManage="State.IsHost" />
     }
 
     @if (_activity.EventId is { } backId)

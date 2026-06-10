@@ -156,6 +156,56 @@ internal static class GameplayEndpoints
             return Results.Ok(new ActivityPhotoDto { Id = photo.Id, Author = photo.Author, Url = photo.Url, CreatedUtc = photo.CreatedUtc });
         }).DisableAntiforgery();
 
+        app.MapDelete("/api/activities/{id:int}/photos/{photoId:int}", async (
+            int id, int photoId, AppDbContext db, StoragePaths paths, RundanOptions options,
+            HttpContext http, CancellationToken ct) =>
+        {
+            var photo = await db.ActivityPhotos.FirstOrDefaultAsync(p => p.Id == photoId && p.ActivityId == id, ct);
+            if (photo is null)
+            {
+                return Results.NotFound();
+            }
+
+            // Allowed for whoever can manage the event (host / event admin) …
+            var activity = await db.Activities.AsNoTracking().FirstOrDefaultAsync(a => a.Id == id, ct);
+            var canManage = activity?.EventId is int evId
+                && await EventAuthorization.CanManageEventAsync(http, db, options, evId, ct);
+
+            // … or the player who uploaded it (their participant token's name matches; names are
+            // unique within an activity).
+            var isUploader = false;
+            if (!canManage)
+            {
+                var raw = http.Request.Headers[ParticipantContext.HeaderName].ToString();
+                if (Guid.TryParse(raw, out var token) && token != Guid.Empty)
+                {
+                    var p = await db.Participants.AsNoTracking()
+                        .FirstOrDefaultAsync(x => x.ActivityId == id && x.Token == token, ct);
+                    isUploader = p is not null && p.DisplayName == photo.Author;
+                }
+            }
+
+            if (!canManage && !isUploader)
+            {
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
+            }
+
+            db.ActivityPhotos.Remove(photo);
+            await db.SaveChangesAsync(ct);
+
+            try // best-effort: drop the file too (an orphan is harmless otherwise)
+            {
+                var full = Path.Combine(paths.UploadsDir, Path.GetFileName(photo.Url));
+                if (File.Exists(full))
+                {
+                    File.Delete(full);
+                }
+            }
+            catch { /* ignore */ }
+
+            return Results.NoContent();
+        });
+
         // --- Scoreboard ---------------------------------------------------------
 
         app.MapGet("/api/activities/{id:int}/scoreboard", async (
