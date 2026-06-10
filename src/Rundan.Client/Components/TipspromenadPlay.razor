@@ -46,7 +46,7 @@ else
                 var done = _answered.ContainsKey(q.Id);
                 var canOpen = done || WithinRadius(q);
                 <li>
-                    <span class="grow"><b>Station @q.Order</b></span>
+                    <span class="grow"><b>Station @StationNumber(q)</b></span>
                     <a class="btn ghost small" href="@MapsUrl(q)" target="_blank" rel="noopener">🗺️ Maps</a>
                     @if (done)
                     {
@@ -70,7 +70,7 @@ else
         var mine = _answered.GetValueOrDefault(sel.Id);
         <div class="card stack">
             <div class="row">
-                <h2 class="grow">Question @sel.Order</h2>
+                <h2 class="grow">Question @StationNumber(sel)</h2>
                 <a class="btn ghost small" href="@MapsUrl(sel)" target="_blank" rel="noopener">🗺️ Maps</a>
                 <button class="btn ghost small" @onclick="() => _selectedId = null">Close</button>
             </div>
@@ -149,7 +149,7 @@ else
             }
             <div class="arrival__check">✓</div>
             <div class="arrival__title">You've arrived!</div>
-            <div class="arrival__sub">Question @aq?.Order</div>
+            <div class="arrival__sub">Question @(aq is { } a ? StationNumber(a) : 0)</div>
             <div class="arrival__cta">
                 <button class="btn accent block" @onclick="OpenArrived" @onclick:stopPropagation="true">Open the question</button>
             </div>
@@ -170,6 +170,10 @@ else
     private bool _loading = true;
     private bool _needMapInit;
     private List<QuestionDto> _questions = new();
+
+    // The station's number as the host sees it: its rank in the Order sequence (1..N, gap-tolerant),
+    // not its position in this player's possibly-shuffled list — so "Station 3" means the same to all.
+    private int StationNumber(QuestionDto q) => _questions.Count(x => x.Order < q.Order) + 1;
     private Dictionary<int, MyAnswerDto> _answered = new();
     private readonly Dictionary<int, double> _distances = new();
     private readonly HashSet<int> _notified = new();

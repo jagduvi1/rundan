@@ -9,11 +9,11 @@
     else
     {
         <ul class="list">
-            @foreach (var q in _questions)
+            @foreach (var (q, idx) in _questions.Select((q, i) => (q, i)))
             {
                 <li style="flex-wrap:wrap">
                     <span class="grow">
-                        <b>@q.Order.</b>
+                        <b>@(idx + 1).</b>
                         @if (q.Hidden)
                         {
                             <span class="muted"><i>Hidden — you'll see it when you play</i></span>
@@ -106,7 +106,7 @@
 </div>
 
 <div class="card stack">
-    <h2>@(_editId is null ? "Add a question" : $"Edit station #{_editOrder}")</h2>
+    <h2>@(_editId is null ? "Add a question" : $"Edit station #{_questions.FindIndex(q => q.Id == _editId) + 1}")</h2>
 
     @if (_error is not null)
     {

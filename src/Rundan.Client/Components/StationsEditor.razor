@@ -41,11 +41,11 @@
     else
     {
         <ul class="list">
-            @foreach (var q in _questions)
+            @foreach (var (q, idx) in _questions.Select((q, i) => (q, i)))
             {
                 <li style="flex-wrap:wrap">
                     <span class="grow">
-                        <b>#@q.Order</b>
+                        <b>#@(idx + 1)</b>
                         <span class="muted" style="font-size:.78rem">
                             @if (q.HasLocation)
                             {
