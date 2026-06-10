@@ -199,6 +199,10 @@ public sealed class RundanApi(HttpClient http, AppState state)
     public Task<ActivityDto?> GetActivityByCodeAsync(string code) =>
         TryGetAsync<ActivityDto>($"api/activities/by-code/{Uri.EscapeDataString(code.Trim())}");
 
+    /// <summary>The slap ceremony for one finished activity (pending to take, or the resolved outcome).</summary>
+    public Task<ActivitySlapDto?> GetActivitySlapAsync(int id) =>
+        TryGetAsync<ActivitySlapDto>($"api/activities/{id}/slap");
+
     public Task<List<ParticipantDto>> GetParticipantsAsync(int id) =>
         GetListAsync<ParticipantDto>($"api/activities/{id}/participants");
 

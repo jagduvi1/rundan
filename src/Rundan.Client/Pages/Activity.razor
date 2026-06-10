@@ -70,6 +70,13 @@ else
         <Scoreboard Board="_board" MyParticipantId="_session?.ParticipantId" />
     </div>
 
+    @* Slap ceremony — appears the moment this activity finishes (any order), winners act here. *@
+    @if (_slap is not null)
+    {
+        <SlapCeremony Slap="_slap" ActingUserId="_eventUserId" CanManage="State.IsHost"
+                      OnChanged="OnSlapChangedAsync" />
+    }
+
     @if (_activity.Status == ActivityStatus.Draft)
     {
         <div class="card muted">This activity hasn't opened yet. The host is still setting it up.</div>
@@ -220,6 +227,8 @@ else
     private bool _loading = true;
     private bool _reconnecting;
     private bool _isViewer;
+    private ActivitySlapDto? _slap;
+    private int? _eventUserId;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -251,10 +260,40 @@ else
             _session = await State.GetSessionAsync(Id);
             _board = await Api.GetScoreboardAsync(Id);
             _participants = await Api.GetParticipantsAsync(Id);
+
+            // For the slap ceremony: who this device is in the event roster, and the member token
+            // that lets them act (claimed earlier on the event page; restore it if not in memory).
+            if (_activity.EventId is { } evId2)
+            {
+                _eventUserId = await State.GetEventUserIdAsync(evId2);
+                State.ActiveMemberToken ??= await State.GetEventMemberTokenAsync(evId2);
+            }
+
+            await LoadSlapAsync();
             await StartConnectionAsync();
         }
 
         _loading = false;
+    }
+
+    private async Task LoadSlapAsync()
+    {
+        try
+        {
+            var slap = await Api.GetActivitySlapAsync(Id);
+            _slap = slap is { State: not SlapState.None } ? slap : null;
+        }
+        catch (ApiException)
+        {
+            // leave the previous slap state on a transient error
+        }
+    }
+
+    private async Task OnSlapChangedAsync()
+    {
+        await LoadSlapAsync();
+        _board = await Api.GetScoreboardAsync(Id); // the slap shifted the standings
+        StateHasChanged();
     }
 
     private async Task StartConnectionAsync()
@@ -279,7 +318,15 @@ else
     {
         _board = board;
         _scoreVersion++;
-        InvokeAsync(StateHasChanged);
+        _ = InvokeAsync(async () =>
+        {
+            // A taken slap broadcasts a scoreboard push — refresh the ceremony's outcome once finished.
+            if (_activity?.Status == ActivityStatus.Finished)
+            {
+                await LoadSlapAsync();
+            }
+            StateHasChanged();
+        });
     }
 
     private void OnStatusChanged(ActivityStatusChangedDto status)
@@ -287,6 +334,7 @@ else
         {
             _activity = await Api.GetActivityAsync(Id);
             _participants = await Api.GetParticipantsAsync(Id);
+            await LoadSlapAsync(); // finishing arms the slap ceremony
             StateHasChanged();
         });
 

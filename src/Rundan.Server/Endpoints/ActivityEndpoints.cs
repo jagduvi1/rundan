@@ -157,17 +157,9 @@ internal static class ActivityEndpoints
                 }
             }
 
-            // Slap twist: a pending slap must be resolved before the next activity starts.
-            if (req.Status == ActivityStatus.Live && activity.EventId is { } slapEventId)
-            {
-                var pending = await slaps.PendingAsync(slapEventId, ct);
-                if (pending is not null && pending.ActivityId != id)
-                {
-                    throw new RuleViolationException(
-                        $"{pending.WinnerName} still owes a slap from “{pending.ActivityTitle}” — resolve it first.",
-                        StatusCodes.Status409Conflict);
-                }
-            }
+            // Slaps no longer gate the next activity: activities finish out of order (e.g. an
+            // all-day tipspromenad), so each finished activity surfaces its own slap ceremony
+            // independently instead of blocking the running order.
 
             if (req.Status == ActivityStatus.Live && activity.StartedUtc is null)
             {
@@ -365,6 +357,10 @@ internal static class ActivityEndpoints
             var dto = await LoadDtoAsync(db, id, ct);
             return dto is null ? Results.NotFound() : Results.Ok(dto);
         });
+
+        // The slap ceremony for one finished activity (pending to take, or the resolved outcome).
+        app.MapGet("/api/activities/{id:int}/slap", async (int id, SlapService slaps, CancellationToken ct) =>
+            Results.Ok(await slaps.ActivitySlapAsync(id, ct)));
 
         app.MapGet("/api/activities/by-code/{code}", async (string code, AppDbContext db, CancellationToken ct) =>
         {
