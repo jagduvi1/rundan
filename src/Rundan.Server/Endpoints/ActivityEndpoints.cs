@@ -287,6 +287,19 @@ internal static class ActivityEndpoints
             activity.MatchFormat = req.MatchFormat;
             activity.BestOfSets = req.BestOfSets is 1 or 3 or 5 ? req.BestOfSets : 3;
             activity.GamesToWinSet = Math.Clamp(req.GamesToWinSet, 1, 100);
+
+            // Tournament (knockout) advanced options.
+            activity.UseGroupStage = req.UseGroupStage;
+            activity.GroupCount = Math.Clamp(req.GroupCount, 0, 32);
+            activity.GroupMatchFormat = req.GroupMatchFormat;
+            activity.GroupBestOfSets = req.GroupBestOfSets is 1 or 3 or 5 ? req.GroupBestOfSets : 1;
+            activity.GroupGamesToWinSet = Math.Clamp(req.GroupGamesToWinSet, 1, 100);
+            activity.AdvanceToPlayoffA = Math.Clamp(req.AdvanceToPlayoffA, 1, 16);
+            activity.AdvanceToPlayoffB = Math.Clamp(req.AdvanceToPlayoffB, 0, 16);
+            activity.PlayoffAConsolation = req.PlayoffAConsolation;
+            activity.PlayoffBConsolation = req.PlayoffBConsolation;
+            activity.UseManualSeeding = req.UseManualSeeding;
+            activity.TournamentScoring = req.TournamentScoring;
             await db.SaveChangesAsync(ct);
             return Results.Ok(await LoadDtoAsync(db, id, ct));
         }).AddEndpointFilter<ActivityManagerFilter>();

@@ -1,3 +1,5 @@
+using Microsoft.EntityFrameworkCore;
+using Rundan.Server.Data;
 using Rundan.Server.Security;
 using Rundan.Server.Services;
 using Rundan.Shared;
@@ -15,6 +17,25 @@ internal static class BracketEndpoints
             var dto = await svc.BuildAsync(id, ct);
             return dto is null ? Results.NotFound() : Results.Ok(dto);
         });
+
+        // Current manual-seed order (teams in seed order, unseeded last).
+        app.MapGet("/api/activities/{id:int}/seeds", async (int id, AppDbContext db, CancellationToken ct) =>
+        {
+            var seeds = await db.Participants.AsNoTracking()
+                .Where(p => p.ActivityId == id && p.IsTeam)
+                .OrderBy(p => p.Seed ?? int.MaxValue).ThenBy(p => p.Id)
+                .Select(p => new TeamSeedDto { TeamId = p.Id, Name = p.DisplayName, Seed = p.Seed ?? 0 })
+                .ToListAsync(ct);
+            return Results.Ok(seeds);
+        });
+
+        // Host / event admin: set the manual seed order.
+        app.MapPut("/api/activities/{id:int}/seeds", async (
+            int id, SetSeedsRequest req, BracketService svc, CancellationToken ct) =>
+        {
+            await svc.SetSeedsAsync(id, req.TeamIdsInOrder, ct);
+            return Results.Ok(new { ok = true });
+        }).AddEndpointFilter<ActivityManagerFilter>();
 
         // Host / event admin: draw, record a result, reset.
         app.MapPost("/api/activities/{id:int}/bracket/draw", async (

@@ -10,6 +10,12 @@ public class BracketMatch
     public int ActivityId { get; set; }
     public Activity? Activity { get; set; }
 
+    /// <summary>Which playoff bracket this belongs to: 0 = Playoff A / the single knockout, 1 = Playoff B (plate).</summary>
+    public int Pool { get; set; }
+
+    /// <summary>Set for round-robin group matches (the 0-based group index); null for knockout matches.</summary>
+    public int? GroupIndex { get; set; }
+
     public BracketSide Side { get; set; }
 
     /// <summary>1-based round within the side.</summary>

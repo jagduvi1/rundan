@@ -87,6 +87,21 @@ public enum MatchFormat
     Sets = 1,
 }
 
+/// <summary>
+/// For a knockout tournament: how the bracket/group results turn into the activity score that
+/// feeds the event standings (and the slap twist).
+/// </summary>
+public enum TournamentScoring
+{
+    /// <summary>Points per match win: group win = 1, Playoff A win = 3 (consolation 1), Playoff B win = 2
+    /// (consolation 1). Mirrors the classic 3/1 knockout scoring and sums into the scoreboard.</summary>
+    PerWin = 0,
+
+    /// <summary>Final placement: teams are ranked by how far they got (champion first) and scored by
+    /// position, so every team gets one placement value.</summary>
+    Placement = 1,
+}
+
 /// <summary>How an event forms its teams across its activities.</summary>
 public enum TeamShuffle
 {

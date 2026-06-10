@@ -21,6 +21,9 @@ public class Participant
     /// <summary>The creator/admin of the activity (can manage it from the same device).</summary>
     public bool IsAdmin { get; set; }
 
+    /// <summary>Manual tournament seed (1 = top seed) set by the host before the draw; null when unseeded.</summary>
+    public int? Seed { get; set; }
+
     public DateTimeOffset JoinedUtc { get; set; }
 
     public List<Answer> Answers { get; set; } = new();

@@ -60,6 +60,37 @@ public class ActivityDto
     /// <summary>Boule sets mode: games to win a set (e.g. 13 for pétanque).</summary>
     public int GamesToWinSet { get; set; } = 13;
 
+    // ---- Tournament (knockout) advanced options: optional round-robin group stage + seeding ----
+
+    /// <summary>Play a round-robin group stage before the knockout (the "primary round").</summary>
+    public bool UseGroupStage { get; set; }
+
+    /// <summary>How many groups to split the teams into. 0 = let the app suggest the best split.</summary>
+    public int GroupCount { get; set; }
+
+    /// <summary>Group-stage match format (can be shorter than the playoffs).</summary>
+    public MatchFormat GroupMatchFormat { get; set; }
+    public int GroupBestOfSets { get; set; } = 1;
+    public int GroupGamesToWinSet { get; set; } = 13;
+
+    /// <summary>How many teams from each group advance to Playoff A (the championship bracket).</summary>
+    public int AdvanceToPlayoffA { get; set; } = 2;
+
+    /// <summary>How many teams from each group advance to Playoff B (the plate bracket). 0 = no Playoff B.</summary>
+    public int AdvanceToPlayoffB { get; set; }
+
+    /// <summary>Give Playoff A a losers' consolation bracket (as a single knockout does today).</summary>
+    public bool PlayoffAConsolation { get; set; } = true;
+
+    /// <summary>Give Playoff B a losers' consolation bracket.</summary>
+    public bool PlayoffBConsolation { get; set; }
+
+    /// <summary>Seed teams manually (host ranks them 1→N) instead of a random draw.</summary>
+    public bool UseManualSeeding { get; set; }
+
+    /// <summary>How a tournament's results become the activity score (per-win points vs final placement).</summary>
+    public TournamentScoring TournamentScoring { get; set; }
+
     /// <summary>Serve question activities in a random order per player.</summary>
     public bool RandomizeQuestions { get; set; }
 
@@ -97,6 +128,9 @@ public class ActivityDto
 
     /// <summary>True for round-based score games (Boule / generic).</summary>
     public bool UsesRounds => Type is ActivityType.Boule or ActivityType.ScoreGame;
+
+    /// <summary>Tournament with the optional round-robin group stage switched on.</summary>
+    public bool UsesGroups => Type == ActivityType.Boule && UseGroupStage;
 
     /// <summary>Score game measured as a duration (stopwatch entry).</summary>
     public bool MeasuresTime => Measurement == Measurement.TimeSeconds;
@@ -169,6 +203,19 @@ public class UpdateActivityRequest
     public MatchFormat MatchFormat { get; set; }
     public int BestOfSets { get; set; } = 3;
     public int GamesToWinSet { get; set; } = 13;
+
+    // ---- Tournament (knockout) advanced options ----
+    public bool UseGroupStage { get; set; }
+    public int GroupCount { get; set; }
+    public MatchFormat GroupMatchFormat { get; set; }
+    public int GroupBestOfSets { get; set; } = 1;
+    public int GroupGamesToWinSet { get; set; } = 13;
+    public int AdvanceToPlayoffA { get; set; } = 2;
+    public int AdvanceToPlayoffB { get; set; }
+    public bool PlayoffAConsolation { get; set; } = true;
+    public bool PlayoffBConsolation { get; set; }
+    public bool UseManualSeeding { get; set; }
+    public TournamentScoring TournamentScoring { get; set; }
 }
 
 /// <summary>One city in a MapPin game as the player sees it — the real location is never sent until pinned.</summary>

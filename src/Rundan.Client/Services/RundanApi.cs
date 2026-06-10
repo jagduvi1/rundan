@@ -369,6 +369,13 @@ public sealed class RundanApi(HttpClient http, AppState state)
     public async Task<BracketDto> ResetBracketAsync(int id) =>
         (await SendAsync<BracketDto>(HttpMethod.Post, $"api/activities/{id}/bracket/reset", admin: true))!;
 
+    public Task<List<TeamSeedDto>> GetSeedsAsync(int id) =>
+        GetListAsync<TeamSeedDto>($"api/activities/{id}/seeds");
+
+    public async Task SetSeedsAsync(int id, List<int> teamIdsInOrder) =>
+        await SendAsync<object>(HttpMethod.Put, $"api/activities/{id}/seeds",
+            body: new SetSeedsRequest { TeamIdsInOrder = teamIdsInOrder }, admin: true);
+
     // ---- Word game ---------------------------------------------------------
     public async Task<WordGameDto?> GetWordGameAsync(int id, Guid token) =>
         await SendAsync<WordGameDto>(HttpMethod.Get, $"api/activities/{id}/wordgame", participantToken: token);

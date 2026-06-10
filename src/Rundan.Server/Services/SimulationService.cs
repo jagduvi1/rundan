@@ -130,8 +130,10 @@ public sealed class SimulationService(AppDbContext db, TeamService teams, Bracke
     {
         await brackets.GenerateAsync(activityId, ct);
 
-        // Resolve every playable match with a random winner until the bracket is complete.
-        for (var guard = 0; guard < 200; guard++)
+        // Resolve every playable match with a random winner until the tournament is complete. This
+        // sweeps the round-robin group matches first (which then seed the playoffs) and then the
+        // bracket rounds, so the guard must cover a full group stage plus two playoff brackets.
+        for (var guard = 0; guard < 1000; guard++)
         {
             var match = await db.BracketMatches
                 .Where(m => m.ActivityId == activityId && m.WinnerParticipantId == null && !m.IsBye
