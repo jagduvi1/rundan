@@ -258,6 +258,8 @@ internal static class ActivityEndpoints
             activity.HideQuestionsFromHost = req.HideQuestionsFromHost && activity.Type != ActivityType.MusicQuiz;
             activity.IsPublic = req.IsPublic;
             activity.ScoreEntryMode = req.ScoreEntryMode;
+            activity.RoundCount = Math.Clamp(req.RoundCount, 1, 50);
+            activity.PlayersPerRound = req.PlayersPerRound is int ppr ? Math.Clamp(ppr, 1, 50) : null;
             activity.Latitude = req.Latitude;
             activity.Longitude = req.Longitude;
             activity.RadiusMeters = req.RadiusMeters;

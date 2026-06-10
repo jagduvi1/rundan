@@ -41,6 +41,8 @@ public sealed class ActivityLibraryService(AppDbContext db, JoinCodeGenerator co
             RandomizeQuestions = src.RandomizeQuestions,
             HideQuestionsFromHost = src.HideQuestionsFromHost,
             ScoreEntryMode = src.ScoreEntryMode,
+            RoundCount = src.RoundCount,
+            PlayersPerRound = src.PlayersPerRound,
             CourtLabel = src.CourtLabel,
             Latitude = src.Latitude,
             Longitude = src.Longitude,

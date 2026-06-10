@@ -187,13 +187,34 @@ else
                     <input type="number" min="0" max="100000" @bind="_editTarget" style="width:160px" />
                 </div>
             }
-            <div class="field">
-                <label>Score entry</label>
-                <select @bind="_editScoreEntryMode">
-                    <option value="@ScoreEntryMode.Team">One score per team, per round</option>
-                    <option value="@ScoreEntryMode.PerPlayer">Per player, per round (summed to the team)</option>
-                </select>
-            </div>
+            @if (_activity.Type == ActivityType.ScoreGame)
+            {
+                <div class="field">
+                    <label>How the team plays</label>
+                    <select @bind="_editScoreEntryMode">
+                        <option value="@ScoreEntryMode.Team">Whole team plays each round (one score per round)</option>
+                        <option value="@ScoreEntryMode.PerPlayer">Each player plays a round (one score per player)</option>
+                    </select>
+                </div>
+                @if (_editScoreEntryMode == ScoreEntryMode.Team)
+                {
+                    <div class="field">
+                        <label>Number of rounds</label>
+                        <input type="number" min="1" max="50" @bind="_editRoundCount" style="width:120px" />
+                    </div>
+                }
+                else
+                {
+                    <p class="muted" style="font-size:.85rem;margin:.1rem 0 .4rem">
+                        Each player plays one round, so the number of rounds matches the team size.
+                    </p>
+                }
+                <div class="field">
+                    <label>Players per round <span class="muted" style="font-weight:400">(optional)</span></label>
+                    <input type="number" min="1" max="50" @bind="_editPlayersPerRound" style="width:120px" placeholder="any" />
+                    <div class="muted" style="font-size:.8rem">Shown to the scorekeeper and players as guidance.</div>
+                </div>
+            }
         }
 
         @if (_activity.Type == ActivityType.MapPin)
@@ -322,6 +343,8 @@ else
     private string? _editDescription;
     private string? _editImage;
     private ScoreEntryMode _editScoreEntryMode = ScoreEntryMode.Team;
+    private int _editRoundCount = 1;
+    private int? _editPlayersPerRound;
     private ScoringMode _editScoringMode = ScoringMode.HigherWins;
     private Measurement _editMeasurement = Measurement.Points;
     private int _editTarget = 147;
@@ -368,6 +391,8 @@ else
             _editDescription = _activity.Description;
             _editImage = _activity.ImageUrl;
             _editScoreEntryMode = _activity.ScoreEntryMode;
+            _editRoundCount = _activity.RoundCount;
+            _editPlayersPerRound = _activity.PlayersPerRound;
             _editScoringMode = _activity.ScoringMode;
             _editMeasurement = _activity.Measurement;
             _editTarget = _activity.TargetValue ?? 147;
@@ -488,6 +513,8 @@ else
                 HideQuestionsFromHost = _editHideQuestions,
                 IsPublic = _editPublic,
                 ScoreEntryMode = _editScoreEntryMode,
+                RoundCount = _editRoundCount,
+                PlayersPerRound = _editPlayersPerRound,
                 Latitude = _editLat,
                 Longitude = _editLng,
                 RadiusMeters = _editLat.HasValue ? _editRadius : null,

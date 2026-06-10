@@ -21,8 +21,14 @@ public class ActivityDto
     public string? ImageUrl { get; set; }
     public ActivityStatus Status { get; set; }
 
-    /// <summary>Score-game point entry mode (team total vs per player).</summary>
+    /// <summary>Score-game format: whole team plays each round (Team) vs each player plays a round (PerPlayer).</summary>
     public ScoreEntryMode ScoreEntryMode { get; set; }
+
+    /// <summary>Score game (Team format): how many rounds the team plays.</summary>
+    public int RoundCount { get; set; } = 1;
+
+    /// <summary>Score game: how many players take part each round (guidance shown to host/players).</summary>
+    public int? PlayersPerRound { get; set; }
 
     /// <summary>Optional GPS geofence for the activity.</summary>
     public double? Latitude { get; set; }
@@ -145,6 +151,13 @@ public class UpdateActivityRequest
     public bool HideQuestionsFromHost { get; set; }
     public bool IsPublic { get; set; }
     public ScoreEntryMode ScoreEntryMode { get; set; } = ScoreEntryMode.Team;
+
+    /// <summary>Score game (Team format): how many rounds the team plays.</summary>
+    public int RoundCount { get; set; } = 1;
+
+    /// <summary>Score game: how many players take part each round (guidance).</summary>
+    public int? PlayersPerRound { get; set; }
+
     public double? Latitude { get; set; }
     public double? Longitude { get; set; }
     public int? RadiusMeters { get; set; }

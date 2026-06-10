@@ -61,8 +61,16 @@ public class Activity
     /// <summary>The playing surfaces for this activity.</summary>
     public List<Court> Courts { get; set; } = new();
 
-    /// <summary>Score-game point entry: one score per team, or per player (summed to the team).</summary>
+    /// <summary>Score-game format: Team = the whole team plays each round (one score per round);
+    /// PerPlayer = each player plays a round (one score per player, rounds = team size).</summary>
     public ScoreEntryMode ScoreEntryMode { get; set; } = ScoreEntryMode.Team;
+
+    /// <summary>Score game (Team format): how many rounds the team plays. PerPlayer derives rounds
+    /// from the team size instead, so this is ignored there.</summary>
+    public int RoundCount { get; set; } = 1;
+
+    /// <summary>Score game: how many players take part in each round (guidance shown to host/players).</summary>
+    public int? PlayersPerRound { get; set; }
 
     /// <summary>Optional GPS geofence — when set, the activity unlocks on a player's phone within this radius.</summary>
     public double? Latitude { get; set; }
