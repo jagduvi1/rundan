@@ -195,7 +195,8 @@ internal static class EventEndpoints
         }).AddEndpointFilter<EventManagerFilter>();
 
         app.MapPut("/api/events/{id:int}/members", async (
-            int id, SetEventMembersRequest req, AppDbContext db, TimeProvider clock, CancellationToken ct) =>
+            int id, SetEventMembersRequest req, AppDbContext db, ScoreboardNotifier notifier,
+            TimeProvider clock, CancellationToken ct) =>
         {
             var ev = await db.Events.FirstOrDefaultAsync(e => e.Id == id, ct)
                 ?? throw new RuleViolationException("Event not found.", StatusCodes.Status404NotFound);
@@ -227,6 +228,10 @@ internal static class EventEndpoints
             }
 
             await db.SaveChangesAsync(ct);
+
+            // Tell connected players so a just-(de)selected admin's host controls update live.
+            await notifier.PushEventChangedAsync(id);
+
             return Results.Ok(await LoadEventDtoAsync(db, ev, ct));
         }).AddEndpointFilter<AdminEndpointFilter>();
 

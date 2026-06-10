@@ -19,6 +19,7 @@ public sealed class ScoreboardConnection(NavigationManager nav, AppState state) 
     public event Action<ParticipantDto>? ParticipantJoined;
     public event Action<ActivityStatusChangedDto>? StatusChanged;
     public event Action<EventViewersDto>? ViewersChanged;
+    public event Action<int>? EventChanged;
     public event Action? ConnectionStateChanged;
 
     public bool IsConnected => _connection?.State == HubConnectionState.Connected;
@@ -47,6 +48,7 @@ public sealed class ScoreboardConnection(NavigationManager nav, AppState state) 
         _connection.On<ActivityStatusChangedDto>(ScoreboardMessages.ActivityStatusChanged,
             s => StatusChanged?.Invoke(s));
         _connection.On<EventViewersDto>(ScoreboardMessages.ViewersChanged, v => ViewersChanged?.Invoke(v));
+        _connection.On<int>(ScoreboardMessages.EventChanged, id => EventChanged?.Invoke(id));
 
         _connection.Reconnecting += _ => { ConnectionStateChanged?.Invoke(); return Task.CompletedTask; };
         _connection.Reconnected += async _ =>

@@ -35,4 +35,9 @@ public sealed class ScoreboardNotifier(
     public Task PushViewersAsync(int eventId, List<string> viewers)
         => hub.Clients.Group(ScoreboardGroups.ForEvent(eventId))
             .ViewersChanged(new EventViewersDto { EventId = eventId, Viewers = viewers });
+
+    /// <summary>Tell everyone watching an event that its roster/admins changed, so they re-claim
+    /// (e.g. a player's admin flag was toggled and their host controls should appear/disappear live).</summary>
+    public Task PushEventChangedAsync(int eventId)
+        => hub.Clients.Group(ScoreboardGroups.ForEvent(eventId)).EventChanged(eventId);
 }

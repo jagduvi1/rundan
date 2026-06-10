@@ -1059,6 +1059,7 @@ else
         _conn.ScoreboardUpdated += OnRealtimeScore;
         _conn.StatusChanged += OnRealtimeStatus;
         _conn.ViewersChanged += OnRealtimeViewers;
+        _conn.EventChanged += OnRealtimeEventChanged;
         _conn.ConnectionStateChanged += OnConnectionStateChanged;
         try
         {
@@ -1079,6 +1080,16 @@ else
             StateHasChanged();
         }
     });
+    // The host changed this event's roster/admins — re-fetch (RefreshAsync re-claims, so a player
+    // just made/unmade an admin sees their host controls appear/disappear without a manual reload).
+    private void OnRealtimeEventChanged(int eventId)
+    {
+        if (eventId == Id)
+        {
+            RefreshSoon();
+        }
+    }
+
     private void RefreshSoon() => _ = InvokeAsync(RefreshAsync);
 
     private async Task RefreshAsync()
@@ -1601,6 +1612,7 @@ else
             _conn.ScoreboardUpdated -= OnRealtimeScore;
             _conn.StatusChanged -= OnRealtimeStatus;
             _conn.ViewersChanged -= OnRealtimeViewers;
+            _conn.EventChanged -= OnRealtimeEventChanged;
             _conn.ConnectionStateChanged -= OnConnectionStateChanged;
             await _conn.DisposeAsync();
             _conn = null;
