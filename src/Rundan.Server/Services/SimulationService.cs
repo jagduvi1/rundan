@@ -66,6 +66,10 @@ public sealed class SimulationService(AppDbContext db, TeamService teams, Bracke
     public async Task<List<int>> EventActivityIdsAsync(int eventId, CancellationToken ct = default) =>
         await db.Activities.Where(a => a.EventId == eventId).OrderBy(a => a.Order).Select(a => a.Id).ToListAsync(ct);
 
+    /// <summary>Deletes the whole group-chat history for an event (host opt-in on a restart).</summary>
+    public async Task ClearEventChatAsync(int eventId, CancellationToken ct = default) =>
+        await db.ChatMessages.Where(m => m.EventId == eventId).ExecuteDeleteAsync(ct);
+
     private async Task ClearResultsAsync(int activityId, CancellationToken ct)
     {
         db.Answers.RemoveRange(db.Answers.Where(a => a.Participant!.ActivityId == activityId));

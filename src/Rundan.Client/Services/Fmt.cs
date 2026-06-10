@@ -114,7 +114,7 @@ public static class Fmt
     {
         ActivityType.Quiz => "Quiz",
         ActivityType.Tipspromenad => "Tipspromenad",
-        ActivityType.Boule => "Boule",
+        ActivityType.Boule => "Tournament (knockout)",
         ActivityType.ScoreGame => "Score game",
         ActivityType.WordGame => "Word game",
         ActivityType.MapPin => "Pin the city (map)",

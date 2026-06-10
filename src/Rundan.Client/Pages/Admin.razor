@@ -110,7 +110,7 @@ else
         }
 
         <h3 style="margin-top:.4rem">New event</h3>
-        <p class="muted" style="font-size:.85rem">A series of activities (tipspromenad, quiz, boule…) played in order.</p>
+        <p class="muted" style="font-size:.85rem">A series of activities (tipspromenad, quiz, tournament…) played in order.</p>
         <input @bind="_eventName" placeholder="e.g. Midsommarfesten" maxlength="200" />
         <button class="btn block success" @onclick="CreateEventAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_eventName))">
             Create event
@@ -147,7 +147,7 @@ else
             <select @bind="_type">
                 <option value="@ActivityType.Quiz">Quiz</option>
                 <option value="@ActivityType.Tipspromenad">Tipspromenad (quiz walk)</option>
-                <option value="@ActivityType.Boule">Boule (knockout bracket)</option>
+                <option value="@ActivityType.Boule">Tournament (knockout bracket)</option>
                 <option value="@ActivityType.ScoreGame">Other score game</option>
                 <option value="@ActivityType.WordGame">Word game</option>
                 <option value="@ActivityType.MapPin">Pin the city (map)</option>

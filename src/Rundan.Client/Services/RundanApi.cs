@@ -342,8 +342,8 @@ public sealed class RundanApi(HttpClient http, AppState state)
     public async Task SimulateEventAsync(int eventId) =>
         await SendAsync<object>(HttpMethod.Post, $"api/events/{eventId}/simulate", admin: true);
 
-    public async Task ResetEventResultsAsync(int eventId) =>
-        await SendAsync<object>(HttpMethod.Post, $"api/events/{eventId}/reset-results", admin: true);
+    public async Task ResetEventResultsAsync(int eventId, bool clearChat = false) =>
+        await SendAsync<object>(HttpMethod.Post, $"api/events/{eventId}/reset-results?clearChat={clearChat}", admin: true);
 
     public Task<List<ActivityDto>> GetLibraryAsync() =>
         GetListAsync<ActivityDto>("api/activities/library", admin: true);
