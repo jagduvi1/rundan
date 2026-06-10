@@ -43,6 +43,60 @@ internal static class EventEndpoints
         app.MapGet("/api/events/active", async (AppDbContext db, CancellationToken ct) =>
             Results.Ok(await ListAllEventDtosAsync(db, ct)));
 
+        // A player reports their GPS; auto-start any OPEN activity whose geofence — or, for a
+        // tipspromenad, a question's geofence — they've walked into. Location-verified, so it can't
+        // be triggered from afar; only opened activities start (Draft ones aren't ready yet).
+        app.MapPost("/api/events/{id:int}/arrive", async (
+            int id, ArriveRequest req, AppDbContext db, ScoreboardNotifier notifier,
+            TimeProvider clock, CancellationToken ct) =>
+        {
+            var open = await db.Activities
+                .Where(a => a.EventId == id && a.Status == ActivityStatus.Open)
+                .ToListAsync(ct);
+            if (open.Count == 0)
+            {
+                return Results.Ok(new { started = Array.Empty<int>() });
+            }
+
+            var tipsIds = open.Where(a => a.Type == ActivityType.Tipspromenad).Select(a => a.Id).ToList();
+            var stations = tipsIds.Count == 0
+                ? new List<(int ActivityId, double Lat, double Lng, int? Radius)>()
+                : (await db.Questions.AsNoTracking()
+                        .Where(q => tipsIds.Contains(q.ActivityId) && q.Latitude != null && q.Longitude != null)
+                        .Select(q => new { q.ActivityId, q.Latitude, q.Longitude, q.RadiusMeters })
+                        .ToListAsync(ct))
+                    .Select(q => (ActivityId: q.ActivityId, Lat: q.Latitude!.Value, Lng: q.Longitude!.Value, Radius: q.RadiusMeters))
+                    .ToList();
+
+            static bool Within(double lat1, double lng1, double lat2, double lng2, int? radius) =>
+                GeoMath.DistanceKm(lat1, lng1, lat2, lng2) * 1000 <= (radius is > 0 ? radius.Value : 25);
+
+            var started = new List<int>();
+            foreach (var a in open)
+            {
+                var here =
+                    (a.Latitude is double alat && a.Longitude is double alng && Within(req.Lat, req.Lng, alat, alng, a.RadiusMeters))
+                    || stations.Any(s => s.ActivityId == a.Id && Within(req.Lat, req.Lng, s.Lat, s.Lng, s.Radius));
+                if (here)
+                {
+                    a.Status = ActivityStatus.Live;
+                    a.StartedUtc ??= clock.GetUtcNow();
+                    started.Add(a.Id);
+                }
+            }
+
+            if (started.Count > 0)
+            {
+                await db.SaveChangesAsync(ct);
+                foreach (var aid in started)
+                {
+                    await notifier.PushStatusAsync(aid, ActivityStatus.Live);
+                }
+            }
+
+            return Results.Ok(new { started });
+        });
+
         // Viewers (spectators): register / heartbeat / leave — access-gated, no competing identity.
         app.MapPost("/api/events/{id:int}/viewers", async (
             int id, RegisterViewerRequest req, AppDbContext db, ScoreboardNotifier notifier, TimeProvider clock, CancellationToken ct) =>

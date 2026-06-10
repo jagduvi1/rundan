@@ -130,6 +130,14 @@ public class SkipSlapRequest
     public int ActivityId { get; set; }
 }
 
+/// <summary>A player reports their GPS so the server can auto-start any open activity whose geofence
+/// — or, for a tipspromenad, a question's geofence — they've walked into.</summary>
+public class ArriveRequest
+{
+    public double Lat { get; set; }
+    public double Lng { get; set; }
+}
+
 /// <summary>Registers (or heartbeats) a viewer of an event. Pass the existing token to update.</summary>
 public class RegisterViewerRequest
 {
