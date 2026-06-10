@@ -45,6 +45,37 @@ public class Activity
     /// <summary>Boule sets mode: games needed to win a set (guidance for the result popup, e.g. 13 for pétanque).</summary>
     public int GamesToWinSet { get; set; } = 13;
 
+    // ---- Tournament (knockout) advanced options: optional round-robin group stage + seeding ----
+
+    /// <summary>Play a round-robin group stage before the knockout (the "primary round").</summary>
+    public bool UseGroupStage { get; set; }
+
+    /// <summary>How many groups to split the teams into. 0 = let the app suggest the best split.</summary>
+    public int GroupCount { get; set; }
+
+    /// <summary>Group-stage match format (can be shorter than the playoffs).</summary>
+    public MatchFormat GroupMatchFormat { get; set; } = MatchFormat.Free;
+    public int GroupBestOfSets { get; set; } = 1;
+    public int GroupGamesToWinSet { get; set; } = 13;
+
+    /// <summary>How many teams from each group advance to Playoff A (championship bracket).</summary>
+    public int AdvanceToPlayoffA { get; set; } = 2;
+
+    /// <summary>How many teams from each group advance to Playoff B (plate). 0 = no Playoff B.</summary>
+    public int AdvanceToPlayoffB { get; set; }
+
+    /// <summary>Give Playoff A a losers' consolation bracket (the default single-knockout behaviour).</summary>
+    public bool PlayoffAConsolation { get; set; } = true;
+
+    /// <summary>Give Playoff B a losers' consolation bracket.</summary>
+    public bool PlayoffBConsolation { get; set; }
+
+    /// <summary>Seed teams manually (host ranks them) instead of a random draw.</summary>
+    public bool UseManualSeeding { get; set; }
+
+    /// <summary>How tournament results become the activity score (per-win points vs final placement).</summary>
+    public TournamentScoring TournamentScoring { get; set; } = TournamentScoring.PerWin;
+
     /// <summary>For question activities: serve the questions in a random order per player.</summary>
     public bool RandomizeQuestions { get; set; }
 

@@ -3,7 +3,7 @@
 
 <div class="card stack">
     <div class="row">
-        <h2 class="grow">Slutspelsträd</h2>
+        <h2 class="grow">Tournament</h2>
         @if (State.IsHost && (_bracket?.Drawn ?? false))
         {
             <button class="btn ghost small danger" @onclick="ResetAsync" disabled="@_busy">Reset</button>
@@ -17,10 +17,38 @@
 
     @if (_bracket is null || !_bracket.Drawn)
     {
-        <p class="muted">The bracket hasn't been drawn yet.</p>
-        @if (State.IsHost)
+        @* ---- Pre-draw: optional manual seeding, then the draw ---- *@
+        @if (State.IsHost && Activity.UseManualSeeding && _seeds.Count > 1)
         {
-            <button class="btn block success" @onclick="DrawAsync" disabled="@_busy">Draw the teams</button>
+            <h3>Seed the teams</h3>
+            <p class="muted" style="font-size:.85rem">
+                Rank the teams (1 = top seed). @(Activity.UseGroupStage
+                    ? "Seeds are spread across the groups."
+                    : "The bracket is built so the top seed meets the lowest.")
+            </p>
+            <ol class="list">
+                @for (var i = 0; i < _seeds.Count; i++)
+                {
+                    var idx = i;
+                    <li>
+                        <span class="badge">@(idx + 1)</span>
+                        <span class="grow">@_seeds[idx].Name</span>
+                        <button class="btn ghost small" @onclick="() => MoveSeed(idx, -1)" disabled="@(idx == 0)">▲</button>
+                        <button class="btn ghost small" @onclick="() => MoveSeed(idx, 1)" disabled="@(idx == _seeds.Count - 1)">▼</button>
+                    </li>
+                }
+            </ol>
+        }
+
+        @if (_bracket is null)
+        {
+            <p class="muted">Loading…</p>
+        }
+        else if (State.IsHost)
+        {
+            <button class="btn block success" @onclick="DrawAsync" disabled="@_busy">
+                @(Activity.UseGroupStage ? "Draw the groups" : "Draw the teams")
+            </button>
         }
         else
         {
@@ -29,65 +57,112 @@
     }
     else
     {
-        @if (_bracket.Complete)
+        @* ---- Group stage ---- *@
+        @if (_bracket.HasGroupStage)
         {
-            <div class="alert success">Champion: <b>@_bracket.ChampionName</b></div>
-        }
-
-        <h3>Winners</h3>
-        <div class="bracket">
-            @foreach (var r in Rounds(BracketSide.Winners))
+            <h3>Group stage</h3>
+            @if (!_bracket.GroupStageComplete)
             {
-                <div class="round">
-                    @foreach (var m in Matches(BracketSide.Winners, r))
+                <p class="muted" style="font-size:.85rem">Play out every group match — the playoffs are seeded automatically once they're all in.</p>
+            }
+
+            @foreach (var g in _bracket.Groups)
+            {
+                <div class="stack" style="gap:.4rem">
+                    <h4 style="margin:.25rem 0">Group @(g.GroupIndex + 1)</h4>
+                    <table class="grp">
+                        <thead>
+                            <tr><th>#</th><th style="text-align:left">Team</th><th>P</th><th>W</th><th>L</th><th>+/−</th><th></th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var row in g.Rows)
+                            {
+                                <tr>
+                                    <td>@row.Rank</td>
+                                    <td style="text-align:left">@row.Name</td>
+                                    <td>@row.Played</td>
+                                    <td>@row.Won</td>
+                                    <td>@row.Lost</td>
+                                    <td>@(row.Diff > 0 ? "+" : "")@row.Diff</td>
+                                    <td>@AdvanceBadge(row.AdvancesToPool)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+
+                    @{ var gm = GroupMatches(g.GroupIndex).ToList(); }
+                    @if (gm.Any(m => !m.Decided))
                     {
-                        @RenderMatch(m)
+                        <ul class="list">
+                            @foreach (var m in gm)
+                            {
+                                @RenderRow(m)
+                            }
+                        </ul>
                     }
                 </div>
             }
-        </div>
+        }
 
-        @if (_bracket.Matches.Any(m => m.Side == BracketSide.Losers))
+        @* ---- Playoff brackets (A = championship, B = plate) ---- *@
+        @foreach (var pool in PoolsPresent())
         {
-            <h3>Losers' bracket</h3>
+            var champ = pool == 0 ? _bracket.ChampionName : _bracket.PlayoffBChampionName;
+            <h3>@PoolLabel(pool)</h3>
+            @if (!string.IsNullOrEmpty(champ))
+            {
+                <div class="alert success">@(pool == 0 ? "Champion" : "Plate winner"): <b>@champ</b></div>
+            }
+
+            <h4 style="margin:.25rem 0">Winners</h4>
             <div class="bracket">
-                @foreach (var r in Rounds(BracketSide.Losers))
+                @foreach (var r in PoolRounds(pool, BracketSide.Winners))
                 {
                     <div class="round">
-                        @foreach (var m in Matches(BracketSide.Losers, r))
+                        @foreach (var m in PoolMatches(pool, BracketSide.Winners, r))
                         {
                             @RenderMatch(m)
                         }
                     </div>
                 }
             </div>
+
+            @if (PoolMatches(pool, BracketSide.Losers).Any())
+            {
+                <h4 style="margin:.25rem 0">Consolation</h4>
+                <div class="bracket">
+                    @foreach (var r in PoolRounds(pool, BracketSide.Losers))
+                    {
+                        <div class="round">
+                            @foreach (var m in PoolMatches(pool, BracketSide.Losers, r))
+                            {
+                                @RenderMatch(m)
+                            }
+                        </div>
+                    }
+                </div>
+            }
         }
 
-        <h3>Order of play</h3>
-        <ul class="list">
-            @foreach (var m in OrderOfPlay())
-            {
-                <li>
-                    @if (!string.IsNullOrEmpty(m.CourtName))
-                    {
-                        <span class="badge">@m.CourtName</span>
-                    }
-                    <span class="grow">@(m.AName ?? "—") vs @(m.IsBye ? "(walkover)" : m.BName ?? "—")</span>
-                    @if (m.Decided)
-                    {
-                        <span class="muted" style="font-size:.85rem">
-                            @WinnerName(m)@(string.IsNullOrEmpty(m.Score) ? "" : $" · {m.Score}")
-                        </span>
-                    }
-                    else if (!m.IsBye)
-                    {
-                        <span class="muted" style="font-size:.85rem">@(m.Side == BracketSide.Winners ? "W" : "L")@m.Round</span>
-                    }
-                </li>
-            }
-        </ul>
+        @if (Playable().Any())
+        {
+            <h3>Order of play</h3>
+            <ul class="list">
+                @foreach (var m in Playable())
+                {
+                    <li>
+                        @if (!string.IsNullOrEmpty(m.CourtName))
+                        {
+                            <span class="badge">@m.CourtName</span>
+                        }
+                        <span class="grow">@(m.AName ?? "—") vs @(m.IsBye ? "(walkover)" : m.BName ?? "—")</span>
+                        <span class="muted" style="font-size:.85rem">@StageTag(m)</span>
+                    </li>
+                }
+            </ul>
+        }
 
-        <p class="muted" style="font-size:.8rem">Points: 3 per winners'-side win, 1 per losers'-side win — fed into the scoreboard above.</p>
+        <p class="muted" style="font-size:.8rem">@ScoringLegend()</p>
     }
 </div>
 
@@ -106,10 +181,10 @@
                 <span class="grow" style="text-align:right">@(rm.BName ?? "—")</span>
             </div>
 
-            @if (Activity.MatchFormat == MatchFormat.Sets)
+            @if (SelFormat == MatchFormat.Sets)
             {
                 <p class="muted" style="font-size:.8rem">
-                    Best of @Activity.BestOfSets sets · first to @Activity.GamesToWinSet wins a set · @SetsToWin to take the match.
+                    Best of @SelBestOf sets · first to @SelGames wins a set · @SetsToWin to take the match.
                 </p>
             }
 
@@ -122,7 +197,7 @@
             {
                 var idx = i;
                 <div class="row" style="align-items:center;gap:.5rem">
-                    @if (Activity.MatchFormat == MatchFormat.Sets)
+                    @if (SelFormat == MatchFormat.Sets)
                     {
                         <span class="muted" style="width:52px;font-size:.85rem">Set @(idx + 1)</span>
                     }
@@ -145,6 +220,7 @@
     [Parameter] public int RefreshKey { get; set; }
 
     private BracketDto? _bracket;
+    private List<TeamSeedDto> _seeds = new();
     private bool _busy;
     private string? _error;
     private int _loadedActivityId = -1;
@@ -156,8 +232,86 @@
     private int[] _scoreB = Array.Empty<int>();
     private string? _resultError;
 
-    private int RowCount => Activity.MatchFormat == MatchFormat.Sets ? Math.Max(1, Activity.BestOfSets) : 1;
-    private int SetsToWin => Math.Max(1, Activity.BestOfSets) / 2 + 1;
+    // The selected match's format (group matches can be shorter than the playoffs).
+    private bool SelGroup => _resultMatch?.GroupIndex != null;
+    private MatchFormat SelFormat => SelGroup ? Activity.GroupMatchFormat : Activity.MatchFormat;
+    private int SelBestOf => SelGroup ? Math.Max(1, Activity.GroupBestOfSets) : Math.Max(1, Activity.BestOfSets);
+    private int SelGames => SelGroup ? Activity.GroupGamesToWinSet : Activity.GamesToWinSet;
+    private int RowCount => SelFormat == MatchFormat.Sets ? SelBestOf : 1;
+    private int SetsToWin => SelBestOf / 2 + 1;
+
+    // ---- Group / pool helpers ----
+    private IEnumerable<BracketMatchDto> GroupMatches(int groupIndex) => _bracket!.Matches
+        .Where(m => m.GroupIndex == groupIndex).OrderBy(m => m.Round).ThenBy(m => m.Slot);
+
+    private IEnumerable<int> PoolsPresent() => _bracket!.Matches
+        .Where(m => m.GroupIndex == null).Select(m => m.Pool).Distinct().OrderBy(p => p);
+
+    private IEnumerable<int> PoolRounds(int pool, BracketSide side) => _bracket!.Matches
+        .Where(m => m.GroupIndex == null && m.Pool == pool && m.Side == side)
+        .Select(m => m.Round).Distinct().OrderBy(r => r);
+
+    private IEnumerable<BracketMatchDto> PoolMatches(int pool, BracketSide side) => _bracket!.Matches
+        .Where(m => m.GroupIndex == null && m.Pool == pool && m.Side == side);
+
+    private IEnumerable<BracketMatchDto> PoolMatches(int pool, BracketSide side, int round) =>
+        PoolMatches(pool, side).Where(m => m.Round == round).OrderBy(m => m.Slot);
+
+    private IEnumerable<BracketMatchDto> Playable() => _bracket!.Matches
+        .Where(m => m.Ready && !m.Decided)
+        .OrderBy(m => m.GroupIndex.HasValue ? m.GroupIndex.Value : 1000)
+        .ThenBy(m => m.Pool).ThenBy(m => (int)m.Side).ThenBy(m => m.Round).ThenBy(m => m.Slot);
+
+    private string PoolLabel(int pool) => _bracket!.HasGroupStage ? (pool == 0 ? "Playoff A" : "Playoff B")
+        : "Knockout";
+
+    private string StageTag(BracketMatchDto m) => m.GroupIndex is int g
+        ? $"Group {g + 1}"
+        : $"{PoolLabel(m.Pool).Replace("Playoff ", "")}{(m.Side == BracketSide.Winners ? "W" : "L")}{m.Round}";
+
+    private RenderFragment AdvanceBadge(int? pool) => builder =>
+    {
+        if (pool is null)
+        {
+            return;
+        }
+
+        builder.OpenElement(0, "span");
+        builder.AddAttribute(1, "class", "badge");
+        builder.AddAttribute(2, "style", pool == 0 ? "background:var(--green-100);color:var(--green-700)" : "");
+        builder.AddContent(3, pool == 0 ? "→ A" : "→ B");
+        builder.CloseElement();
+    };
+
+    private string ScoringLegend()
+    {
+        if (Activity.TournamentScoring == TournamentScoring.Placement)
+        {
+            return "Scoring: teams are ranked by how far they got and scored by final placement — fed into the scoreboard above.";
+        }
+
+        return _bracket!.HasGroupStage
+            ? "Points: 1 per group win, 3 per Playoff A win, 2 per Playoff B win, 1 per consolation win — fed into the scoreboard above."
+            : "Points: 3 per winners'-side win, 1 per consolation win — fed into the scoreboard above.";
+    }
+
+    // A compact pickable row (used for round-robin group matches and the order of play).
+    private RenderFragment RenderRow(BracketMatchDto m) =>
+    @<li>
+        @if (!string.IsNullOrEmpty(m.CourtName))
+        {
+            <span class="badge">@m.CourtName</span>
+        }
+        <span class="grow">@(m.AName ?? "—") vs @(m.BName ?? "—")</span>
+        @if (m.Decided)
+        {
+            <span class="muted" style="font-size:.85rem">@WinnerName(m)@(string.IsNullOrEmpty(m.Score) ? "" : $" · {m.Score}")</span>
+        }
+        else if (CanPick(m, m.AId))
+        {
+            <button class="btn small success" @onclick="() => OpenResult(m)">Enter</button>
+        }
+    </li>;
 
     private RenderFragment RenderMatch(BracketMatchDto m) =>
     @<div class="match">
@@ -198,15 +352,6 @@
         return m.WinnerParticipantId == id ? "win" : m.Decided ? "lose" : string.Empty;
     }
 
-    private IEnumerable<int> Rounds(BracketSide side) => _bracket!.Matches
-        .Where(m => m.Side == side).Select(m => m.Round).Distinct().OrderBy(r => r);
-
-    private IEnumerable<BracketMatchDto> Matches(BracketSide side, int round) => _bracket!.Matches
-        .Where(m => m.Side == side && m.Round == round).OrderBy(m => m.Slot);
-
-    private IEnumerable<BracketMatchDto> OrderOfPlay() => _bracket!.Matches
-        .OrderBy(m => m.Round).ThenBy(m => m.Side).ThenBy(m => m.Slot);
-
     private string WinnerName(BracketMatchDto m) =>
         (m.WinnerParticipantId == m.AId ? m.AName : m.BName) ?? "—";
 
@@ -232,7 +377,7 @@
             return null;
         }
 
-        if (Activity.MatchFormat == MatchFormat.Sets)
+        if (SelFormat == MatchFormat.Sets)
         {
             int a = 0, b = 0;
             for (var i = 0; i < RowCount; i++)
@@ -257,7 +402,7 @@
             var id = WinnerId();
             if (id is null)
             {
-                return Activity.MatchFormat == MatchFormat.Sets ? "Enter the set scores" : "Enter the score";
+                return SelFormat == MatchFormat.Sets ? "Enter the set scores" : "Enter the score";
             }
 
             var name = id == _resultMatch!.AId ? _resultMatch.AName : _resultMatch.BName;
@@ -299,6 +444,17 @@
         }
     }
 
+    private void MoveSeed(int index, int delta)
+    {
+        var target = index + delta;
+        if (target < 0 || target >= _seeds.Count)
+        {
+            return;
+        }
+
+        (_seeds[index], _seeds[target]) = (_seeds[target], _seeds[index]);
+    }
+
     protected override async Task OnParametersSetAsync()
     {
         if (Activity.Id != _loadedActivityId || RefreshKey != _lastRefreshKey)
@@ -313,18 +469,49 @@
     {
         try { _bracket = await Api.GetBracketAsync(Activity.Id); }
         catch (ApiException ex) { _error = ex.Message; }
+
+        // Load the seed order for the pre-draw editor (host + manual seeding only).
+        if (State.IsHost && Activity.UseManualSeeding && _bracket is { Drawn: false })
+        {
+            try { _seeds = await Api.GetSeedsAsync(Activity.Id); } catch (ApiException) { _seeds = new(); }
+        }
     }
 
-    private async Task DrawAsync() => await RunAsync(() => Api.DrawBracketAsync(Activity.Id));
-    private async Task ResetAsync() => await RunAsync(() => Api.ResetBracketAsync(Activity.Id));
-
-    private async Task RunAsync(Func<Task<BracketDto>> action)
+    private async Task DrawAsync()
     {
         _busy = true;
         _error = null;
         try
         {
-            _bracket = await action();
+            // Persist the chosen seed order first, then draw from it.
+            if (Activity.UseManualSeeding && _seeds.Count > 1)
+            {
+                await Api.SetSeedsAsync(Activity.Id, _seeds.Select(s => s.TeamId).ToList());
+            }
+
+            _bracket = await Api.DrawBracketAsync(Activity.Id);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ResetAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            _bracket = await Api.ResetBracketAsync(Activity.Id);
+            if (State.IsHost && Activity.UseManualSeeding)
+            {
+                try { _seeds = await Api.GetSeedsAsync(Activity.Id); } catch (ApiException) { }
+            }
         }
         catch (ApiException ex)
         {

@@ -257,6 +257,103 @@ else
                     </div>
                 </div>
             }
+
+            <div class="row" style="margin-top:.25rem">
+                <button class="btn ghost small grow" @onclick="() => _showAdvanced = !_showAdvanced">
+                    @(_showAdvanced ? "▾" : "▸") Advanced — group stage, seeding & scoring
+                </button>
+            </div>
+
+            @if (_showAdvanced)
+            {
+                <div class="stack" style="border:1px solid var(--line);border-radius:12px;padding:.85rem;gap:.85rem">
+                    @* ---- Group stage (primary round-robin) ---- *@
+                    <label class="row" style="gap:.5rem;align-items:center">
+                        <input type="checkbox" @bind="_editUseGroupStage" />
+                        <b>Play a group stage first</b> <span class="muted">(round-robin, then a knockout)</span>
+                    </label>
+
+                    @if (_editUseGroupStage)
+                    {
+                        <div class="row wrap" style="gap:.6rem">
+                            <div class="field" style="width:200px">
+                                <label>Number of groups</label>
+                                <input type="number" min="0" max="32" @bind="_editGroupCount" />
+                                <p class="muted" style="font-size:.78rem">0 = suggest the best split@(SuggestedGroupsHint())</p>
+                            </div>
+                            <div class="field" style="width:220px">
+                                <label>Group match results</label>
+                                <select @bind="_editGroupMatchFormat">
+                                    <option value="@MatchFormat.Free">Free scoring (one score)</option>
+                                    <option value="@MatchFormat.Sets">Sets — best-of</option>
+                                </select>
+                            </div>
+                        </div>
+                        @if (_editGroupMatchFormat == MatchFormat.Sets)
+                        {
+                            <div class="row wrap" style="gap:.6rem">
+                                <div class="field" style="width:170px">
+                                    <label>Sets per group match</label>
+                                    <select @bind="_editGroupBestOfSets">
+                                        <option value="1">Single set</option>
+                                        <option value="3">Best of 3</option>
+                                        <option value="5">Best of 5</option>
+                                    </select>
+                                </div>
+                                <div class="field" style="width:170px">
+                                    <label>Games to win a set</label>
+                                    <input type="number" min="1" max="100" @bind="_editGroupGames" />
+                                </div>
+                            </div>
+                            <p class="muted" style="font-size:.78rem">Tip: keep group matches shorter than the playoffs.</p>
+                        }
+
+                        <div class="row wrap" style="gap:.6rem">
+                            <div class="field" style="width:200px">
+                                <label>Advance to Playoff A / group</label>
+                                <input type="number" min="1" max="16" @bind="_editAdvanceA" />
+                            </div>
+                            <div class="field" style="width:200px">
+                                <label>Advance to Playoff B / group</label>
+                                <input type="number" min="0" max="16" @bind="_editAdvanceB" />
+                                <p class="muted" style="font-size:.78rem">0 = no Playoff B</p>
+                            </div>
+                        </div>
+                    }
+
+                    @* ---- Consolation (losers') brackets ---- *@
+                    <label class="row" style="gap:.5rem;align-items:center">
+                        <input type="checkbox" @bind="_editPlayoffAConsolation" />
+                        @(_editUseGroupStage ? "Playoff A" : "Knockout") has a losers' consolation bracket
+                    </label>
+                    @if (_editUseGroupStage && _editAdvanceB > 0)
+                    {
+                        <label class="row" style="gap:.5rem;align-items:center">
+                            <input type="checkbox" @bind="_editPlayoffBConsolation" />
+                            Playoff B has a losers' consolation bracket
+                        </label>
+                    }
+
+                    @* ---- Seeding ---- *@
+                    <label class="row" style="gap:.5rem;align-items:center">
+                        <input type="checkbox" @bind="_editUseManualSeeding" />
+                        <b>Seed the teams manually</b>
+                        <span class="muted">(@(_editUseGroupStage ? "rank 1→N spreads them across the groups" : "rank 1→N seeds the bracket"))</span>
+                    </label>
+                    <p class="muted" style="font-size:.78rem">
+                        You'll set the order on the tournament screen, just before the draw. Off = a random draw.
+                    </p>
+
+                    @* ---- Scoring ---- *@
+                    <div class="field">
+                        <label>How results feed the standings</label>
+                        <select @bind="_editTournamentScoring">
+                            <option value="@TournamentScoring.PerWin">Points per win (group 1, Playoff A 3, Playoff B 2; consolation 1)</option>
+                            <option value="@TournamentScoring.Placement">Final placement (rank by how far each team got)</option>
+                        </select>
+                    </div>
+                </div>
+            }
         }
 
         @if (!_activity.UsesMap)
@@ -373,6 +470,21 @@ else
     private MatchFormat _editMatchFormat = MatchFormat.Free;
     private int _editBestOfSets = 3;
     private int _editGames = 13;
+
+    // Tournament (knockout) advanced options.
+    private bool _showAdvanced;
+    private bool _editUseGroupStage;
+    private int _editGroupCount;
+    private MatchFormat _editGroupMatchFormat = MatchFormat.Free;
+    private int _editGroupBestOfSets = 1;
+    private int _editGroupGames = 13;
+    private int _editAdvanceA = 2;
+    private int _editAdvanceB;
+    private bool _editPlayoffAConsolation = true;
+    private bool _editPlayoffBConsolation;
+    private bool _editUseManualSeeding;
+    private TournamentScoring _editTournamentScoring = TournamentScoring.PerWin;
+
     private int _editMapCityCount = 5;
     private bool _editRandomize;
     private bool _editHideQuestions;
@@ -421,6 +533,22 @@ else
             _editMatchFormat = _activity.MatchFormat;
             _editBestOfSets = _activity.BestOfSets is 1 or 3 or 5 ? _activity.BestOfSets : 3;
             _editGames = _activity.GamesToWinSet;
+
+            _editUseGroupStage = _activity.UseGroupStage;
+            _editGroupCount = _activity.GroupCount;
+            _editGroupMatchFormat = _activity.GroupMatchFormat;
+            _editGroupBestOfSets = _activity.GroupBestOfSets is 1 or 3 or 5 ? _activity.GroupBestOfSets : 1;
+            _editGroupGames = _activity.GroupGamesToWinSet;
+            _editAdvanceA = Math.Max(1, _activity.AdvanceToPlayoffA);
+            _editAdvanceB = Math.Max(0, _activity.AdvanceToPlayoffB);
+            _editPlayoffAConsolation = _activity.PlayoffAConsolation;
+            _editPlayoffBConsolation = _activity.PlayoffBConsolation;
+            _editUseManualSeeding = _activity.UseManualSeeding;
+            _editTournamentScoring = _activity.TournamentScoring;
+            // Surface the advanced panel automatically if any non-default tournament option is in use.
+            _showAdvanced = _activity.UseGroupStage || _activity.UseManualSeeding
+                || _activity.TournamentScoring != TournamentScoring.PerWin;
+
             _editMapCityCount = _activity.MapCityCount ?? 5;
             _editRandomize = _activity.RandomizeQuestions;
             _editHideQuestions = _activity.HideQuestionsFromHost;
@@ -473,6 +601,19 @@ else
         {
             _busy = false;
         }
+    }
+
+    // Shows the app's suggested group count for the current team count (matches the server's heuristic).
+    private string SuggestedGroupsHint()
+    {
+        var teams = _activity?.TeamCount ?? 0;
+        if (teams < 2)
+        {
+            return string.Empty;
+        }
+
+        var g = teams < 4 ? 1 : Math.Clamp((int)Math.Round(teams / 4.0, MidpointRounding.AwayFromZero), 1, teams / 2);
+        return $" — for {teams} teams that's {g} group{(g == 1 ? "" : "s")}";
     }
 
     // "4 teams · 8 players" for a team event activity, otherwise just the player count.
@@ -543,6 +684,17 @@ else
                 MatchFormat = _editMatchFormat,
                 BestOfSets = _editBestOfSets,
                 GamesToWinSet = _editGames,
+                UseGroupStage = _editUseGroupStage,
+                GroupCount = _editGroupCount,
+                GroupMatchFormat = _editGroupMatchFormat,
+                GroupBestOfSets = _editGroupBestOfSets,
+                GroupGamesToWinSet = _editGroupGames,
+                AdvanceToPlayoffA = _editAdvanceA,
+                AdvanceToPlayoffB = _editAdvanceB,
+                PlayoffAConsolation = _editPlayoffAConsolation,
+                PlayoffBConsolation = _editPlayoffBConsolation,
+                UseManualSeeding = _editUseManualSeeding,
+                TournamentScoring = _editTournamentScoring,
                 MapCityCount = _editMapCityCount,
             });
 
