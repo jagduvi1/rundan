@@ -1,0 +1,97 @@
+@page "/diploma/{Id:int}"
+@inject RundanApi Api
+@inject AppState State
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+
+<PageTitle>Diploma · Rundan</PageTitle>
+
+@if (_loading)
+{
+    <div class="card center muted"><div class="spinner" style="margin:1rem auto"></div></div>
+}
+else if (_event is null || _winners.Count == 0)
+{
+    <div class="card stack center">
+        <h1>No champion yet</h1>
+        <p class="muted">The diploma appears once the event is finished and scored.</p>
+        <a class="btn" href="@($"e/{Id}")">Back to the event</a>
+    </div>
+}
+else
+{
+    <div class="diploma">
+        <img src="img/rundan-mark.svg" width="56" height="56" alt="" class="diploma__mark" />
+        <div class="diploma__kicker">Certificate of Champions</div>
+        <h1 class="diploma__event">@_event.Name</h1>
+        <div class="diploma__awarded">This is awarded to</div>
+        <div class="diploma__winner">@string.Join(" & ", _winners)</div>
+        <div class="diploma__sub">
+            Champion@(_winners.Count > 1 ? "s" : "") with <b>@Fmt.Num(_topPoints)</b> points
+            @if (_dateText is { } d) { <text> · @d</text> }
+        </div>
+
+        @if (_podium.Count > 1)
+        {
+            <div class="diploma__podium">
+                @foreach (var e in _podium)
+                {
+                    <div class="diploma__spot">
+                        <span class="diploma__rank">@e.Rank.</span>
+                        <span class="diploma__name">@e.DisplayName</span>
+                        <span class="diploma__pts">@Fmt.Num(e.TotalPoints) p</span>
+                    </div>
+                }
+            </div>
+        }
+
+        <div class="diploma__footer">Rundan · @_event.Activities.Count activities</div>
+    </div>
+
+    <div class="no-print" style="text-align:center;margin:1rem 0 2rem;display:flex;gap:.5rem;justify-content:center">
+        <button class="btn" @onclick="PrintAsync">🖨 Print / Save as PDF</button>
+        <a class="btn ghost" href="@($"e/{Id}")">Back</a>
+    </div>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private EventDto? _event;
+    private List<string> _winners = new();
+    private List<EventStandingEntryDto> _podium = new();
+    private double _topPoints;
+    private string? _dateText;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await State.EnsureInitializedAsync(Api);
+        try
+        {
+            _event = await Api.GetEventAsync(Id);
+            var standings = await Api.GetEventStandingsAsync(Id);
+            if (standings is not null)
+            {
+                _winners = standings.Entries.Where(e => e.Rank == 1).Select(e => e.DisplayName).ToList();
+                _topPoints = standings.Entries.FirstOrDefault()?.TotalPoints ?? 0;
+                _podium = standings.Entries.Take(3).ToList();
+            }
+
+            // Only award once the day is actually done.
+            if (_event is not null && !_event.IsComplete)
+            {
+                _winners = new();
+            }
+        }
+        catch (ApiException) { }
+
+        _dateText = DateTime.Now.ToString("d MMMM yyyy");
+        _loading = false;
+    }
+
+    private async Task PrintAsync()
+    {
+        try { await JS.InvokeVoidAsync("window.print"); } catch { /* ignore */ }
+    }
+}
