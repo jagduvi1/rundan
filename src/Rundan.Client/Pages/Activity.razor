@@ -72,7 +72,9 @@ else
 
     @if (State.IsHost && _activity.Type == ActivityType.MusicQuiz && _activity.Status != ActivityStatus.Draft)
     {
-        <MusicHostPanel @key="_activity.Id" Activity="_activity" />
+        @* Distinct key: a host playing a live music quiz renders this AND <MusicQuizPlay> as
+           siblings, and @key must be unique across all keyed siblings (even of different types). *@
+        <MusicHostPanel @key='$"musichost-{_activity.Id}"' Activity="_activity" />
     }
 
     @if (_activity.Status == ActivityStatus.Draft)
