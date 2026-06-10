@@ -328,7 +328,10 @@ public sealed class SlapService(AppDbContext db, ScoreboardService scoreboard, E
 
         var total = entries[idx].TotalPoints;
         var following = entries.Skip(idx + 1).FirstOrDefault(e => e.TotalPoints < total);
-        return following is null ? 0 : Math.Max(0d, (total - following.TotalPoints) / 2d);
+        // Half the lead over the player just below — and for the last player (nobody below) that
+        // floor is 0, so a slap on last place halves their points toward zero rather than doing nothing.
+        var floor = following?.TotalPoints ?? 0d;
+        return Math.Max(0d, (total - floor) / 2d);
     }
 
     /// <summary>The winning team(s) (rank 1) of an activity: the team name, every winning member's
