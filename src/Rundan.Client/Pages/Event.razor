@@ -95,6 +95,18 @@ else
                     </div>
                 }
             </div>
+
+            <a class="btn small block" href="@($"diploma/{Id}")">🏆 Open the winner's diploma</a>
+
+            @if (EventSummary() is { Count: > 0 } lines)
+            {
+                <ul style="text-align:left;align-self:stretch;margin:.4rem 0 0;padding-left:1.15rem;line-height:1.65;font-size:.9rem">
+                    @foreach (var l in lines)
+                    {
+                        <li>@l</li>
+                    }
+                </ul>
+            }
         </div>
     }
 
@@ -848,6 +860,47 @@ else
         }
 
         return winners.Count == 1 ? $"{winners[0]} wins!" : $"{string.Join(" & ", winners)} tie for the win!";
+    }
+
+    // A short recap shown when the event is done.
+    private List<string> EventSummary()
+    {
+        var lines = new List<string>();
+        if (_event is null || _standings is null || _standings.Entries.Count == 0)
+        {
+            return lines;
+        }
+
+        var entries = _standings.Entries;
+        var champs = entries.Where(e => e.Rank == 1).Select(e => e.DisplayName).ToList();
+        lines.Add($"🏆 Champion{(champs.Count > 1 ? "s" : "")}: {string.Join(" & ", champs)} — {Fmt.Num(entries[0].TotalPoints)} points.");
+        lines.Add($"🎮 {_event.Activities.Count} activit{(_event.Activities.Count == 1 ? "y" : "ies")} played by {entries.Count} player{(entries.Count == 1 ? "" : "s")}.");
+
+        var runnerUp = entries.FirstOrDefault(e => e.Rank > 1);
+        if (runnerUp is not null)
+        {
+            var gap = entries[0].TotalPoints - runnerUp.TotalPoints;
+            lines.Add(gap <= 0
+                ? "🤝 It came down to a dead heat at the very top!"
+                : $"📊 Sealed it by {Fmt.Num(gap)} point{(gap == 1 ? "" : "s")} over {runnerUp.DisplayName}.");
+        }
+
+        var mostActive = entries.OrderByDescending(e => e.ActivitiesPlayed).First();
+        if (mostActive.ActivitiesPlayed > 0)
+        {
+            lines.Add($"🏃 Busiest player: {mostActive.DisplayName} ({mostActive.ActivitiesPlayed} activities).");
+        }
+
+        if (_event.SlapMode != SlapMode.Off)
+        {
+            var lost = entries.Sum(e => e.SlapLost);
+            if (lost > 0)
+            {
+                lines.Add($"👋 {Fmt.Num(lost)} points were slapped away over the day.");
+            }
+        }
+
+        return lines;
     }
 
     private string ScoringLabel => _event?.Scoring == EventScoring.Placement
