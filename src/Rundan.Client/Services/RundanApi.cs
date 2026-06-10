@@ -131,6 +131,11 @@ public sealed class RundanApi(HttpClient http, AppState state)
         return (await resp.Content.ReadFromJsonAsync<ActivityPhotoDto>(JsonOptions))!;
     }
 
+    /// <summary>Remove a photo (the uploader, via their participant token, or the host).</summary>
+    public Task DeleteActivityPhotoAsync(int activityId, int photoId, Guid? token) =>
+        SendAsync(HttpMethod.Delete, $"api/activities/{activityId}/photos/{photoId}",
+            participantToken: token, admin: state.IsHost);
+
     // ---- Events ------------------------------------------------------------
     public Task<EventDto?> GetEventAsync(int id) =>
         TryGetAsync<EventDto>($"api/events/{id}");
