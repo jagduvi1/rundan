@@ -100,17 +100,22 @@ public sealed class EventStandingsService(AppDbContext db, TimeProvider clock)
         }
 
         // Apply slap penalties: the slapped player loses points; a "send" slap gives them to a recipient.
+        // Track lost/received per player so the standings can show the slap columns when slaps are on.
+        var lost = roster.ToDictionary(u => u.UserId, _ => 0d);
+        var received = roster.ToDictionary(u => u.UserId, _ => 0d);
         var slaps = await db.Slaps.AsNoTracking().Where(s => s.EventId == eventId && !s.Skipped).ToListAsync(ct);
         foreach (var s in slaps)
         {
             if (totals.ContainsKey(s.SlappedUserId))
             {
                 totals[s.SlappedUserId] -= s.Penalty;
+                lost[s.SlappedUserId] += s.Penalty;
             }
 
             if (s.RecipientUserId is { } r && totals.ContainsKey(r))
             {
                 totals[r] += s.Penalty;
+                received[r] += s.Penalty;
             }
         }
 
@@ -120,6 +125,8 @@ public sealed class EventStandingsService(AppDbContext db, TimeProvider clock)
             DisplayName = u.Name,
             TotalPoints = totals[u.UserId],
             ActivitiesPlayed = played[u.UserId].Count,
+            SlapLost = lost[u.UserId],
+            SlapReceived = received[u.UserId],
         }).ToList();
     }
 
