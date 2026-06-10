@@ -28,6 +28,7 @@ public class AppDbContext : DbContext
     public DbSet<EventViewer> EventViewers => Set<EventViewer>();
     public DbSet<Slap> Slaps => Set<Slap>();
     public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
+    public DbSet<ActivityPhoto> ActivityPhotos => Set<ActivityPhoto>();
     public DbSet<QuestionTemplate> QuestionTemplates => Set<QuestionTemplate>();
     public DbSet<QuestionTemplateOption> QuestionTemplateOptions => Set<QuestionTemplateOption>();
     public DbSet<QuestionTemplateTag> QuestionTemplateTags => Set<QuestionTemplateTag>();
@@ -231,6 +232,15 @@ public class AppDbContext : DbContext
             e.HasIndex(x => new { x.EventId, x.Id });
             e.HasOne(x => x.Event).WithMany()
                 .HasForeignKey(x => x.EventId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<ActivityPhoto>(e =>
+        {
+            e.Property(x => x.Author).HasMaxLength(60).IsRequired();
+            e.Property(x => x.Url).HasMaxLength(500).IsRequired();
+            e.HasIndex(x => new { x.ActivityId, x.Id });
+            e.HasOne(x => x.Activity).WithMany()
+                .HasForeignKey(x => x.ActivityId).OnDelete(DeleteBehavior.Cascade);
         });
 
         b.Entity<Court>(e =>

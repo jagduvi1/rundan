@@ -103,6 +103,59 @@ internal static class GameplayEndpoints
             return Results.NoContent();
         }).AddEndpointFilter<ActivityManagerFilter>();
 
+        // --- Activity photo wall (players take/upload photos) -------------------
+
+        app.MapGet("/api/activities/{id:int}/photos", async (int id, AppDbContext db, CancellationToken ct) =>
+        {
+            var photos = await db.ActivityPhotos.AsNoTracking()
+                .Where(p => p.ActivityId == id)
+                .OrderByDescending(p => p.Id)
+                .Select(p => new ActivityPhotoDto { Id = p.Id, Author = p.Author, Url = p.Url, CreatedUtc = p.CreatedUtc })
+                .ToListAsync(ct);
+            return Results.Ok(photos);
+        });
+
+        app.MapPost("/api/activities/{id:int}/photos", async (
+            int id, IFormFile file, AppDbContext db, StoragePaths paths,
+            TimeProvider clock, HttpContext http, CancellationToken ct) =>
+        {
+            var participant = await http.ResolveForActivityAsync(db, id, ct); // must be in the activity
+
+            if (file is null || file.Length == 0)
+            {
+                throw new RuleViolationException("No photo was uploaded.");
+            }
+            if (file.Length > 8 * 1024 * 1024)
+            {
+                throw new RuleViolationException("Photo is too large (max 8 MB).");
+            }
+
+            var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+            string[] allowed = { ".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic" };
+            if (!allowed.Contains(ext))
+            {
+                throw new RuleViolationException("Use a JPG, PNG, GIF, WEBP or HEIC photo.");
+            }
+
+            var name = $"{Guid.NewGuid():N}{ext}";
+            await using (var stream = File.Create(Path.Combine(paths.UploadsDir, name)))
+            {
+                await file.CopyToAsync(stream, ct);
+            }
+
+            var photo = new Rundan.Server.Data.Entities.ActivityPhoto
+            {
+                ActivityId = id,
+                Author = participant.DisplayName,
+                Url = $"/uploads/{name}",
+                CreatedUtc = clock.GetUtcNow(),
+            };
+            db.ActivityPhotos.Add(photo);
+            await db.SaveChangesAsync(ct);
+
+            return Results.Ok(new ActivityPhotoDto { Id = photo.Id, Author = photo.Author, Url = photo.Url, CreatedUtc = photo.CreatedUtc });
+        }).DisableAntiforgery();
+
         // --- Scoreboard ---------------------------------------------------------
 
         app.MapGet("/api/activities/{id:int}/scoreboard", async (
