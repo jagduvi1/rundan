@@ -15,7 +15,7 @@ internal static class GameplayEndpoints
 
         app.MapPost("/api/activities/{id:int}/answers", async (
             int id, SubmitAnswerRequest req, AppDbContext db, GameService game,
-            ScoreboardNotifier notifier, HttpContext http, CancellationToken ct) =>
+            ScoreboardNotifier notifier, PushService push, HttpContext http, CancellationToken ct) =>
         {
             var participant = await http.ResolveForActivityAsync(db, id, ct);
 
@@ -27,6 +27,7 @@ internal static class GameplayEndpoints
             if (activity is not null && await game.TryAutoFinishQuestionsAsync(activity, ct))
             {
                 await notifier.PushStatusAsync(id, ActivityStatus.Finished);
+                _ = push.NotifyActivityFinishedAsync(id);
             }
 
             return Results.Ok(result);
@@ -57,7 +58,7 @@ internal static class GameplayEndpoints
 
         app.MapPost("/api/activities/{id:int}/scores", async (
             int id, RecordScoreRequest req, AppDbContext db, GameService game,
-            ScoreboardNotifier notifier, HttpContext http, CancellationToken ct) =>
+            ScoreboardNotifier notifier, PushService push, HttpContext http, CancellationToken ct) =>
         {
             await http.ResolveForActivityAsync(db, id, ct); // must be a participant of this activity
 
@@ -71,6 +72,7 @@ internal static class GameplayEndpoints
             if (await game.TryAutoFinishScoreGameAsync(activity, ct))
             {
                 await notifier.PushStatusAsync(id, ActivityStatus.Finished);
+                _ = push.NotifyActivityFinishedAsync(id);
             }
 
             return Results.Ok(dto);
@@ -116,7 +118,7 @@ internal static class GameplayEndpoints
         });
 
         app.MapPost("/api/activities/{id:int}/photos", async (
-            int id, IFormFile file, AppDbContext db, StoragePaths paths,
+            int id, IFormFile file, AppDbContext db, StoragePaths paths, PushService push,
             TimeProvider clock, HttpContext http, CancellationToken ct) =>
         {
             var participant = await http.ResolveForActivityAsync(db, id, ct); // must be in the activity
@@ -152,6 +154,12 @@ internal static class GameplayEndpoints
             };
             db.ActivityPhotos.Add(photo);
             await db.SaveChangesAsync(ct);
+
+            var evId = await db.Activities.Where(a => a.Id == id).Select(a => a.EventId).FirstOrDefaultAsync(ct);
+            if (evId is int e)
+            {
+                push.Notify(e, "📷 New photo", $"{participant.DisplayName} added a photo.", $"a/{id}", "photo");
+            }
 
             return Results.Ok(new ActivityPhotoDto { Id = photo.Id, Author = photo.Author, Url = photo.Url, CreatedUtc = photo.CreatedUtc });
         }).DisableAntiforgery();

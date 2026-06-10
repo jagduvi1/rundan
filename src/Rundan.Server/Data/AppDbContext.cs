@@ -29,6 +29,7 @@ public class AppDbContext : DbContext
     public DbSet<Slap> Slaps => Set<Slap>();
     public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
     public DbSet<ActivityPhoto> ActivityPhotos => Set<ActivityPhoto>();
+    public DbSet<PushSubscription> PushSubscriptions => Set<PushSubscription>();
     public DbSet<QuestionTemplate> QuestionTemplates => Set<QuestionTemplate>();
     public DbSet<QuestionTemplateOption> QuestionTemplateOptions => Set<QuestionTemplateOption>();
     public DbSet<QuestionTemplateTag> QuestionTemplateTags => Set<QuestionTemplateTag>();
@@ -241,6 +242,17 @@ public class AppDbContext : DbContext
             e.HasIndex(x => new { x.ActivityId, x.Id });
             e.HasOne(x => x.Activity).WithMany()
                 .HasForeignKey(x => x.ActivityId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<PushSubscription>(e =>
+        {
+            e.Property(x => x.Endpoint).HasMaxLength(800).IsRequired();
+            e.Property(x => x.P256dh).HasMaxLength(200).IsRequired();
+            e.Property(x => x.Auth).HasMaxLength(100).IsRequired();
+            e.HasIndex(x => x.Endpoint).IsUnique();
+            e.HasIndex(x => x.EventId);
+            e.HasOne(x => x.Event).WithMany()
+                .HasForeignKey(x => x.EventId).OnDelete(DeleteBehavior.Cascade);
         });
 
         b.Entity<Court>(e =>

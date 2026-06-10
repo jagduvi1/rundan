@@ -1,0 +1,13 @@
+{
+  "name": "Rundan",
+  "short_name": "Rundan",
+  "description": "A day out with your people — quiz walks, games and a friendly scoreboard.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#FBF8F1",
+  "theme_color": "#0B84B3",
+  "icons": [
+    { "src": "img/rundan-mark.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

@@ -138,7 +138,25 @@ else
 
     @* ---- Group chat: everyone in the event ---- *@
     <div class="card stack">
-        <h2>Chat</h2>
+        <div class="row">
+            <h2 class="grow">Chat</h2>
+            @if (_pushStatus == "subscribed")
+            {
+                <span class="badge" title="You'll get alerts for this event">🔔 Alerts on</span>
+            }
+            else if (_pushStatus is "default" or "granted")
+            {
+                <button class="btn ghost small" @onclick="EnableAlertsAsync" disabled="@_pushBusy">🔔 Get alerts</button>
+            }
+            else if (_pushStatus == "denied")
+            {
+                <span class="muted" style="font-size:.75rem" title="Turn on notifications for this site in your browser settings">🔕 Alerts blocked</span>
+            }
+        </div>
+        @if (_pushError is not null)
+        {
+            <div class="muted" style="font-size:.75rem;color:var(--coral-700)">@_pushError</div>
+        }
         <div style="max-height:16rem;overflow-y:auto;display:flex;flex-direction:column;gap:.45rem">
             @if (_chat.Count == 0)
             {
@@ -652,6 +670,12 @@ else
         : State.IsHost ? "Host"
         : string.Empty;
     private bool CanChat => !string.IsNullOrWhiteSpace(ChatAuthor);
+
+    // Web Push alerts.
+    private string? _pushStatus;
+    private bool _pushBusy;
+    private bool _pushChecked;
+    private string? _pushError;
     private string? _eventName;
     private int? _userId;
     private readonly Dictionary<int, string> _teamByActivity = new();
@@ -1209,7 +1233,67 @@ else
         }
     }
 
-    // Fetch the slap ceremony for each finished activity so it can show inline in the running order.
+    // ---- Web Push alerts ----
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_pushChecked)
+        {
+            _pushChecked = true;
+            try
+            {
+                _pushStatus = await JS.InvokeAsync<string>("rundanPush.status");
+                StateHasChanged();
+            }
+            catch { _pushStatus = "unsupported"; }
+        }
+    }
+
+    private async Task EnableAlertsAsync()
+    {
+        _pushBusy = true;
+        _pushError = null;
+        try
+        {
+            var key = await Api.GetPushKeyAsync();
+            if (key is null || string.IsNullOrEmpty(key.PublicKey))
+            {
+                _pushError = "Alerts aren't available right now.";
+                return;
+            }
+
+            var res = await JS.InvokeAsync<PushSubResult>("rundanPush.subscribe", key.PublicKey);
+            if (res is { ok: true, endpoint: { } ep, p256dh: { } p, auth: { } a })
+            {
+                await Api.SubscribePushAsync(Id, ep, p, a);
+                _pushStatus = "subscribed";
+            }
+            else if (res?.reason == "denied")
+            {
+                _pushStatus = "denied";
+            }
+            else
+            {
+                _pushError = "Couldn't enable alerts on this device.";
+            }
+        }
+        catch (Exception)
+        {
+            _pushError = "Couldn't enable alerts.";
+        }
+        finally
+        {
+            _pushBusy = false;
+        }
+    }
+
+    private sealed class PushSubResult
+    {
+        public bool ok { get; set; }
+        public string? reason { get; set; }
+        public string? endpoint { get; set; }
+        public string? p256dh { get; set; }
+        public string? auth { get; set; }
+    }
     private async Task LoadSlapsAsync()
     {
         if (_event is null || _event.SlapMode == SlapMode.Off)

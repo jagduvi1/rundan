@@ -48,7 +48,7 @@ internal static class EventEndpoints
         // be triggered from afar; only opened activities start (Draft ones aren't ready yet).
         app.MapPost("/api/events/{id:int}/arrive", async (
             int id, ArriveRequest req, AppDbContext db, ScoreboardNotifier notifier,
-            TimeProvider clock, CancellationToken ct) =>
+            PushService push, TimeProvider clock, CancellationToken ct) =>
         {
             var open = await db.Activities
                 .Where(a => a.EventId == id && a.Status == ActivityStatus.Open)
@@ -91,6 +91,8 @@ internal static class EventEndpoints
                 foreach (var aid in started)
                 {
                     await notifier.PushStatusAsync(aid, ActivityStatus.Live);
+                    var title = open.First(a => a.Id == aid).Title;
+                    push.Notify(id, "📍 First arrival!", $"Someone reached “{title}” — it's live now.", $"e/{id}", $"live-{aid}");
                 }
             }
 
@@ -111,7 +113,7 @@ internal static class EventEndpoints
 
         app.MapPost("/api/events/{id:int}/chat", async (
             int id, PostChatMessageRequest req, AppDbContext db, ScoreboardNotifier notifier,
-            TimeProvider clock, CancellationToken ct) =>
+            PushService push, TimeProvider clock, CancellationToken ct) =>
         {
             var text = (req.Text ?? string.Empty).Trim();
             if (text.Length == 0)
@@ -137,7 +139,43 @@ internal static class EventEndpoints
 
             var dto = new ChatMessageDto { Id = msg.Id, Author = msg.Author, Text = msg.Text, CreatedUtc = msg.CreatedUtc };
             await notifier.PushChatAsync(id, dto);
+            push.Notify(id, $"💬 {dto.Author}", dto.Text, $"e/{id}", "chat");
             return Results.Ok(dto);
+        });
+
+        // --- Web Push (notifications) -------------------------------------------
+        app.MapGet("/api/push/key", (PushService push) => Results.Ok(new PushKeyDto { PublicKey = push.PublicKey }));
+
+        app.MapPost("/api/events/{id:int}/push/subscribe", async (
+            int id, PushSubscribeRequest req, AppDbContext db, TimeProvider clock, CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(req.Endpoint) || string.IsNullOrWhiteSpace(req.P256dh) || string.IsNullOrWhiteSpace(req.Auth))
+            {
+                throw new RuleViolationException("Invalid push subscription.");
+            }
+            if (!await db.Events.AnyAsync(e => e.Id == id, ct))
+            {
+                return Results.NotFound();
+            }
+
+            // One row per device endpoint — re-point it at the event they just subscribed under.
+            var existing = await db.PushSubscriptions.FirstOrDefaultAsync(s => s.Endpoint == req.Endpoint, ct);
+            if (existing is null)
+            {
+                db.PushSubscriptions.Add(new PushSubscription
+                {
+                    EventId = id, Endpoint = req.Endpoint, P256dh = req.P256dh, Auth = req.Auth, CreatedUtc = clock.GetUtcNow(),
+                });
+            }
+            else
+            {
+                existing.EventId = id;
+                existing.P256dh = req.P256dh;
+                existing.Auth = req.Auth;
+            }
+
+            await db.SaveChangesAsync(ct);
+            return Results.NoContent();
         });
 
         // Viewers (spectators): register / heartbeat / leave — access-gated, no competing identity.
