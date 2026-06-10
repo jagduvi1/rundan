@@ -1003,8 +1003,11 @@ else
             _standings = await Api.GetEventStandingsAsync(Id);
             await LoadSlapsAsync();
             try { _chat = await Api.GetChatAsync(Id); } catch (ApiException) { /* chat unavailable */ }
-            await StartConnectionAsync();
-            await StartGeoAsync();
+
+            // Live updates + geolocation start in the background so neither the SignalR handshake
+            // (or a long-polling fallback) nor a geolocation prompt blocks the page from rendering.
+            _ = StartConnectionAsync();
+            _ = StartGeoAsync();
             EnsureClock();
         }
 
@@ -1360,20 +1363,23 @@ else
             return;
         }
 
-        // Build into a fresh map first, then swap in synchronously — clearing before the awaited
-        // refetch made the cards blink out (flicker) on every refresh while data was in flight.
-        var fresh = new Dictionary<int, ActivitySlapDto>();
-        foreach (var a in _event.Activities.Where(a => a.Status == ActivityStatus.Finished))
+        // Fetch every finished activity's slap concurrently (was a serial round-trip per activity —
+        // the main load-time cost on an event with several finished games). Build into a fresh map
+        // first, then swap in synchronously — clearing before the refetch made the cards flicker.
+        var finished = _event.Activities.Where(a => a.Status == ActivityStatus.Finished).ToList();
+        var slaps = await Task.WhenAll(finished.Select(async a =>
         {
-            try
+            try { return (a.Id, Slap: await Api.GetActivitySlapAsync(a.Id)); }
+            catch (ApiException) { return (a.Id, Slap: (ActivitySlapDto?)null); }
+        }));
+
+        var fresh = new Dictionary<int, ActivitySlapDto>();
+        foreach (var (id, slap) in slaps)
+        {
+            if (slap is { State: not SlapState.None })
             {
-                var slap = await Api.GetActivitySlapAsync(a.Id);
-                if (slap is { State: not SlapState.None })
-                {
-                    fresh[a.Id] = slap;
-                }
+                fresh[id] = slap;
             }
-            catch (ApiException) { /* skip this one on a transient error */ }
         }
 
         _slapByActivity.Clear();
