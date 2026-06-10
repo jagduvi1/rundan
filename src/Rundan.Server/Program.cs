@@ -123,6 +123,7 @@ app.MapParticipantEndpoints();
 app.MapQuestionEndpoints();
 app.MapGameplayEndpoints();
 app.MapMapPinEndpoints();
+app.MapMemoryEndpoints();
 app.MapBracketEndpoints();
 app.MapWordGameEndpoints();
 app.MapSimulationEndpoints();

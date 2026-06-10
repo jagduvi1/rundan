@@ -185,6 +185,20 @@ public class MapCityDto
     public double? DistanceKm { get; set; }
 }
 
+/// <summary>One label in a Memory game (each becomes two cards on the board).</summary>
+public class MemoryCardDto
+{
+    public int Id { get; set; }
+    public int Order { get; set; }
+    public string Text { get; set; } = string.Empty;
+}
+
+/// <summary>Host sets a Memory game's full list of card labels.</summary>
+public class SetMemoryCardsRequest
+{
+    public List<string> Words { get; set; } = new();
+}
+
 /// <summary>A photo on an activity's shared photo wall.</summary>
 public class ActivityPhotoDto
 {

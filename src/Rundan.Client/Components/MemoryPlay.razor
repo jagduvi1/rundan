@@ -1,0 +1,213 @@
+@inject RundanApi Api
+@implements IDisposable
+
+@if (_loading)
+{
+    <div class="card center muted"><div class="spinner" style="margin:1rem auto"></div>Shuffling…</div>
+}
+else if (_cells.Count == 0)
+{
+    <div class="card muted">No cards yet — the host is still setting up.</div>
+}
+else
+{
+    <div class="card stack">
+        <div class="row muted" style="font-size:.9rem">
+            <span class="grow">Pairs: <b>@_matched.Count</b> / @_pairCount</span>
+            <span style="font-variant-numeric:tabular-nums">
+                @(Activity.MeasuresTime ? Clock(ElapsedSeconds) : $"{_flips} flips")
+            </span>
+        </div>
+
+        @if (_error is not null)
+        {
+            <div class="alert error">@_error</div>
+        }
+        @if (_done)
+        {
+            <div class="alert success">🎉 Cleared! @ResultText — recorded for your team.</div>
+        }
+
+        <div style="display:grid;grid-template-columns:repeat(@_cols, 1fr);gap:.4rem">
+            @for (var i = 0; i < _cells.Count; i++)
+            {
+                var idx = i;
+                var cell = _cells[i];
+                <button class="memory-card @CellClass(cell)"
+                        @onclick="() => FlipAsync(idx)"
+                        disabled="@(_busy || _done || cell.State != CardState.Down)">
+                    <span>@(cell.State == CardState.Down ? "" : cell.Text)</span>
+                </button>
+            }
+        </div>
+
+        @if (!_done)
+        {
+            <button class="btn ghost small" @onclick="Reset" disabled="@_busy">Shuffle &amp; restart</button>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public ActivityDto Activity { get; set; } = default!;
+    [Parameter] public PlayerSession Session { get; set; } = default!;
+
+    private enum CardState { Down, Up, Matched }
+    private sealed class Cell { public string Text = ""; public string Pair = ""; public CardState State = CardState.Down; }
+
+    private bool _loading = true;
+    private bool _busy;
+    private bool _done;
+    private string? _error;
+    private List<Cell> _cells = new();
+    private readonly List<int> _flipped = new();
+    private readonly HashSet<string> _matched = new();
+    private int _pairCount;
+    private int _cols = 4;
+    private int _flips;
+    private DateTimeOffset? _start;
+    private System.Threading.Timer? _ticker;
+
+    private double ElapsedSeconds => _start is { } s ? (DateTimeOffset.UtcNow - s).TotalSeconds : 0;
+    private string ResultText => Activity.MeasuresTime ? $"time {Clock(ElapsedSeconds)}" : $"{_flips} flips";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var cards = await Api.GetMemoryCardsAsync(Activity.Id);
+            var words = cards.Select(c => c.Text).Where(t => !string.IsNullOrWhiteSpace(t)).ToList();
+            _pairCount = words.Count;
+            BuildBoard(words);
+        }
+        catch (ApiException ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private void BuildBoard(List<string> words)
+    {
+        // Each word becomes two cards, shuffled with a per-team seed so the board is stable on reload.
+        var deck = new List<Cell>();
+        foreach (var w in words)
+        {
+            deck.Add(new Cell { Text = w, Pair = w });
+            deck.Add(new Cell { Text = w, Pair = w });
+        }
+
+        var rng = new Random(Session.Token.GetHashCode());
+        for (var i = deck.Count - 1; i > 0; i--)
+        {
+            var j = rng.Next(i + 1);
+            (deck[i], deck[j]) = (deck[j], deck[i]);
+        }
+
+        _cells = deck;
+        _cols = deck.Count <= 8 ? 4 : deck.Count <= 18 ? 4 : deck.Count <= 30 ? 5 : 6;
+    }
+
+    private async Task FlipAsync(int idx)
+    {
+        if (_busy || _done || _cells[idx].State != CardState.Down || _flipped.Count >= 2)
+        {
+            return;
+        }
+
+        if (_start is null)
+        {
+            _start = DateTimeOffset.UtcNow;
+            EnsureTicking();
+        }
+
+        _cells[idx].State = CardState.Up;
+        _flipped.Add(idx);
+        _flips++;
+
+        if (_flipped.Count < 2)
+        {
+            return;
+        }
+
+        _busy = true;
+        var a = _cells[_flipped[0]];
+        var b = _cells[_flipped[1]];
+        if (a.Pair == b.Pair)
+        {
+            a.State = CardState.Matched;
+            b.State = CardState.Matched;
+            _matched.Add(a.Pair);
+            _flipped.Clear();
+            _busy = false;
+
+            if (_matched.Count >= _pairCount)
+            {
+                await FinishAsync();
+            }
+        }
+        else
+        {
+            StateHasChanged();
+            await Task.Delay(850);
+            a.State = CardState.Down;
+            b.State = CardState.Down;
+            _flipped.Clear();
+            _busy = false;
+        }
+    }
+
+    private async Task FinishAsync()
+    {
+        _ticker?.Dispose();
+        _ticker = null;
+        _done = true;
+
+        // Score = elapsed seconds (time game) or flip count (flips game); lowest wins.
+        var score = Activity.MeasuresTime ? Math.Round(ElapsedSeconds) : _flips;
+        try
+        {
+            await Api.RecordScoreAsync(Activity.Id,
+                new RecordScoreRequest { ParticipantId = Session.ParticipantId, Round = 1, Points = score },
+                Session.Token);
+        }
+        catch (ApiException ex) { _error = ex.Message; }
+    }
+
+    private void Reset()
+    {
+        _ticker?.Dispose();
+        _ticker = null;
+        _flipped.Clear();
+        _matched.Clear();
+        _flips = 0;
+        _start = null;
+        _done = false;
+        _error = null;
+        foreach (var c in _cells)
+        {
+            c.State = CardState.Down;
+        }
+
+        BuildBoard(_cells.Select(c => c.Pair).Distinct().ToList());
+    }
+
+    private void EnsureTicking() =>
+        _ticker ??= new System.Threading.Timer(_ => _ = InvokeAsync(() =>
+        {
+            if (_done) { _ticker?.Dispose(); _ticker = null; return; }
+            StateHasChanged();
+        }), null, 500, 500);
+
+    private static string CellClass(Cell c) => c.State switch
+    {
+        CardState.Matched => "matched",
+        CardState.Up => "up",
+        _ => "down",
+    };
+
+    private static string Clock(double seconds)
+    {
+        var s = (int)Math.Round(seconds);
+        return $"{s / 60}:{s % 60:00}";
+    }
+
+    public void Dispose() => _ticker?.Dispose();
+}

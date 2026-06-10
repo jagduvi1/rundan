@@ -79,6 +79,13 @@ public static class Fmt
                 lines.Add("Each correct guess (song and artist) scores that track's points; close spellings are accepted.");
                 break;
 
+            case ActivityType.Memory:
+                lines.Add("Flip cards two at a time to find the matching pairs — your team has its own shuffled board.");
+                lines.Add(a.MeasuresTime
+                    ? "Clear the board as fast as you can — fastest time wins."
+                    : "Clear the board in as few flips as you can — fewest flips wins.");
+                break;
+
             default: // ScoreGame and any future round-based game
                 var measure = a.Measurement switch
                 {
@@ -112,6 +119,7 @@ public static class Fmt
         ActivityType.WordGame => "Word game",
         ActivityType.MapPin => "Pin the city (map)",
         ActivityType.MusicQuiz => "Music quiz",
+        ActivityType.Memory => "Memory (card flip)",
         _ => type.ToString(),
     };
 }

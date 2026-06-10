@@ -28,6 +28,10 @@ public enum ActivityType
 
     /// <summary>Music quiz: the host plays a Spotify track per question; players name the song and the artist.</summary>
     MusicQuiz = 7,
+
+    /// <summary>Memory / card-flip: each team races their own shuffled board of text pairs; the time or
+    /// flip count is recorded as a lowest-wins score.</summary>
+    Memory = 8,
 }
 
 /// <summary>Lifecycle of an activity.</summary>
