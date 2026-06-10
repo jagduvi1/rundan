@@ -21,7 +21,7 @@ else
     {
         <div class="card stack">
             <h2>Nothing scheduled just yet</h2>
-            <p class="muted">When your host sets up a day, it'll show up right here. Got a code? Use it below.</p>
+            <p class="muted">When your host sets up a day, it'll show up right here. Got a code? Open the menu (top-left ☰) to jump in.</p>
         </div>
     }
     else
@@ -37,23 +37,6 @@ else
     }
 }
 
-<div class="card stack">
-    <h2>Got a code?</h2>
-    <p class="muted">Type the code your host shared to jump straight in.</p>
-
-    @if (_error is not null)
-    {
-        <div class="alert error">@_error</div>
-    }
-
-    <input class="code-input" type="text" inputmode="text" autocomplete="off" maxlength="16"
-           placeholder="CODE" @bind="_code" @bind:event="oninput" @onkeydown="OnKeyDown" />
-
-    <button class="btn block" @onclick="GoAsync" disabled="@_busy">
-        @(_busy ? "Looking…" : "Let's go")
-    </button>
-</div>
-
 <div class="card center muted">
     Hosting today? <a href="admin">Open the host panel</a>
 </div>
@@ -63,10 +46,6 @@ else
     private readonly Dictionary<int, string> _names = new();
     private readonly Dictionary<int, string> _winners = new();
     private bool _loading = true;
-
-    private string _code = string.Empty;
-    private string? _error;
-    private bool _busy;
 
     private RenderFragment EventCard(EventDto ev) =>
     @<div class="card stack">
@@ -159,7 +138,8 @@ else
         }
         catch (ApiException)
         {
-            // Leave the welcome page on the code-entry fallback if the list can't load.
+            // Couldn't load the event list — fall through to the empty state. Code entry now
+            // lives in the header menu (☰), so there's nothing else to render here.
         }
         finally
         {
@@ -179,46 +159,5 @@ else
 
     private static string FormatDistance(int meters) =>
         meters >= 1000 ? $"{meters / 1000.0:0.0} km" : $"{meters} m";
-
-    private async Task OnKeyDown(KeyboardEventArgs e)
-    {
-        if (e.Key == "Enter")
-        {
-            await GoAsync();
-        }
-    }
-
-    private async Task GoAsync()
-    {
-        var code = _code.Trim().ToUpperInvariant();
-        if (code.Length == 0)
-        {
-            _error = "Enter a code first.";
-            return;
-        }
-
-        _busy = true;
-        _error = null;
-
-        // A code can be an event (a whole day of activities) or a single activity.
-        var ev = await Api.GetEventByCodeAsync(code);
-        if (ev is not null)
-        {
-            _busy = false;
-            Nav.NavigateTo($"e/{ev.Id}");
-            return;
-        }
-
-        var activity = await Api.GetActivityByCodeAsync(code);
-        _busy = false;
-
-        if (activity is null)
-        {
-            _error = "No event or activity found with that code.";
-            return;
-        }
-
-        Nav.NavigateTo($"a/{activity.Id}");
-    }
 
 }

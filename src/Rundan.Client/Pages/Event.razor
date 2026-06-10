@@ -22,31 +22,52 @@ else if (_event is null)
 else
 {
     <div class="card stack">
+        @* Once an activity is underway the event blurb collapses to a tappable bar,
+           so the running order and scoreboard sit higher on the page. *@
         <div class="row">
-            <h1 class="grow">@_event.Name</h1>
+            @if (EventUnderway)
+            {
+                <h1 class="grow" style="margin:0">
+                    <button class="ei-toggle" @onclick="() => _eventInfoOpen = !_eventInfoOpen"
+                            aria-expanded="@_eventInfoOpen" aria-controls="event-info-blurb">
+                        <span class="grow">@_event.Name</span>
+                        <span class="ei-chevron @(_eventInfoOpen ? "open" : null)" aria-hidden="true">⌄</span>
+                    </button>
+                </h1>
+            }
+            else
+            {
+                <h1 class="grow">@_event.Name</h1>
+            }
             @if (_reconnecting)
             {
                 <span class="badge">Reconnecting…</span>
             }
         </div>
-        @if (!string.IsNullOrEmpty(_event.ImageUrl))
+        @if (!EventUnderway || _eventInfoOpen)
         {
-            <img src="@_event.ImageUrl" alt="" class="media-img" />
+            <div id="event-info-blurb" class="stack">
+                @if (!string.IsNullOrEmpty(_event.ImageUrl))
+                {
+                    <img src="@_event.ImageUrl" alt="" class="media-img" />
+                }
+                @if (!string.IsNullOrWhiteSpace(_event.Description))
+                {
+                    <div class="rte-content">@((MarkupString)Fmt.RichHtml(_event.Description))</div>
+                }
+                <div class="row muted" style="font-size:.85rem">
+                    <span>Event code @_event.JoinCode</span>
+                    <span>·</span>
+                    <span>Teams of @_event.TeamSize</span>
+                    @if (ScheduleText() is { } sched)
+                    {
+                        <span>·</span>
+                        <span>📅 @sched</span>
+                    }
+                </div>
+            </div>
         }
-        @if (!string.IsNullOrWhiteSpace(_event.Description))
-        {
-            <div class="rte-content">@((MarkupString)Fmt.RichHtml(_event.Description))</div>
-        }
-        <div class="row muted" style="font-size:.85rem">
-            <span>Event code @_event.JoinCode</span>
-            <span>·</span>
-            <span>Teams of @_event.TeamSize</span>
-            @if (ScheduleText() is { } sched)
-            {
-                <span>·</span>
-                <span>📅 @sched</span>
-            }
-        </div>
+        @* Availability gating stays visible even when collapsed — it's why a player can't play yet. *@
         @if (!EventOpenForMe)
         {
             <div class="alert" style="background:var(--coral-50);color:var(--coral-700);border:1px solid var(--coral-100)">
@@ -709,6 +730,14 @@ else
     private int _slapTarget;
     private int _slapRecipient;
 
+    // Collapsed-by-default state of the event-info blurb once the event is underway.
+    private bool _eventInfoOpen;
+
+    // The event is "underway" once any activity has been started (is live or already finished).
+    // At that point the long event blurb folds into an accordion to save vertical space.
+    private bool EventUnderway =>
+        _event is not null && _event.Activities.Any(a => a.Status is ActivityStatus.Live or ActivityStatus.Finished);
+
     // True when this device is currently playing as another player in THIS event.
     private bool ProxyHere => State.IsProxying && State.Proxy!.EventId == Id;
 
@@ -786,6 +815,10 @@ else
 
         if (_event is not null)
         {
+            // Decide the blurb's collapsed state ONCE, from the state at load: already underway
+            // → start collapsed; not yet → start open and stay open (a later activity going Live
+            // via SignalR must not yank the blurb closed while someone is reading it).
+            _eventInfoOpen = !EventUnderway;
             SyncEditFields();
             _isViewer = await State.GetViewerAsync(Id);
             if (_isViewer)
