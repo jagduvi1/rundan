@@ -524,7 +524,9 @@ input:focus, select:focus, textarea:focus { outline: 3px solid var(--focus-ring)
     align-items: center;
     justify-content: center;
     gap: .4rem;
-    padding: 1.75rem;
+    /* Respect the notch/home-indicator and leave room for the fixed CTA, so the reveal stays
+       centred in the space above the button rather than dead-centre with a gap below. */
+    padding: calc(var(--safe-top) + 1.75rem) 1.25rem calc(var(--safe-bottom) + 6rem);
     text-align: center;
     background: radial-gradient(120% 90% at 50% 20%, var(--sea-500), var(--sea-800));
     overflow: hidden;
@@ -532,17 +534,30 @@ input:focus, select:focus, textarea:focus { outline: 3px solid var(--focus-ring)
 }
 
 .arrival__check {
-    width: 96px; height: 96px; border-radius: 50%;
+    width: clamp(76px, 24vw, 96px); height: clamp(76px, 24vw, 96px); border-radius: 50%;
     background: var(--green-500); color: #fff;
     display: flex; align-items: center; justify-content: center;
-    font-size: 3.25rem; font-weight: 800;
+    font-size: clamp(2.5rem, 9vw, 3.25rem); font-weight: 800;
     box-shadow: 0 0 0 10px rgba(255, 255, 255, 0.12), var(--shadow-xl);
     animation: rds-pop var(--dur-reveal) var(--ease-bounce) both;
 }
 
-.arrival__title { font-family: var(--font-display); font-weight: 800; font-size: 2.5rem; color: #fff; margin-top: 1.5rem; letter-spacing: -0.02em; }
-.arrival__sub { color: rgba(255, 255, 255, 0.9); font-size: 1.125rem; }
-.arrival__cta { position: absolute; left: 1.5rem; right: 1.5rem; bottom: calc(var(--safe-bottom) + 1.5rem); }
+.arrival__title {
+    font-family: var(--font-display); font-weight: 800;
+    font-size: clamp(1.75rem, 8vw, 2.5rem); color: #fff;
+    margin-top: 1.25rem; letter-spacing: -0.02em;
+    max-width: 20ch; text-wrap: balance;
+}
+.arrival__sub { color: rgba(255, 255, 255, 0.9); font-size: clamp(1rem, 4.5vw, 1.125rem); max-width: 28ch; }
+.arrival__cta { position: absolute; left: 1.25rem; right: 1.25rem; bottom: calc(var(--safe-bottom) + 1.25rem); }
+
+/* Short screens (landscape phones): shrink so the cluster never collides with the CTA. */
+@media (max-height: 540px) {
+    .arrival { padding: calc(var(--safe-top) + 1rem) 1.25rem calc(var(--safe-bottom) + 4.5rem); gap: .2rem; }
+    .arrival__check { width: 60px; height: 60px; font-size: 2rem; }
+    .arrival__title { font-size: 1.5rem; margin-top: .6rem; }
+    .arrival__sub { font-size: 1rem; }
+}
 .confetti { position: absolute; top: -24px; width: 11px; height: 11px; animation: rds-confetti 2.6s linear infinite; }
 
 @keyframes rds-reveal-in { from { opacity: 0; } to { opacity: 1; } }
