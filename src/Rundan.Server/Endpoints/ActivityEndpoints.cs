@@ -107,7 +107,7 @@ internal static class ActivityEndpoints
 
         app.MapPut("/api/activities/{id:int}/status", async (
             int id, UpdateActivityStatusRequest req, AppDbContext db,
-            ScoreboardNotifier notifier, TeamService teams, SlapService slaps, TimeProvider clock, CancellationToken ct) =>
+            ScoreboardNotifier notifier, PushService push, TeamService teams, SlapService slaps, TimeProvider clock, CancellationToken ct) =>
         {
             var activity = await db.Activities.FirstOrDefaultAsync(a => a.Id == id, ct)
                 ?? throw new RuleViolationException("Activity not found.", StatusCodes.Status404NotFound);
@@ -201,6 +201,19 @@ internal static class ActivityEndpoints
 
             await notifier.PushStatusAsync(id, activity.Status);
             await notifier.PushScoreboardAsync(id, ct);
+
+            // Push notifications: an activity going live, or finishing (winner / slap / new leader).
+            if (activity.EventId is { } pevId)
+            {
+                if (req.Status == ActivityStatus.Live)
+                {
+                    push.Notify(pevId, "▶ Activity started", $"“{activity.Title}” is live — go play!", $"e/{pevId}", $"live-{id}");
+                }
+                else if (req.Status == ActivityStatus.Finished)
+                {
+                    _ = push.NotifyActivityFinishedAsync(id);
+                }
+            }
 
             return Results.Ok(await LoadDtoAsync(db, id, ct));
         }).AddEndpointFilter<ActivityManagerFilter>();

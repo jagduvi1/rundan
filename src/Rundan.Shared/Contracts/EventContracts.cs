@@ -146,6 +146,20 @@ public class PostChatMessageRequest
     public string Text { get; set; } = string.Empty;
 }
 
+/// <summary>The server's VAPID public key, for the browser to create a push subscription.</summary>
+public class PushKeyDto
+{
+    public string PublicKey { get; set; } = string.Empty;
+}
+
+/// <summary>A browser push subscription to register for an event's notifications.</summary>
+public class PushSubscribeRequest
+{
+    public string Endpoint { get; set; } = string.Empty;
+    public string P256dh { get; set; } = string.Empty;
+    public string Auth { get; set; } = string.Empty;
+}
+
 /// <summary>A player reports their GPS so the server can auto-start any open activity whose geofence
 /// — or, for a tipspromenad, a question's geofence — they've walked into.</summary>
 public class ArriveRequest

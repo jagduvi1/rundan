@@ -26,7 +26,7 @@ internal static class BracketEndpoints
         }).AddEndpointFilter<ActivityManagerFilter>();
 
         app.MapPost("/api/activities/{id:int}/bracket/result", async (
-            int id, RecordBracketResultRequest req, BracketService svc, ScoreboardNotifier notifier, CancellationToken ct) =>
+            int id, RecordBracketResultRequest req, BracketService svc, ScoreboardNotifier notifier, PushService push, CancellationToken ct) =>
         {
             var sets = req.Sets.Select(s => (s.A, s.B)).ToList();
             await svc.RecordResultAsync(id, req.MatchId, sets, explicitWinnerId: null, ct);
@@ -36,6 +36,7 @@ internal static class BracketEndpoints
             if (await svc.TryAutoFinishAsync(id, ct))
             {
                 await notifier.PushStatusAsync(id, ActivityStatus.Finished);
+                _ = push.NotifyActivityFinishedAsync(id);
             }
 
             return Results.Ok(await svc.BuildAsync(id, ct));

@@ -29,6 +29,7 @@ builder.Services.AddSingleton(new StoragePaths { UploadsDir = uploadsDir });
 // --- Services ---------------------------------------------------------------
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<JoinCodeGenerator>();
+builder.Services.AddSingleton<PushService>();
 builder.Services.AddScoped<ScoreboardService>();
 builder.Services.AddScoped<EventStandingsService>();
 builder.Services.AddScoped<TeamService>();

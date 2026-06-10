@@ -220,6 +220,13 @@ public sealed class RundanApi(HttpClient http, AppState state)
         await SendAsync<object>(HttpMethod.Post, $"api/events/{eventId}/arrive",
             body: new ArriveRequest { Lat = lat, Lng = lng });
 
+    // ---- Web Push ----------------------------------------------------------
+    public Task<PushKeyDto?> GetPushKeyAsync() => TryGetAsync<PushKeyDto>("api/push/key");
+
+    public Task SubscribePushAsync(int eventId, string endpoint, string p256dh, string auth) =>
+        SendAsync(HttpMethod.Post, $"api/events/{eventId}/push/subscribe",
+            body: new PushSubscribeRequest { Endpoint = endpoint, P256dh = p256dh, Auth = auth });
+
     // ---- Event group chat --------------------------------------------------
     public Task<List<ChatMessageDto>> GetChatAsync(int eventId) =>
         GetListAsync<ChatMessageDto>($"api/events/{eventId}/chat");
