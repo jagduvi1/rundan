@@ -180,6 +180,12 @@ public sealed class RundanApi(HttpClient http, AppState state)
         await SendAsync<object>(HttpMethod.Post, $"api/events/{eventId}/slap/send-points",
             body: new SendSlapPointsRequest { ActivityId = activityId, RecipientUserId = recipientUserId });
 
+    /// <summary>Report the player's GPS so the server can auto-start any open activity (or tipspromenad
+    /// station) geofence they've entered. Returns the ids of activities it just started.</summary>
+    public async Task ReportArrivalAsync(int eventId, double lat, double lng) =>
+        await SendAsync<object>(HttpMethod.Post, $"api/events/{eventId}/arrive",
+            body: new ArriveRequest { Lat = lat, Lng = lng });
+
     public async Task<ViewerDto> RegisterViewerAsync(int eventId, string name, Guid? token) =>
         (await SendAsync<ViewerDto>(HttpMethod.Post, $"api/events/{eventId}/viewers",
             body: new RegisterViewerRequest { Name = name, Token = token }))!;

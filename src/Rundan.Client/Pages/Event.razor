@@ -862,8 +862,10 @@ else
 
     private async Task StartGeoAsync()
     {
-        // Spectators don't need tracking, and it powers the player-only arrival prompt.
-        if (_event is null || _isViewer || _geo is not null || !_event.Activities.Any(a => a.HasLocation))
+        // Spectators don't need tracking. It powers the arrival prompt and the geofence auto-start —
+        // so also track when there's a tipspromenad (its geofences live on the questions, not the activity).
+        if (_event is null || _isViewer || _geo is not null
+            || !_event.Activities.Any(a => a.HasLocation || a.Type == ActivityType.Tipspromenad))
         {
             return;
         }
@@ -913,11 +915,33 @@ else
             }
 
             CheckArrivals();
+            _ = MaybeReportArrivalAsync(p); // server starts any open activity/station geofence we've entered
         }
 
         StateHasChanged();
         return Task.CompletedTask;
     });
+
+    // Report our GPS so the server auto-starts any open activity (or tipspromenad station) we've
+    // walked into. Throttled, and only when there's actually an open geofenced activity to start.
+    private DateTimeOffset _lastArrivePost = DateTimeOffset.MinValue;
+    private async Task MaybeReportArrivalAsync(GeoPosition p)
+    {
+        if (_event is null
+            || !_event.Activities.Any(a => a.Status == ActivityStatus.Open && (a.HasLocation || a.Type == ActivityType.Tipspromenad))
+            || DateTimeOffset.UtcNow - _lastArrivePost < TimeSpan.FromSeconds(8))
+        {
+            return;
+        }
+
+        _lastArrivePost = DateTimeOffset.UtcNow;
+        try
+        {
+            // The SignalR status push from a started activity refreshes everyone, so no need to act on the result.
+            await Api.ReportArrivalAsync(Id, p.Latitude, p.Longitude);
+        }
+        catch (ApiException) { /* transient — the next fix retries */ }
+    }
 
     private void OnGeoError(string message) => _ = InvokeAsync(() =>
     {
