@@ -63,8 +63,14 @@ public class PendingSlapDto
     /// <summary>The winning team's display name.</summary>
     public string WinnerName { get; set; } = string.Empty;
 
-    /// <summary>The winning team's member user ids (a member of this team performs the slap; can't be slapped).</summary>
+    /// <summary>The winning team's member user ids — none of them can be slapped (your own team).</summary>
     public List<int> WinnerUserIds { get; set; } = new();
+
+    /// <summary>The one winning-team member who takes the slap: the lowest overall score (ties random).</summary>
+    public int SlapperUserId { get; set; }
+
+    /// <summary>That designated slapper's name (for the "waiting for …" line).</summary>
+    public string? SlapperName { get; set; }
 
     /// <summary>The resolved effect for this activity (Vanish or SendToPlayer; Random is decided here).</summary>
     public SlapMode EffectiveMode { get; set; }

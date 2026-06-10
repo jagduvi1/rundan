@@ -53,7 +53,7 @@ public sealed class SlapService(AppDbContext db, ScoreboardService scoreboard, E
                 continue;
             }
 
-            var winner = await WinnerAsync(a.Id, ct);
+            var winner = await WinnerAsync(eventId, a.Id, ct);
             if (winner is null)
             {
                 continue; // no players / not a team activity → nothing to slap
@@ -70,6 +70,8 @@ public sealed class SlapService(AppDbContext db, ScoreboardService scoreboard, E
                 ActivityTitle = a.Title,
                 WinnerName = winner.Value.Name,
                 WinnerUserIds = winner.Value.MemberIds,
+                SlapperUserId = winner.Value.SlapperUserId,
+                SlapperName = members.FirstOrDefault(m => m.UserId == winner.Value.SlapperUserId)?.Name,
                 EffectiveMode = EffectiveMode(ev.SlapMode, a.Id),
                 Members = members.OrderBy(m => m.Name, StringComparer.OrdinalIgnoreCase).ToList(),
             };
@@ -137,7 +139,7 @@ public sealed class SlapService(AppDbContext db, ScoreboardService scoreboard, E
         }
 
         // Not resolved yet → pending, but only if the activity has a winner to slap with.
-        var winner = await WinnerAsync(activityId, ct);
+        var winner = await WinnerAsync(eventId, activityId, ct);
         if (winner is null)
         {
             return result; // None — no team winner (e.g. nobody played)
@@ -146,7 +148,9 @@ public sealed class SlapService(AppDbContext db, ScoreboardService scoreboard, E
         result.State = SlapState.Pending;
         result.WinnerName = winner.Value.Name;
         result.WinnerUserIds = winner.Value.MemberIds;
+        result.SlapperUserId = winner.Value.SlapperUserId;
         result.Members = await MembersAsync(eventId, ct);
+        result.SlapperName = result.Members.FirstOrDefault(m => m.UserId == winner.Value.SlapperUserId)?.Name;
         return result;
     }
 
@@ -225,11 +229,13 @@ public sealed class SlapService(AppDbContext db, ScoreboardService scoreboard, E
             throw new RuleViolationException("Someone already took this slap.", StatusCodes.Status409Conflict);
         }
 
-        var winner = await WinnerAsync(activityId, ct)
+        var winner = await WinnerAsync(eventId, activityId, ct)
             ?? throw new RuleViolationException("This activity has no winner to slap with.");
-        if (!winner.MemberIds.Contains(slapperUserId))
+        if (winner.SlapperUserId != slapperUserId)
         {
-            throw new RuleViolationException("Only the winning team can slap.", StatusCodes.Status403Forbidden);
+            throw new RuleViolationException(
+                "It's not your slap to take — the lowest-scoring player on the winning team does it.",
+                StatusCodes.Status403Forbidden);
         }
 
         var memberIds = await db.EventMembers.Where(m => m.EventId == eventId).Select(m => m.UserId).ToListAsync(ct);
@@ -325,8 +331,9 @@ public sealed class SlapService(AppDbContext db, ScoreboardService scoreboard, E
         return following is null ? 0 : Math.Max(0d, (total - following.TotalPoints) / 2d);
     }
 
-    /// <summary>The winning team(s) (rank 1) of an activity and their roster member ids, or null.</summary>
-    private async Task<(string Name, List<int> MemberIds)?> WinnerAsync(int activityId, CancellationToken ct)
+    /// <summary>The winning team(s) (rank 1) of an activity: the team name, every winning member's
+    /// roster id (none can be slapped), and the single member designated to take the slap.</summary>
+    private async Task<(string Name, List<int> MemberIds, int SlapperUserId)?> WinnerAsync(int eventId, int activityId, CancellationToken ct)
     {
         var board = await scoreboard.BuildAsync(activityId, ct);
         var top = board?.Entries.Where(e => e.Rank == 1).ToList() ?? new();
@@ -335,8 +342,7 @@ public sealed class SlapService(AppDbContext db, ScoreboardService scoreboard, E
             return null;
         }
 
-        // On a first-place tie, every member of every tied team is eligible to slap
-        // (the first to act still takes the single slap).
+        // On a first-place tie, every member of every tied team counts as a winner.
         var topIds = top.Select(e => e.ParticipantId).ToList();
         var memberIds = await db.ParticipantMembers.AsNoTracking()
             .Where(pm => topIds.Contains(pm.ParticipantId))
@@ -344,7 +350,33 @@ public sealed class SlapService(AppDbContext db, ScoreboardService scoreboard, E
             .Distinct()
             .ToListAsync(ct);
 
+        if (memberIds.Count == 0)
+        {
+            return null;
+        }
+
         var name = string.Join(" & ", top.Select(e => e.DisplayName));
-        return memberIds.Count == 0 ? null : (name, memberIds);
+        var slapper = await DesignatedSlapperAsync(eventId, activityId, memberIds, ct);
+        return (name, memberIds, slapper);
+    }
+
+    /// <summary>Of the winning team's members, the one with the lowest overall event score takes the
+    /// slap. Ties are broken deterministically-at-random per activity, so the choice is stable across
+    /// refreshes (everyone sees the same designated slapper).</summary>
+    private async Task<int> DesignatedSlapperAsync(int eventId, int activityId, List<int> memberIds, CancellationToken ct)
+    {
+        var board = await standings.BuildAsync(eventId, ct);
+        var totals = board?.Entries.ToDictionary(e => e.UserId, e => e.TotalPoints) ?? new();
+        double Score(int uid) => totals.GetValueOrDefault(uid, 0d);
+
+        var min = memberIds.Min(Score);
+        var lowest = memberIds.Where(uid => Score(uid) <= min + 1e-9).OrderBy(uid => uid).ToList();
+        if (lowest.Count == 1)
+        {
+            return lowest[0];
+        }
+
+        var hash = unchecked((uint)activityId * 2654435761u);
+        return lowest[(int)(hash % (uint)lowest.Count)];
     }
 }
