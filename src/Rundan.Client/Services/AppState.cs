@@ -174,6 +174,13 @@ public sealed class AppState(IJSRuntime js)
         }
     }
 
+    // The event this device last opened — used to send a returning visitor straight back to it
+    // from the landing page (so they don't have to re-pick it every time).
+    private const string LastEventKey = "rundan.lastevent";
+    public async Task<int?> GetLastEventIdAsync()
+        => int.TryParse(await GetItemAsync(LastEventKey), out var v) ? v : null;
+    public Task SaveLastEventIdAsync(int eventId) => SetItemAsync(LastEventKey, eventId.ToString());
+
     // The name a device joined an event with (used to prefill and to re-join newly opened activities).
     private static string EventNameKey(int eventId) => $"rundan.eventname.{eventId}";
     public Task<string?> GetEventNameAsync(int eventId) => GetItemAsync(EventNameKey(eventId));

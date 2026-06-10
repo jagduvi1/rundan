@@ -1,10 +1,11 @@
 @inject AppState State
 @inject RundanApi Api
 
-<div class="card stack center">
-    <img src="img/rundan-mark.svg" width="56" height="56" alt="" style="margin:0 auto" />
-    <h1>Members only</h1>
-    <p class="muted">Pop in the access code your group shared with you.</p>
+<WelcomeHero />
+
+<div class="card stack">
+    <h2>Enter your access code</h2>
+    <p class="muted">Pop in the code your group shared with you to get started.</p>
 
     @if (_error is not null)
     {
