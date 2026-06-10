@@ -19,6 +19,7 @@ public static class ScoreboardMessages
     public const string ActivityStatusChanged = nameof(IScoreboardClient.ActivityStatusChanged);
     public const string ViewersChanged = nameof(IScoreboardClient.ViewersChanged);
     public const string EventChanged = nameof(IScoreboardClient.EventChanged);
+    public const string ChatPosted = nameof(IScoreboardClient.ChatPosted);
 }
 
 /// <summary>Client → server method names (hub invocations).</summary>
@@ -50,4 +51,7 @@ public interface IScoreboardClient
 
     /// <summary>The event's roster/admins changed — clients should re-claim and refresh.</summary>
     Task EventChanged(int eventId);
+
+    /// <summary>A new message was posted to the event's group chat.</summary>
+    Task ChatPosted(ChatMessageDto message);
 }

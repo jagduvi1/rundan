@@ -40,4 +40,8 @@ public sealed class ScoreboardNotifier(
     /// (e.g. a player's admin flag was toggled and their host controls should appear/disappear live).</summary>
     public Task PushEventChangedAsync(int eventId)
         => hub.Clients.Group(ScoreboardGroups.ForEvent(eventId)).EventChanged(eventId);
+
+    /// <summary>Broadcast a new chat message to everyone watching the event.</summary>
+    public Task PushChatAsync(int eventId, ChatMessageDto message)
+        => hub.Clients.Group(ScoreboardGroups.ForEvent(eventId)).ChatPosted(message);
 }

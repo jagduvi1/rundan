@@ -97,6 +97,49 @@ internal static class EventEndpoints
             return Results.Ok(new { started });
         });
 
+        // --- Group chat (everyone in the event) ---------------------------------
+        app.MapGet("/api/events/{id:int}/chat", async (int id, AppDbContext db, CancellationToken ct) =>
+        {
+            var messages = await db.ChatMessages.AsNoTracking()
+                .Where(m => m.EventId == id)
+                .OrderByDescending(m => m.Id).Take(200)
+                .Select(m => new ChatMessageDto { Id = m.Id, Author = m.Author, Text = m.Text, CreatedUtc = m.CreatedUtc })
+                .ToListAsync(ct);
+            messages.Reverse(); // oldest first for display
+            return Results.Ok(messages);
+        });
+
+        app.MapPost("/api/events/{id:int}/chat", async (
+            int id, PostChatMessageRequest req, AppDbContext db, ScoreboardNotifier notifier,
+            TimeProvider clock, CancellationToken ct) =>
+        {
+            var text = (req.Text ?? string.Empty).Trim();
+            if (text.Length == 0)
+            {
+                throw new RuleViolationException("Type a message first.");
+            }
+            if (text.Length > 1000)
+            {
+                text = text[..1000];
+            }
+
+            var author = (req.Author ?? string.Empty).Trim();
+            author = author.Length == 0 ? "Someone" : author.Length > 60 ? author[..60] : author;
+
+            if (!await db.Events.AnyAsync(e => e.Id == id, ct))
+            {
+                return Results.NotFound();
+            }
+
+            var msg = new ChatMessage { EventId = id, Author = author, Text = text, CreatedUtc = clock.GetUtcNow() };
+            db.ChatMessages.Add(msg);
+            await db.SaveChangesAsync(ct);
+
+            var dto = new ChatMessageDto { Id = msg.Id, Author = msg.Author, Text = msg.Text, CreatedUtc = msg.CreatedUtc };
+            await notifier.PushChatAsync(id, dto);
+            return Results.Ok(dto);
+        });
+
         // Viewers (spectators): register / heartbeat / leave — access-gated, no competing identity.
         app.MapPost("/api/events/{id:int}/viewers", async (
             int id, RegisterViewerRequest req, AppDbContext db, ScoreboardNotifier notifier, TimeProvider clock, CancellationToken ct) =>

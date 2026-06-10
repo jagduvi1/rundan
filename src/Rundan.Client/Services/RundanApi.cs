@@ -186,6 +186,14 @@ public sealed class RundanApi(HttpClient http, AppState state)
         await SendAsync<object>(HttpMethod.Post, $"api/events/{eventId}/arrive",
             body: new ArriveRequest { Lat = lat, Lng = lng });
 
+    // ---- Event group chat --------------------------------------------------
+    public Task<List<ChatMessageDto>> GetChatAsync(int eventId) =>
+        GetListAsync<ChatMessageDto>($"api/events/{eventId}/chat");
+
+    public async Task<ChatMessageDto> PostChatAsync(int eventId, string author, string text) =>
+        (await SendAsync<ChatMessageDto>(HttpMethod.Post, $"api/events/{eventId}/chat",
+            body: new PostChatMessageRequest { Author = author, Text = text }))!;
+
     public async Task<ViewerDto> RegisterViewerAsync(int eventId, string name, Guid? token) =>
         (await SendAsync<ViewerDto>(HttpMethod.Post, $"api/events/{eventId}/viewers",
             body: new RegisterViewerRequest { Name = name, Token = token }))!;
