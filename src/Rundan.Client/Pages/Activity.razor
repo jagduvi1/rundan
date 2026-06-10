@@ -268,9 +268,12 @@ else
                 _isViewer = await State.GetViewerAsync(evId);
             }
 
+            // Independent reads run together so the spinner doesn't wait on a serial chain of round-trips.
+            var boardTask = Api.GetScoreboardAsync(Id);
+            var participantsTask = Api.GetParticipantsAsync(Id);
             _session = await State.GetSessionAsync(Id);
-            _board = await Api.GetScoreboardAsync(Id);
-            _participants = await Api.GetParticipantsAsync(Id);
+            _board = await boardTask;
+            _participants = await participantsTask;
 
             // For the slap ceremony: who this device is acting as in the event roster — the proxied
             // player when the host is "playing as" someone, otherwise this device's own claim — plus
@@ -285,7 +288,11 @@ else
             }
 
             await LoadSlapAsync();
-            await StartConnectionAsync();
+
+            // Live updates connect in the background — don't block the first render on the SignalR
+            // handshake (or a slow long-polling fallback). Messages arrive once it's up; the data
+            // above is already loaded, so the page is usable immediately.
+            _ = StartConnectionAsync();
         }
 
         _loading = false;
