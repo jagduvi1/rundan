@@ -253,7 +253,7 @@ internal static class EventEndpoints
         // Host: bulk-reset every activity to Draft (fresh, not opened) or Open (ready to start),
         // without touching scores. Confirmed in the UI.
         app.MapPut("/api/events/{id:int}/activities/status", async (
-            int id, UpdateActivityStatusRequest req, AppDbContext db, ScoreboardNotifier notifier, CancellationToken ct) =>
+            int id, UpdateActivityStatusRequest req, AppDbContext db, TeamService teams, ScoreboardNotifier notifier, CancellationToken ct) =>
         {
             if (req.Status is not (ActivityStatus.Draft or ActivityStatus.Open))
             {
@@ -277,6 +277,18 @@ internal static class EventEndpoints
             if (changed.Count > 0)
             {
                 await db.SaveChangesAsync(ct);
+
+                // Opening an activity forms its teams — mirror the single-activity handler so a
+                // bulk "All to open" doesn't leave Open activities with an empty scoreboard until
+                // the first player claims.
+                if (req.Status == ActivityStatus.Open)
+                {
+                    foreach (var a in activities.Where(a => changed.Contains(a.Id)))
+                    {
+                        await teams.EnsureTeamsAsync(a, ct);
+                    }
+                }
+
                 foreach (var aid in changed)
                 {
                     await notifier.PushStatusAsync(aid, req.Status);

@@ -173,11 +173,10 @@ public sealed class BracketService(AppDbContext db, TimeProvider clock)
 
         var standings = ComputeStandings(activity, groupMatches);
 
-        var aAdvance = Math.Max(1, activity.AdvanceToPlayoffA);
-        var bAdvance = Math.Max(0, activity.AdvanceToPlayoffB);
-
-        var aSeeds = SeedsForPool(standings, fromRank: 1, count: aAdvance);
-        var bSeeds = SeedsForPool(standings, fromRank: aAdvance + 1, count: bAdvance);
+        // Seed each pool from the exact rows ComputeStandings marked as advancing there, so the bracket
+        // and the standings "→ A/B" badges always agree.
+        var aSeeds = SeedsForPool(standings, pool: 0);
+        var bSeeds = SeedsForPool(standings, pool: 1);
 
         if (aSeeds.Count >= 1)
         {
@@ -193,22 +192,17 @@ public sealed class BracketService(AppDbContext db, TimeProvider clock)
         return true;
     }
 
-    // Cross-group seed list: all teams finishing at rank `fromRank` (ordered best-first), then the next
-    // rank, … for `count` ranks. Putting group winners at the top seeds spreads them across the bracket.
-    private static List<int> SeedsForPool(List<GroupStandingDto> standings, int fromRank, int count)
-    {
-        var seeds = new List<int>();
-        for (var k = fromRank; k < fromRank + count; k++)
-        {
-            var atRank = standings.SelectMany(g => g.Rows)
-                .Where(r => r.Rank == k)
-                .OrderByDescending(r => r.Won).ThenByDescending(r => r.Diff).ThenByDescending(r => r.PointsFor)
-                .ThenBy(r => r.TeamId);
-            seeds.AddRange(atRank.Select(r => r.TeamId));
-        }
-
-        return seeds;
-    }
+    // Cross-group seed list for a pool: the teams ComputeStandings marked as advancing there, ordered
+    // by group rank (all the rank-1 qualifiers first, best group-winner first, then the rank-2s, …) so
+    // standard bracket seeding spreads the group winners across opposite halves.
+    private static List<int> SeedsForPool(List<GroupStandingDto> standings, int pool) =>
+        standings.SelectMany(g => g.Rows)
+            .Where(r => r.AdvancesToPool == pool)
+            .OrderBy(r => r.Rank)
+            .ThenByDescending(r => r.Won).ThenByDescending(r => r.Diff).ThenByDescending(r => r.PointsFor)
+            .ThenBy(r => r.TeamId)
+            .Select(r => r.TeamId)
+            .ToList();
 
     // Computes each group's table and marks which playoff (if any) each position advances to.
     private static List<GroupStandingDto> ComputeStandings(Activity activity, List<BracketMatch> groupMatches)
@@ -239,15 +233,29 @@ public sealed class BracketService(AppDbContext db, TimeProvider clock)
 
             var aAdvance = Math.Max(1, activity.AdvanceToPlayoffA);
             var bAdvance = Math.Max(0, activity.AdvanceToPlayoffB);
+            // Cap Playoff A at the actual group size, then take Playoff B from the leftover ranks — so a
+            // big A count never steals B's slots or slides B's window off the end of the table.
+            var aTake = Math.Min(aAdvance, ordered.Count);
             for (var i = 0; i < ordered.Count; i++)
             {
                 ordered[i].Rank = i + 1;
-                ordered[i].AdvancesToPool = (i + 1) <= aAdvance ? 0
-                    : (i + 1) <= aAdvance + bAdvance ? 1
+                ordered[i].AdvancesToPool = (i + 1) <= aTake ? 0
+                    : (i + 1) <= aTake + bAdvance ? 1
                     : (int?)null;
             }
 
             groups.Add(new GroupStandingDto { GroupIndex = grp.Key, Rows = ordered });
+        }
+
+        // A plate (Playoff B) needs at least two teams to be a bracket. If only one team would advance
+        // across all groups, drop the promise — this keeps the standings "→ B" badge in lock-step with
+        // the seeded brackets (TrySeedPlayoffs only builds B with >= 2 teams), so they never disagree.
+        if (groups.SelectMany(g => g.Rows).Count(r => r.AdvancesToPool == 1) < 2)
+        {
+            foreach (var r in groups.SelectMany(g => g.Rows).Where(r => r.AdvancesToPool == 1))
+            {
+                r.AdvancesToPool = null;
+            }
         }
 
         return groups;
