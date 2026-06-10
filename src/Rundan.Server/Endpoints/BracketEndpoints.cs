@@ -1,5 +1,6 @@
 using Rundan.Server.Security;
 using Rundan.Server.Services;
+using Rundan.Shared;
 using Rundan.Shared.Contracts;
 
 namespace Rundan.Server.Endpoints;
@@ -30,6 +31,13 @@ internal static class BracketEndpoints
             var sets = req.Sets.Select(s => (s.A, s.B)).ToList();
             await svc.RecordResultAsync(id, req.MatchId, sets, explicitWinnerId: null, ct);
             await notifier.PushScoreboardAsync(id, ct);
+
+            // Auto-finalize once the bracket has a champion (so the slap ceremony fires on its own).
+            if (await svc.TryAutoFinishAsync(id, ct))
+            {
+                await notifier.PushStatusAsync(id, ActivityStatus.Finished);
+            }
+
             return Results.Ok(await svc.BuildAsync(id, ct));
         }).AddEndpointFilter<ActivityManagerFilter>();
 

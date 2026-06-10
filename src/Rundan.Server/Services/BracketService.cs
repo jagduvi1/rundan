@@ -44,6 +44,28 @@ public sealed class BracketService(AppDbContext db, TimeProvider clock)
     /// best-of sets) and the winner is derived from the activity's match format. The simulator instead
     /// passes a <paramref name="explicitWinnerId"/> with no sets.
     /// </summary>
+    /// <summary>If the bracket has crowned a champion, finish the activity automatically. Returns
+    /// true when it just transitioned to Finished.</summary>
+    public async Task<bool> TryAutoFinishAsync(int activityId, CancellationToken ct = default)
+    {
+        var activity = await db.Activities.FirstOrDefaultAsync(a => a.Id == activityId, ct);
+        if (activity is not { Type: ActivityType.Boule, Status: ActivityStatus.Live })
+        {
+            return false;
+        }
+
+        var bracket = await BuildAsync(activityId, ct);
+        if (bracket?.Complete != true)
+        {
+            return false;
+        }
+
+        activity.Status = ActivityStatus.Finished;
+        activity.FinishedUtc = clock.GetUtcNow();
+        await db.SaveChangesAsync(ct);
+        return true;
+    }
+
     public async Task RecordResultAsync(
         int activityId, int matchId, IReadOnlyList<(int A, int B)>? sets, int? explicitWinnerId,
         CancellationToken ct = default)

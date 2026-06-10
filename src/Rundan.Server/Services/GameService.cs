@@ -331,4 +331,59 @@ public sealed class GameService(AppDbContext db, TimeProvider clock)
 
         return entry.ToDto();
     }
+
+    /// <summary>If every expected score for a ScoreGame is in, finish it automatically. Returns true
+    /// when it just transitioned to Finished. Event team games only — that's where "complete" is
+    /// well-defined (a fixed set of teams/players); standalone games are still finished by the host.</summary>
+    public async Task<bool> TryAutoFinishScoreGameAsync(Activity activity, CancellationToken ct = default)
+    {
+        if (activity.Type != ActivityType.ScoreGame || activity.Status != ActivityStatus.Live || activity.EventId is null)
+        {
+            return false;
+        }
+
+        var teamIds = await db.Participants
+            .Where(p => p.ActivityId == activity.Id && p.IsTeam)
+            .Select(p => p.Id)
+            .ToListAsync(ct);
+        if (teamIds.Count == 0)
+        {
+            return false; // no teams formed yet → nothing to complete against
+        }
+
+        int expected, recorded;
+        if (activity.ScoreEntryMode == ScoreEntryMode.PerPlayer)
+        {
+            // One score per player on every team.
+            expected = await db.ParticipantMembers.CountAsync(pm => teamIds.Contains(pm.ParticipantId), ct);
+            recorded = await db.ScoreEntries
+                .Where(s => s.ActivityId == activity.Id && teamIds.Contains(s.ParticipantId) && s.UserId != null)
+                .Select(s => new { s.ParticipantId, s.UserId })
+                .Distinct()
+                .CountAsync(ct);
+        }
+        else
+        {
+            // Whole team per round. Time/length games are a single reading per team (no rounds).
+            var rounds = activity.Measurement is Measurement.TimeSeconds or Measurement.Millimetres
+                ? 1
+                : Math.Max(1, activity.RoundCount);
+            expected = teamIds.Count * rounds;
+            recorded = await db.ScoreEntries
+                .Where(s => s.ActivityId == activity.Id && teamIds.Contains(s.ParticipantId) && s.Round >= 1 && s.Round <= rounds)
+                .Select(s => new { s.ParticipantId, s.Round })
+                .Distinct()
+                .CountAsync(ct);
+        }
+
+        if (expected <= 0 || recorded < expected)
+        {
+            return false;
+        }
+
+        activity.Status = ActivityStatus.Finished;
+        activity.FinishedUtc = clock.GetUtcNow();
+        await db.SaveChangesAsync(ct);
+        return true;
+    }
 }
