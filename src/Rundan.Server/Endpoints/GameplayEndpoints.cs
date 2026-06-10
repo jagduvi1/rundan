@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Rundan.Server.Data;
 using Rundan.Server.Security;
 using Rundan.Server.Services;
+using Rundan.Shared;
 using Rundan.Shared.Contracts;
 
 namespace Rundan.Server.Endpoints;
@@ -57,6 +58,13 @@ internal static class GameplayEndpoints
 
             var dto = await game.RecordScoreAsync(activity, req, ct);
             await notifier.PushScoreboardAsync(id, ct);
+
+            // Auto-finalize once every expected score is in (so the slap ceremony fires on its own).
+            if (await game.TryAutoFinishScoreGameAsync(activity, ct))
+            {
+                await notifier.PushStatusAsync(id, ActivityStatus.Finished);
+            }
+
             return Results.Ok(dto);
         });
 
