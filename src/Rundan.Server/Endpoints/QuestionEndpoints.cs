@@ -188,6 +188,17 @@ internal static class QuestionEndpoints
 
             db.Questions.Remove(question);
             await db.SaveChangesAsync(ct);
+
+            // Renumber the remaining questions to a clean, contiguous 1..N so removing one from the
+            // middle doesn't leave a gap in the station/question numbering players and the host see.
+            var remaining = await db.Questions
+                .Where(q => q.ActivityId == id).OrderBy(q => q.Order).ToListAsync(ct);
+            for (var i = 0; i < remaining.Count; i++)
+            {
+                remaining[i].Order = i + 1;
+            }
+
+            await db.SaveChangesAsync(ct);
             return Results.NoContent();
         }).AddEndpointFilter<ActivityManagerFilter>();
 
