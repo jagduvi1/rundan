@@ -135,6 +135,40 @@ else
         }
     </div>
 
+    @* ---- Group chat: everyone in the event ---- *@
+    <div class="card stack">
+        <h2>Chat</h2>
+        <div style="max-height:16rem;overflow-y:auto;display:flex;flex-direction:column;gap:.45rem">
+            @if (_chat.Count == 0)
+            {
+                <p class="muted center" style="margin:0">No messages yet — say hi! 👋</p>
+            }
+            else
+            {
+                @foreach (var m in _chat)
+                {
+                    <div style="font-size:.9rem">
+                        <b>@m.Author</b>
+                        <span class="muted" style="font-size:.72rem">@m.CreatedUtc.LocalDateTime.ToString("HH:mm")</span>
+                        <div style="white-space:pre-wrap;overflow-wrap:anywhere">@m.Text</div>
+                    </div>
+                }
+            }
+        </div>
+        @if (CanChat)
+        {
+            <div class="row">
+                <input class="grow" placeholder="Message everyone…" maxlength="1000"
+                       @bind="_chatText" @bind:event="oninput" @onkeydown="OnChatKeyDown" />
+                <button class="btn small" @onclick="SendChatAsync" disabled="@(_chatBusy || string.IsNullOrWhiteSpace(_chatText))">Send</button>
+            </div>
+        }
+        else
+        {
+            <p class="muted" style="font-size:.8rem;margin:0">Join the event below to chat.</p>
+        }
+    </div>
+
     @* ---- Identity: viewer, or claim (roster) / free-name join ---- *@
     @if (_isViewer)
     {
@@ -602,6 +636,21 @@ else
 
     // Per-activity slap ceremony shown inline under each finished activity (activityId → slap).
     private readonly Dictionary<int, ActivitySlapDto> _slapByActivity = new();
+
+    // Event group chat.
+    private List<ChatMessageDto> _chat = new();
+    private string _chatText = string.Empty;
+    private bool _chatBusy;
+
+    // The name this device chats under: the proxied player when "playing as", else our claim /
+    // viewer name, else "Host". Empty when we have no identity yet (then chatting is disabled).
+    private string ChatAuthor =>
+        ProxyHere ? State.Proxy!.Name
+        : !string.IsNullOrWhiteSpace(_eventName) ? _eventName!
+        : !string.IsNullOrWhiteSpace(_viewerName) ? _viewerName
+        : State.IsHost ? "Host"
+        : string.Empty;
+    private bool CanChat => !string.IsNullOrWhiteSpace(ChatAuthor);
     private string? _eventName;
     private int? _userId;
     private readonly Dictionary<int, string> _teamByActivity = new();
@@ -870,6 +919,7 @@ else
 
             _standings = await Api.GetEventStandingsAsync(Id);
             await LoadSlapsAsync();
+            try { _chat = await Api.GetChatAsync(Id); } catch (ApiException) { /* chat unavailable */ }
             await StartConnectionAsync();
             await StartGeoAsync();
             EnsureClock();
@@ -1080,6 +1130,7 @@ else
         _conn.StatusChanged += OnRealtimeStatus;
         _conn.ViewersChanged += OnRealtimeViewers;
         _conn.EventChanged += OnRealtimeEventChanged;
+        _conn.ChatPosted += OnRealtimeChat;
         _conn.ConnectionStateChanged += OnConnectionStateChanged;
         try
         {
@@ -1111,6 +1162,51 @@ else
     }
 
     private void RefreshSoon() => _ = InvokeAsync(RefreshAsync);
+
+    // ---- Group chat ----
+    private void OnRealtimeChat(ChatMessageDto m) => _ = InvokeAsync(() =>
+    {
+        AddChat(m);
+        StateHasChanged();
+    });
+
+    private void AddChat(ChatMessageDto m)
+    {
+        if (_chat.All(x => x.Id != m.Id)) // the sender also gets the push — dedupe by id
+        {
+            _chat.Add(m);
+        }
+    }
+
+    private async Task OnChatKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await SendChatAsync();
+        }
+    }
+
+    private async Task SendChatAsync()
+    {
+        var text = _chatText.Trim();
+        if (text.Length == 0 || _chatBusy || !CanChat)
+        {
+            return;
+        }
+
+        _chatBusy = true;
+        try
+        {
+            var msg = await Api.PostChatAsync(Id, ChatAuthor, text);
+            _chatText = string.Empty;
+            AddChat(msg); // show immediately even if our own SignalR push is delayed
+        }
+        catch (ApiException) { /* transient; the message wasn't posted */ }
+        finally
+        {
+            _chatBusy = false;
+        }
+    }
 
     // Fetch the slap ceremony for each finished activity so it can show inline in the running order.
     private async Task LoadSlapsAsync()
@@ -1675,6 +1771,7 @@ else
             _conn.StatusChanged -= OnRealtimeStatus;
             _conn.ViewersChanged -= OnRealtimeViewers;
             _conn.EventChanged -= OnRealtimeEventChanged;
+            _conn.ChatPosted -= OnRealtimeChat;
             _conn.ConnectionStateChanged -= OnConnectionStateChanged;
             await _conn.DisposeAsync();
             _conn = null;

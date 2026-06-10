@@ -130,6 +130,22 @@ public class SkipSlapRequest
     public int ActivityId { get; set; }
 }
 
+/// <summary>One message in an event's group chat.</summary>
+public class ChatMessageDto
+{
+    public int Id { get; set; }
+    public string Author { get; set; } = string.Empty;
+    public string Text { get; set; } = string.Empty;
+    public DateTimeOffset CreatedUtc { get; set; }
+}
+
+/// <summary>Post a message to an event's group chat.</summary>
+public class PostChatMessageRequest
+{
+    public string Author { get; set; } = string.Empty;
+    public string Text { get; set; } = string.Empty;
+}
+
 /// <summary>A player reports their GPS so the server can auto-start any open activity whose geofence
 /// — or, for a tipspromenad, a question's geofence — they've walked into.</summary>
 public class ArriveRequest
