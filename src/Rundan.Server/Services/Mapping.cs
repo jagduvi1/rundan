@@ -30,6 +30,8 @@ public static class Mapping
         CourtLabel = a.CourtLabel,
         Courts = courts ?? new(),
         ScoreEntryMode = a.ScoreEntryMode,
+        RoundCount = a.RoundCount,
+        PlayersPerRound = a.PlayersPerRound,
         Latitude = a.Latitude,
         Longitude = a.Longitude,
         RadiusMeters = a.RadiusMeters,

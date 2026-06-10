@@ -5,15 +5,24 @@
 <div class="card stack">
     <div class="row">
         <h2 class="grow">Record scores</h2>
-        <div class="row" style="gap:.4rem">
-            <span class="muted">Round</span>
-            <div class="stepper" style="width:auto">
-                <button @onclick="() => SetRound(_round - 1)" disabled="@(_round <= 1)">−</button>
-                <span class="value" style="min-width:2ch;font-size:1.3rem">@_round</span>
-                <button @onclick="() => SetRound(_round + 1)">+</button>
+        @* Per-player format is one score per player (no rounds); team format steps through the set rounds. *@
+        @if (!PerPlayer && MaxRound > 1)
+        {
+            <div class="row" style="gap:.4rem">
+                <span class="muted">Round of @MaxRound</span>
+                <div class="stepper" style="width:auto">
+                    <button @onclick="() => SetRound(_round - 1)" disabled="@(_round <= 1)">−</button>
+                    <span class="value" style="min-width:2ch;font-size:1.3rem">@_round</span>
+                    <button @onclick="() => SetRound(_round + 1)" disabled="@(_round >= MaxRound)">+</button>
+                </div>
             </div>
-        </div>
+        }
     </div>
+
+    @if (StructureNote() is { } note)
+    {
+        <div class="muted" style="font-size:.85rem">@note</div>
+    }
 
     @if (_error is not null)
     {
@@ -151,6 +160,60 @@
 
     private bool PerPlayer => Activity.ScoreEntryMode == ScoreEntryMode.PerPlayer;
     private bool IsPoints => Activity.Measurement == Measurement.Points;
+
+    // The round count for the team format. Never fewer than what's already been recorded, so an
+    // existing multi-round game (or one whose count was lowered) isn't truncated mid-play.
+    private int HistoryMaxRound => _history.Count > 0 ? _history.Max(s => s.Round) : 1;
+    private int MaxRound => PerPlayer ? 1 : Math.Max(Math.Max(1, Activity.RoundCount), HistoryMaxRound);
+
+    // A one-line summary of the configured structure + how much is recorded (team events only,
+    // where the expected number of scores is well-defined).
+    private string? StructureNote()
+    {
+        if (Activity.Type != ActivityType.ScoreGame)
+        {
+            return null;
+        }
+
+        var parts = new List<string>
+        {
+            PerPlayer ? "Each player plays one round" : $"{MaxRound} round{(MaxRound == 1 ? "" : "s")}",
+        };
+        if (Activity.PlayersPerRound is int p)
+        {
+            parts.Add($"{p} player{(p == 1 ? "" : "s")} per round");
+        }
+
+        if (Progress() is { } prog)
+        {
+            parts.Add(prog);
+        }
+
+        return string.Join(" · ", parts);
+    }
+
+    private string? Progress()
+    {
+        if (_teams.Count == 0)
+        {
+            return null; // standalone / not yet formed — no fixed expected count
+        }
+
+        if (PerPlayer)
+        {
+            var total = _teams.Sum(t => t.Members.Count);
+            if (total == 0) return null;
+            var done = _history.Where(s => s.UserId is not null)
+                .Select(s => (s.ParticipantId, s.UserId)).Distinct().Count();
+            return $"{done}/{total} players recorded";
+        }
+
+        var slots = _teams.Count * MaxRound;
+        if (slots == 0) return null;
+        var filled = _history.Where(s => s.Round >= 1 && s.Round <= MaxRound)
+            .Select(s => (s.ParticipantId, s.Round)).Distinct().Count();
+        return $"{filled}/{slots} rounds recorded";
+    }
     private string UnitSuffix => Activity.MeasuresTime ? "s" : Activity.MeasuresLength ? "mm" : string.Empty;
 
     private List<(int Id, string Name)> Units() => _teams.Count > 0
@@ -325,7 +388,7 @@
         }
     }
 
-    private void SetRound(int value) => _round = Math.Max(1, value);
+    private void SetRound(int value) => _round = Math.Clamp(value, 1, MaxRound);
 
     private void Adjust(string key, int delta)
         => _pending[key] = Math.Clamp(_pending.GetValueOrDefault(key, 0) + delta, 0d, 99d);
@@ -346,7 +409,7 @@
             {
                 ParticipantId = participantId,
                 UserId = userId,
-                Round = _round,
+                Round = PerPlayer ? 1 : _round, // per-player format is one score per player, no rounds
                 Points = points,
             }, Session.Token);
 
