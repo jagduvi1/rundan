@@ -47,7 +47,7 @@ else
                 var canOpen = done || WithinRadius(q);
                 <li>
                     <span class="grow"><b>Station @q.Order</b></span>
-                    <a class="btn ghost small" href="@MapsUrl(q)" target="_blank" rel="noopener">Maps</a>
+                    <a class="btn ghost small" href="@MapsUrl(q)" target="_blank" rel="noopener">🗺️ Maps</a>
                     @if (done)
                     {
                         <span class="badge live">done</span>
@@ -71,7 +71,7 @@ else
         <div class="card stack">
             <div class="row">
                 <h2 class="grow">Question @sel.Order</h2>
-                <a class="btn ghost small" href="@MapsUrl(sel)" target="_blank" rel="noopener">Maps</a>
+                <a class="btn ghost small" href="@MapsUrl(sel)" target="_blank" rel="noopener">🗺️ Maps</a>
                 <button class="btn ghost small" @onclick="() => _selectedId = null">Close</button>
             </div>
             <div class="q-text">@sel.Text</div>
