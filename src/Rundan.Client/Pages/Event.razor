@@ -413,6 +413,23 @@ else
                     <button class="btn small ghost" @onclick="() => _confirmRestart = false">Cancel</button>
                 }
             </div>
+
+            <p class="muted" style="font-size:.85rem;margin-top:.5rem">
+                <b>Reset all activities</b> to a status without touching scores — Draft (fresh, not opened) or Open (ready to start).
+            </p>
+            <div class="row wrap">
+                @if (_confirmBulk is null)
+                {
+                    <button class="btn small ghost" @onclick="() => _confirmBulk = ActivityStatus.Draft" disabled="@_busy">All to draft</button>
+                    <button class="btn small ghost" @onclick="() => _confirmBulk = ActivityStatus.Open" disabled="@_busy">All to open</button>
+                }
+                else
+                {
+                    <span class="muted">Set all @_event.Activities.Count activities to @(_confirmBulk == ActivityStatus.Draft ? "Draft" : "Open")?</span>
+                    <button class="btn small danger" @onclick="ResetActivitiesAsync" disabled="@_busy">Yes</button>
+                    <button class="btn small ghost" @onclick="() => _confirmBulk = null" disabled="@_busy">Cancel</button>
+                }
+            </div>
         </div>
     }
 
@@ -618,6 +635,7 @@ else
     private List<ActivityDto> _library = new();
     private int _libSourceId;
     private bool _confirmRestart;
+    private ActivityStatus? _confirmBulk;
     private int? _confirmDeleteId;
     private bool _isViewer;
     private string _viewerName = string.Empty;
@@ -1569,6 +1587,17 @@ else
     private async Task SimulateActivityAsync(int activityId) => await HostActionAsync(() => Api.SimulateActivityAsync(activityId));
 
     private async Task SimulateEventAsync() => await HostActionAsync(() => Api.SimulateEventAsync(Id));
+
+    private async Task ResetActivitiesAsync()
+    {
+        if (_confirmBulk is not { } status)
+        {
+            return;
+        }
+
+        _confirmBulk = null;
+        await HostActionAsync(() => Api.ResetEventActivitiesAsync(Id, status));
+    }
 
     private async Task RestartEventAsync()
     {

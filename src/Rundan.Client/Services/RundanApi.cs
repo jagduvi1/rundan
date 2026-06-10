@@ -203,6 +203,11 @@ public sealed class RundanApi(HttpClient http, AppState state)
         SendAsync(HttpMethod.Put, $"api/events/{eventId}/reorder",
             body: new ReorderActivitiesRequest { ActivityIds = activityIds }, admin: true);
 
+    /// <summary>Host: reset every activity in the event to Draft or Open (scores untouched).</summary>
+    public Task ResetEventActivitiesAsync(int eventId, ActivityStatus status) =>
+        SendAsync(HttpMethod.Put, $"api/events/{eventId}/activities/status",
+            body: new UpdateActivityStatusRequest { Status = status }, admin: true);
+
     // ---- Activities (player) -----------------------------------------------
     public Task<ActivityDto?> GetActivityAsync(int id) =>
         TryGetAsync<ActivityDto>($"api/activities/{id}");

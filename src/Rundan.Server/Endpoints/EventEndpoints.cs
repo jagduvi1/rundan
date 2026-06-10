@@ -169,6 +169,42 @@ internal static class EventEndpoints
             return Results.NoContent();
         }).AddEndpointFilter<EventManagerFilter>();
 
+        // Host: bulk-reset every activity to Draft (fresh, not opened) or Open (ready to start),
+        // without touching scores. Confirmed in the UI.
+        app.MapPut("/api/events/{id:int}/activities/status", async (
+            int id, UpdateActivityStatusRequest req, AppDbContext db, ScoreboardNotifier notifier, CancellationToken ct) =>
+        {
+            if (req.Status is not (ActivityStatus.Draft or ActivityStatus.Open))
+            {
+                throw new RuleViolationException("Resetting all activities only supports Draft or Open.");
+            }
+
+            var activities = await db.Activities.Where(a => a.EventId == id).ToListAsync(ct);
+            var changed = new List<int>();
+            foreach (var a in activities.Where(a => a.Status != req.Status))
+            {
+                a.Status = req.Status;
+                a.FinishedUtc = null;
+                if (req.Status == ActivityStatus.Draft)
+                {
+                    a.StartedUtc = null;
+                }
+
+                changed.Add(a.Id);
+            }
+
+            if (changed.Count > 0)
+            {
+                await db.SaveChangesAsync(ct);
+                foreach (var aid in changed)
+                {
+                    await notifier.PushStatusAsync(aid, req.Status);
+                }
+            }
+
+            return Results.NoContent();
+        }).AddEndpointFilter<EventManagerFilter>();
+
         app.MapDelete("/api/events/{id:int}", async (int id, AppDbContext db, CancellationToken ct) =>
         {
             var ev = await db.Events.FindAsync([id], ct);
