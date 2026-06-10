@@ -310,6 +310,20 @@ internal static class EventEndpoints
             return Results.Ok(new { ok = true });
         });
 
+        // SlappedSends mode: the slapped player passes their lost points to someone.
+        app.MapPost("/api/events/{id:int}/slap/send-points", async (
+            int id, SendSlapPointsRequest req, AppDbContext db, SlapService slaps,
+            ScoreboardNotifier notifier, HttpContext http, CancellationToken ct) =>
+        {
+            // The sender must prove they are the slapped player (their event-member token → userId).
+            var senderUserId = await ResolveMemberUserIdAsync(http, db, id, ct)
+                ?? throw new RuleViolationException("Only a player in this event can do that.", StatusCodes.Status403Forbidden);
+
+            await slaps.SendPointsAsync(id, req.ActivityId, senderUserId, req.RecipientUserId, ct);
+            await notifier.PushScoreboardAsync(req.ActivityId, ct); // nudges everyone's standings to refresh
+            return Results.Ok(new { ok = true });
+        });
+
         app.MapPost("/api/events/{id:int}/slap/skip", async (
             int id, SkipSlapRequest req, AppDbContext db, RundanOptions options,
             SlapService slaps, ScoreboardNotifier notifier, HttpContext http, CancellationToken ct) =>

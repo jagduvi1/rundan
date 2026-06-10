@@ -593,6 +593,7 @@ else
                     <option value="@SlapMode.Off">Off</option>
                     <option value="@SlapMode.Vanish">On — halve a rival's lead, points vanish</option>
                     <option value="@SlapMode.SendToPlayer">On — halve a rival's lead, give the points to someone</option>
+                    <option value="@SlapMode.SlappedSends">On — halve a rival's lead, the slapped player passes the points on</option>
                     <option value="@SlapMode.Random">On — random (vanish or give) each activity</option>
                 </select>
             </div>
@@ -766,6 +767,7 @@ else
     {
         SlapMode.Vanish => "the winner halves a rival's lead — those points vanish.",
         SlapMode.SendToPlayer => "the winner halves a rival's lead — and hands the points to someone.",
+        SlapMode.SlappedSends => "the winner halves a rival's lead — then the slapped player passes those points to someone.",
         SlapMode.Random => "the winner halves a rival's lead — points vanish or get passed on (random each round).",
         _ => "",
     };

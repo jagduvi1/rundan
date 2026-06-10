@@ -54,6 +54,37 @@
         }
     </div>
 }
+else if (Slap.State == SlapState.AwaitingRecipient)
+{
+    <div class="card stack accent">
+        <h2>Slap landed!</h2>
+        @if (IsSlapped)
+        {
+            <p>You lost <b>@Fmt.Num(Slap.Penalty)</b> points to @Slap.SlapperName's slap — now pass them on to someone (not yourself, and not @Slap.SlapperName).</p>
+            @if (_error is not null)
+            {
+                <div class="alert error">@_error</div>
+            }
+            <div class="field">
+                <label>Give the points to</label>
+                <select @bind="_recipient">
+                    <option value="0">Pick someone…</option>
+                    @foreach (var p in SendTargets())
+                    {
+                        <option value="@p.UserId">@p.Name</option>
+                    }
+                </select>
+            </div>
+            <button class="btn block success" @onclick="SendPointsAsync" disabled="@(_busy || _recipient == 0)">
+                Pass on the points
+            </button>
+        }
+        else
+        {
+            <p class="muted"><b>@Slap.SlappedName</b> was slapped — waiting for them to pass the points on…</p>
+        }
+    </div>
+}
 else if (Slap.State == SlapState.Taken)
 {
     <div class="card stack">
@@ -95,8 +126,15 @@ else if (Slap.State == SlapState.Skipped)
 
     private bool CanSlap => ActingUserId is { } uid && Slap.WinnerUserIds.Contains(uid);
 
+    // SlappedSends: the device of the slapped player gets to choose where the points go.
+    private bool IsSlapped => ActingUserId is { } uid && Slap.SlappedUserId == uid;
+
     private IEnumerable<SlapPersonDto> Targets() =>
         Slap.Members.Where(m => !Slap.WinnerUserIds.Contains(m.UserId));
+
+    // Recipients the slapped player may pass the points to — never themselves, never the slapper.
+    private IEnumerable<SlapPersonDto> SendTargets() =>
+        Slap.Members.Where(m => m.UserId != Slap.SlappedUserId && m.UserId != Slap.SlapperUserId);
 
     // Exclude the slapper and the slapped player so the points can't be routed to either.
     private IEnumerable<SlapPersonDto> Recipients() =>
@@ -146,10 +184,35 @@ else if (Slap.State == SlapState.Skipped)
         }
     }
 
+    private async Task SendPointsAsync()
+    {
+        if (_recipient == 0)
+        {
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            await Api.SendSlapPointsAsync(Slap.EventId, Slap.ActivityId, _recipient);
+            await OnChanged.InvokeAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
     private static string Blurb(SlapMode mode) => mode switch
     {
         SlapMode.Vanish => "they can slap a rival, halving their lead — those points vanish.",
         SlapMode.SendToPlayer => "they can slap a rival, halving their lead — and hand the points to someone.",
+        SlapMode.SlappedSends => "they can slap a rival, halving their lead — then the slapped player passes those points to someone.",
         _ => "they can slap a rival, halving their lead.",
     };
 }
