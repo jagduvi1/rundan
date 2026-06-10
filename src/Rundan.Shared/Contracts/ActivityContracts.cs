@@ -185,6 +185,15 @@ public class MapCityDto
     public double? DistanceKm { get; set; }
 }
 
+/// <summary>A photo on an activity's shared photo wall.</summary>
+public class ActivityPhotoDto
+{
+    public int Id { get; set; }
+    public string Author { get; set; } = string.Empty;
+    public string Url { get; set; } = string.Empty;
+    public DateTimeOffset CreatedUtc { get; set; }
+}
+
 /// <summary>Player places (or re-places) a pin for one city.</summary>
 public class MapPinRequest
 {

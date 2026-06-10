@@ -102,6 +102,35 @@ public sealed class RundanApi(HttpClient http, AppState state)
         return result!.Url;
     }
 
+    // ---- Activity photo wall ----------------------------------------------
+    public Task<List<ActivityPhotoDto>> GetActivityPhotosAsync(int activityId) =>
+        GetListAsync<ActivityPhotoDto>($"api/activities/{activityId}/photos");
+
+    /// <summary>A player uploads a photo to an activity's wall (author = their participant name).</summary>
+    public async Task<ActivityPhotoDto> UploadActivityPhotoAsync(int activityId, Stream content, string fileName, string contentType, Guid token)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Post, $"api/activities/{activityId}/photos");
+        if (!string.IsNullOrEmpty(state.AccessCode))
+        {
+            req.Headers.TryAddWithoutValidation("X-Rundan-Access", state.AccessCode);
+        }
+        req.Headers.TryAddWithoutValidation("X-Rundan-Participant", token.ToString());
+
+        var form = new MultipartFormDataContent();
+        var fileContent = new StreamContent(content);
+        fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
+        form.Add(fileContent, "file", fileName);
+        req.Content = form;
+
+        using var resp = await http.SendAsync(req);
+        if (!resp.IsSuccessStatusCode)
+        {
+            throw new ApiException(await ExtractMessageAsync(resp), (int)resp.StatusCode);
+        }
+
+        return (await resp.Content.ReadFromJsonAsync<ActivityPhotoDto>(JsonOptions))!;
+    }
+
     // ---- Events ------------------------------------------------------------
     public Task<EventDto?> GetEventAsync(int id) =>
         TryGetAsync<EventDto>($"api/events/{id}");

@@ -200,6 +200,12 @@ else
         <MusicHostPanel @key='$"musichost-{_activity.Id}"' Activity="_activity" />
     }
 
+    @* Shared photo wall — once the activity is under way (not a draft). *@
+    @if (_activity.Status != ActivityStatus.Draft)
+    {
+        <PhotoWall @key="_activity.Id" ActivityId="_activity.Id" Session="_session" />
+    }
+
     @if (_activity.EventId is { } backId)
     {
         <a class="btn ghost block" href="@($"e/{backId}")">← Back to all activities</a>

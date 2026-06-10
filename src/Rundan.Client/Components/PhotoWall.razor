@@ -1,0 +1,95 @@
+@inject RundanApi Api
+
+@* A shared photo wall for an activity: joined players can take/upload a photo, everyone sees them. *@
+<div class="card stack">
+    <h2>Photos</h2>
+
+    @if (_error is not null)
+    {
+        <div class="alert error">@_error</div>
+    }
+
+    @if (_photos.Count > 0)
+    {
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:.4rem">
+            @foreach (var p in _photos)
+            {
+                <a href="@p.Url" target="_blank" rel="noopener" title="@p.Author">
+                    <img src="@p.Url" alt="" loading="lazy"
+                         style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:var(--radius-md);border:1px solid var(--line)" />
+                </a>
+            }
+        </div>
+    }
+    else
+    {
+        <p class="muted center" style="margin:0">No photos yet — be the first! 📷</p>
+    }
+
+    @if (Session is not null)
+    {
+        <label class="btn small secondary" style="cursor:pointer;align-self:flex-start">
+            @(_busy ? "Uploading…" : "📷 Add a photo")
+            <InputFile OnChange="OnFileAsync" accept="image/*" capture="environment" style="display:none" disabled="@_busy" />
+        </label>
+    }
+</div>
+
+@code {
+    [Parameter] public int ActivityId { get; set; }
+
+    /// <summary>The viewer's session; null for spectators — they see the wall but can't upload.</summary>
+    [Parameter] public PlayerSession? Session { get; set; }
+
+    private List<ActivityPhotoDto> _photos = new();
+    private bool _busy;
+    private string? _error;
+    private int _loadedId = -1;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedId != ActivityId)
+        {
+            _loadedId = ActivityId;
+            await LoadAsync();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        try { _photos = await Api.GetActivityPhotosAsync(ActivityId); }
+        catch (ApiException) { /* wall unavailable */ }
+    }
+
+    private async Task OnFileAsync(InputFileChangeEventArgs e)
+    {
+        if (Session is null || e.File is null)
+        {
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            using var ms = new MemoryStream();
+            await e.File.OpenReadStream(8 * 1024 * 1024).CopyToAsync(ms);
+            ms.Position = 0;
+            var contentType = string.IsNullOrEmpty(e.File.ContentType) ? "image/jpeg" : e.File.ContentType;
+            var photo = await Api.UploadActivityPhotoAsync(ActivityId, ms, e.File.Name, contentType, Session.Token);
+            _photos.Insert(0, photo); // newest first
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        catch (Exception)
+        {
+            _error = "Couldn't upload that photo (max 8 MB).";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}
