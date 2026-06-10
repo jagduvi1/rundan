@@ -21,6 +21,14 @@ internal static class GameplayEndpoints
 
             var result = await game.SubmitAnswerAsync(participant, req, ct);
             await notifier.PushScoreboardAsync(id, ct);
+
+            // Auto-finalize once every participant has answered every question.
+            var activity = await db.Activities.FirstOrDefaultAsync(a => a.Id == id, ct);
+            if (activity is not null && await game.TryAutoFinishQuestionsAsync(activity, ct))
+            {
+                await notifier.PushStatusAsync(id, ActivityStatus.Finished);
+            }
+
             return Results.Ok(result);
         });
 
