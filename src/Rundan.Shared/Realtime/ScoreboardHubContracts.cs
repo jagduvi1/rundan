@@ -18,6 +18,7 @@ public static class ScoreboardMessages
     public const string ParticipantJoined = nameof(IScoreboardClient.ParticipantJoined);
     public const string ActivityStatusChanged = nameof(IScoreboardClient.ActivityStatusChanged);
     public const string ViewersChanged = nameof(IScoreboardClient.ViewersChanged);
+    public const string EventChanged = nameof(IScoreboardClient.EventChanged);
 }
 
 /// <summary>Client → server method names (hub invocations).</summary>
@@ -46,4 +47,7 @@ public interface IScoreboardClient
 
     /// <summary>The set of people watching an event changed.</summary>
     Task ViewersChanged(EventViewersDto viewers);
+
+    /// <summary>The event's roster/admins changed — clients should re-claim and refresh.</summary>
+    Task EventChanged(int eventId);
 }
