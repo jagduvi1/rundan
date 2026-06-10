@@ -100,6 +100,12 @@ else
     <div class="card">
         <h2>@(_event.IsComplete ? "Final standings" : "Total standings")</h2>
         <p class="muted" style="font-size:.8rem;margin-top:-.4rem">@ScoringLabel</p>
+        @if (_event.SlapMode != SlapMode.Off)
+        {
+            <p class="muted" style="font-size:.72rem;margin-top:-.5rem">
+                Slaps: <span style="color:var(--coral-600)">−lost</span> / <span style="color:var(--green-600)">+received</span>
+            </p>
+        }
         @if (_standings is null || _standings.Entries.Count == 0)
         {
             <p class="muted center">No points yet — they add up across every activity.</p>
@@ -115,6 +121,13 @@ else
                             <b>@e.DisplayName @if (IsMe(e.DisplayName)) { <span class="you"> · You</span> }</b>
                             <span class="sub">@e.ActivitiesPlayed of @_event.Activities.Count activities</span>
                         </div>
+                        @if (_event.SlapMode != SlapMode.Off)
+                        {
+                            <div style="display:flex;flex-direction:column;align-items:flex-end;font-size:.72rem;line-height:1.25;min-width:3rem" title="Slaps: lost / received">
+                                <span style="color:var(--coral-600)">@(e.SlapLost > 0 ? $"−{Fmt.Num(e.SlapLost)}" : "—")</span>
+                                <span style="color:var(--green-600)">@(e.SlapReceived > 0 ? $"+{Fmt.Num(e.SlapReceived)}" : "—")</span>
+                            </div>
+                        }
                         <div class="score-row__score">@Fmt.Num(e.TotalPoints)</div>
                     </div>
                 }

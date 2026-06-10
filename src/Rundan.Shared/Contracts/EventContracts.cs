@@ -226,6 +226,12 @@ public class EventStandingEntryDto
 
     /// <summary>How many of the event's activities this player has scored in.</summary>
     public int ActivitiesPlayed { get; set; }
+
+    /// <summary>Points lost to slaps (penalties against this player). Only non-zero when slaps are on.</summary>
+    public double SlapLost { get; set; }
+
+    /// <summary>Points received from "send" slaps. Only non-zero when slaps are on.</summary>
+    public double SlapReceived { get; set; }
 }
 
 /// <summary>Combined event standings — every player's total across all activities.</summary>
