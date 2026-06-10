@@ -20,13 +20,11 @@
             <span class="wordmark">@AppName</span>
         </a>
         <span class="spacer"></span>
+        @* "Host panel" lives in the menu now; the only thing kept here is the preview-exit
+           affordance, since leaving "preview as player" has no equivalent in the menu. *@
         @if (State.PreviewAsPlayer)
         {
             <button class="badge admin" style="border:none;cursor:pointer" @onclick="ExitPreviewAsync">Player preview · Exit</button>
-        }
-        else
-        {
-            <a href="admin" class="badge admin">Host</a>
         }
     </header>
 
