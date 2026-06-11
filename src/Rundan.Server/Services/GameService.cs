@@ -9,6 +9,10 @@ namespace Rundan.Server.Services;
 /// <summary>Game write operations: scoring answers and recording score lines.</summary>
 public sealed class GameService(AppDbContext db, TimeProvider clock)
 {
+    /// <summary>MusicQuiz fastest-to-answer: the speed-bonus window in seconds (the bonus decays to 0 across it).</summary>
+    public const int SpeedWindowSeconds = 30;
+
+
     /// <summary>
     /// Records a participant's answer to a question and awards points. One answer per
     /// participant per question; a repeated submission returns the original result.
@@ -72,6 +76,15 @@ public sealed class GameService(AppDbContext db, TimeProvider clock)
             artistText = artist;
             isCorrect = songOk && artistOk;
             awarded = (songOk ? question.Points : 0) + (artistOk ? question.Points : 0) + yearPoints;
+
+            // Fastest-to-answer: when the host started this track for live play, a correct answer earns a
+            // bonus that decays from the track's points to zero across the window.
+            if (awarded > 0 && question.PlayStartedUtc is { } startedAt)
+            {
+                var elapsed = (clock.GetUtcNow() - startedAt).TotalSeconds;
+                var fraction = Math.Clamp(1d - elapsed / SpeedWindowSeconds, 0d, 1d);
+                awarded += (int)Math.Round(question.Points * fraction);
+            }
         }
         else
         {

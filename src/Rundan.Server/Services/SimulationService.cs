@@ -82,6 +82,10 @@ public sealed class SimulationService(AppDbContext db, TeamService teams, Bracke
         // Slaps reference the activity by a loose int (no FK), so clear them too — otherwise the
         // penalties linger in the standings after a reset.
         await db.Slaps.Where(s => s.ActivityId == activityId).ExecuteDeleteAsync(ct);
+
+        // Clear any music-quiz "track started" timers so a replay begins fresh.
+        await db.Questions.Where(q => q.ActivityId == activityId && q.PlayStartedUtc != null)
+            .ExecuteUpdateAsync(s => s.SetProperty(q => q.PlayStartedUtc, (DateTimeOffset?)null), ct);
     }
 
     private async Task SimulateAnswersAsync(int activityId, List<int> participants, CancellationToken ct)

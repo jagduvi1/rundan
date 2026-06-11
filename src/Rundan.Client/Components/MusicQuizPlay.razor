@@ -1,4 +1,5 @@
 @inject RundanApi Api
+@implements IDisposable
 
 @if (_loading)
 {
@@ -28,6 +29,10 @@ else
         <div class="card stack">
             <div class="row">
                 <b class="grow">Track @(i + 1)@(HasLabel(q, i) ? $" · {q.Text}" : "")</b>
+                @if (mine is null && LiveRemaining(q) is int rem)
+                {
+                    <span class="badge" style="background:var(--green-100);color:var(--green-700)">⏱ answer fast · @rem s</span>
+                }
                 <span class="muted" style="font-size:.8rem">@q.Points pt each</span>
             </div>
 
@@ -90,6 +95,27 @@ else
     [Parameter] public ActivityDto Activity { get; set; } = default!;
     [Parameter] public PlayerSession Session { get; set; } = default!;
 
+    /// <summary>The activity's live connection — used to receive the host's "track started" cue so the
+    /// fastest-to-answer countdown ticks for everyone.</summary>
+    [Parameter] public ScoreboardConnection? Connection { get; set; }
+
+    // Per-track live start + window (from the question's StartedUtc on load, then SignalR while playing).
+    private readonly Dictionary<int, (DateTimeOffset Start, int Window)> _live = new();
+    private ScoreboardConnection? _subscribed;
+    private System.Threading.Timer? _ticker;
+
+    // Seconds left in the speed window for a track, or null if it isn't live right now.
+    private int? LiveRemaining(QuestionDto q)
+    {
+        if (!_live.TryGetValue(q.Id, out var l))
+        {
+            return null;
+        }
+
+        var rem = l.Window - (int)(DateTimeOffset.UtcNow - l.Start).TotalSeconds;
+        return rem > 0 ? rem : null;
+    }
+
     private bool _loading = true;
     private bool _busy;
     private string? _error;
@@ -133,9 +159,57 @@ else
             {
                 _answered[a.QuestionId] = a;
             }
+
+            // A track the host already started before we loaded — pick up its live countdown.
+            foreach (var q in _tracks.Where(q => q.StartedUtc is not null))
+            {
+                _live[q.Id] = (q.StartedUtc!.Value, 30);
+            }
+
+            if (_live.Count > 0) EnsureTicking();
         }
         catch (ApiException ex) { _error = ex.Message; }
         finally { _loading = false; }
+    }
+
+    protected override void OnParametersSet()
+    {
+        // Subscribe to the host's live "track started" cue (re-subscribe if the connection changes).
+        if (ReferenceEquals(_subscribed, Connection))
+        {
+            return;
+        }
+
+        if (_subscribed is not null) _subscribed.MusicTrackStarted -= OnTrackStarted;
+        _subscribed = Connection;
+        if (_subscribed is not null) _subscribed.MusicTrackStarted += OnTrackStarted;
+    }
+
+    private void OnTrackStarted(MusicTrackStartedDto t) => _ = InvokeAsync(() =>
+    {
+        if (t.ActivityId != Activity.Id) return;
+        _live[t.QuestionId] = (t.StartedUtc, t.WindowSeconds);
+        EnsureTicking();
+        StateHasChanged();
+    });
+
+    // Re-render a few times a second while a track is live so the countdown ticks; stop when none are.
+    private void EnsureTicking() =>
+        _ticker ??= new System.Threading.Timer(_ => _ = InvokeAsync(() =>
+        {
+            if (_tracks.All(q => LiveRemaining(q) is null))
+            {
+                _ticker?.Dispose();
+                _ticker = null;
+            }
+
+            StateHasChanged();
+        }), null, 500, 500);
+
+    public void Dispose()
+    {
+        _ticker?.Dispose();
+        if (_subscribed is not null) _subscribed.MusicTrackStarted -= OnTrackStarted;
     }
 
     private async Task SubmitAsync(int questionId)

@@ -23,6 +23,7 @@ public sealed class ScoreboardConnection(NavigationManager nav, AppState state) 
     public event Action<ChatMessageDto>? ChatPosted;
     public event Action<TimerStateDto>? TimerStarted;
     public event Action<TimerStateDto>? TimerStopped;
+    public event Action<MusicTrackStartedDto>? MusicTrackStarted;
     public event Action? ConnectionStateChanged;
 
     public bool IsConnected => _connection?.State == HubConnectionState.Connected;
@@ -55,6 +56,7 @@ public sealed class ScoreboardConnection(NavigationManager nav, AppState state) 
         _connection.On<ChatMessageDto>(ScoreboardMessages.ChatPosted, m => ChatPosted?.Invoke(m));
         _connection.On<TimerStateDto>(ScoreboardMessages.TimerStarted, t => TimerStarted?.Invoke(t));
         _connection.On<TimerStateDto>(ScoreboardMessages.TimerStopped, t => TimerStopped?.Invoke(t));
+        _connection.On<MusicTrackStartedDto>(ScoreboardMessages.MusicTrackStarted, t => MusicTrackStarted?.Invoke(t));
 
         _connection.Reconnecting += _ => { ConnectionStateChanged?.Invoke(); return Task.CompletedTask; };
         _connection.Reconnected += async _ =>

@@ -31,6 +31,10 @@ public class Question
     /// <summary>MusicQuiz (Hitster mode): the track's release year. When set, players guess the year too.</summary>
     public int? ReleaseYear { get; set; }
 
+    /// <summary>MusicQuiz (fastest-to-answer): when the host last started this track for live play. The
+    /// speed bonus is computed from this; null when it hasn't been started.</summary>
+    public DateTimeOffset? PlayStartedUtc { get; set; }
+
     public List<AnswerOption> Options { get; set; } = new();
     public List<Answer> Answers { get; set; } = new();
 }

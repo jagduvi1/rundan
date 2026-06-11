@@ -292,3 +292,14 @@ public class ActivityStatusChangedDto
     public int ActivityId { get; set; }
     public ActivityStatus Status { get; set; }
 }
+
+/// <summary>Pushed over SignalR when the host starts a music-quiz track for live, fastest-to-answer play.</summary>
+public class MusicTrackStartedDto
+{
+    public int ActivityId { get; set; }
+    public int QuestionId { get; set; }
+    public DateTimeOffset StartedUtc { get; set; }
+
+    /// <summary>The speed window in seconds — a correct answer's bonus decays to zero across it.</summary>
+    public int WindowSeconds { get; set; }
+}

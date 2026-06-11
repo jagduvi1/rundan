@@ -22,6 +22,7 @@ public static class ScoreboardMessages
     public const string ChatPosted = nameof(IScoreboardClient.ChatPosted);
     public const string TimerStarted = nameof(IScoreboardClient.TimerStarted);
     public const string TimerStopped = nameof(IScoreboardClient.TimerStopped);
+    public const string MusicTrackStarted = nameof(IScoreboardClient.MusicTrackStarted);
 }
 
 /// <summary>Client → server method names (hub invocations).</summary>
@@ -64,4 +65,7 @@ public interface IScoreboardClient
 
     /// <summary>A live stopwatch was stopped/recorded.</summary>
     Task TimerStopped(TimerStateDto timer);
+
+    /// <summary>The host started a music-quiz track for live, fastest-to-answer play.</summary>
+    Task MusicTrackStarted(MusicTrackStartedDto track);
 }
