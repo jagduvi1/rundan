@@ -27,6 +27,9 @@ public class QuestionAdminDto
     public string? SpotifyUrl { get; set; }
     public string? AcceptedArtist { get; set; }
 
+    /// <summary>MusicQuiz (Hitster mode): the track's release year (host-only).</summary>
+    public int? ReleaseYear { get; set; }
+
     public List<AnswerOptionAdminDto> Options { get; set; } = new();
 
     /// <summary>The text/answers are blanked because the activity hides questions from the host (host plays too).</summary>

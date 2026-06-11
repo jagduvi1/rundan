@@ -28,6 +28,9 @@ public class Question
     public string? SpotifyUrl { get; set; }
     public string? AcceptedArtist { get; set; }
 
+    /// <summary>MusicQuiz (Hitster mode): the track's release year. When set, players guess the year too.</summary>
+    public int? ReleaseYear { get; set; }
+
     public List<AnswerOption> Options { get; set; } = new();
     public List<Answer> Answers { get; set; } = new();
 }

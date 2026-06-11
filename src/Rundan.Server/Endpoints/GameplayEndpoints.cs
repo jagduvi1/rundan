@@ -46,6 +46,7 @@ internal static class GameplayEndpoints
                     SelectedOptionId = a.SelectedOptionId,
                     FreeText = a.FreeText,
                     ArtistText = a.ArtistText,
+                    Year = a.GuessedYear,
                     IsCorrect = a.IsCorrect,
                     AwardedPoints = a.AwardedPoints,
                 })

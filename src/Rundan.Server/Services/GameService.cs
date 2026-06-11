@@ -50,23 +50,28 @@ public sealed class GameService(AppDbContext db, TimeProvider clock)
         string? artistText = null;
         bool isCorrect;
         int awarded;
+        int? guessedYear = null;
         if (isMusic)
         {
-            // Score the song and the artist independently — each correct guess is worth the track's points.
+            // Score the song, the artist and (Hitster mode) the year independently — each is worth the
+            // track's points; the year earns full points for an exact hit, half if it's close.
             var song = (req.FreeText ?? string.Empty).Trim();
             var artist = (req.ArtistText ?? string.Empty).Trim();
-            if (song.Length == 0 && artist.Length == 0)
+            var asksYear = question.ReleaseYear.HasValue;
+            if (song.Length == 0 && artist.Length == 0 && !(asksYear && req.Year.HasValue))
             {
-                throw new RuleViolationException("Type the song and/or the artist first.");
+                throw new RuleViolationException("Type the song, the artist or the year first.");
             }
 
             var songOk = Matches(song, question.AcceptedFreeTextAnswer);
             var artistOk = Matches(artist, question.AcceptedArtist);
+            guessedYear = asksYear ? req.Year : null;
+            var yearPoints = ScoreYear(guessedYear, question.ReleaseYear, question.Points);
             selectedOptionId = null;
             freeText = song;
             artistText = artist;
             isCorrect = songOk && artistOk;
-            awarded = (songOk ? question.Points : 0) + (artistOk ? question.Points : 0);
+            awarded = (songOk ? question.Points : 0) + (artistOk ? question.Points : 0) + yearPoints;
         }
         else
         {
@@ -81,6 +86,7 @@ public sealed class GameService(AppDbContext db, TimeProvider clock)
             SelectedOptionId = selectedOptionId,
             FreeText = freeText,
             ArtistText = artistText,
+            GuessedYear = guessedYear,
             IsCorrect = isCorrect,
             AwardedPoints = awarded,
             SubmittedUtc = clock.GetUtcNow(),
@@ -111,6 +117,24 @@ public sealed class GameService(AppDbContext db, TimeProvider clock)
 
     private static bool Matches(string? guess, string? accepted) =>
         !string.IsNullOrWhiteSpace(accepted) && Normalize(guess) == Normalize(accepted);
+
+    /// <summary>Hitster year scoring: exact year = full points, within two years = half (min 1), else 0.</summary>
+    private const int YearTolerance = 2;
+    private static int ScoreYear(int? guess, int? correct, int points)
+    {
+        if (guess is not int g || correct is not int c)
+        {
+            return 0;
+        }
+
+        var delta = Math.Abs(g - c);
+        if (delta == 0)
+        {
+            return points;
+        }
+
+        return delta <= YearTolerance ? Math.Max(1, points / 2) : 0;
+    }
 
     // Lenient match for music answers: lowercase, strip punctuation/accents-ish, collapse spaces, drop a leading "the".
     private static string Normalize(string? s)
@@ -192,6 +216,8 @@ public sealed class GameService(AppDbContext db, TimeProvider clock)
             dto.ArtistCorrect = Matches(answer.ArtistText, question.AcceptedArtist);
             dto.CorrectSong = question.AcceptedFreeTextAnswer;
             dto.CorrectArtist = question.AcceptedArtist;
+            dto.CorrectYear = question.ReleaseYear;
+            dto.YearPoints = ScoreYear(answer.GuessedYear, question.ReleaseYear, question.Points);
         }
 
         return dto;
