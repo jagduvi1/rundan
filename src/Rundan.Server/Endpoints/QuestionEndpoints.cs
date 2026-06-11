@@ -114,6 +114,7 @@ internal static class QuestionEndpoints
                 req.Kind == QuestionKind.FreeText ? TextHelpers.Clean(req.AcceptedFreeTextAnswer) : null;
             question.SpotifyUrl = TextHelpers.Clean(req.SpotifyUrl);
             question.AcceptedArtist = TextHelpers.Clean(req.AcceptedArtist);
+            question.ReleaseYear = NormalizeYear(req.ReleaseYear);
 
             db.AnswerOptions.RemoveRange(question.Options);
             question.Options.Clear();
@@ -367,10 +368,14 @@ internal static class QuestionEndpoints
             AcceptedFreeTextAnswer = req.Kind == QuestionKind.FreeText ? TextHelpers.Clean(req.AcceptedFreeTextAnswer) : null,
             SpotifyUrl = TextHelpers.Clean(req.SpotifyUrl),
             AcceptedArtist = TextHelpers.Clean(req.AcceptedArtist),
+            ReleaseYear = NormalizeYear(req.ReleaseYear),
         };
         AddOptions(question, req);
         return question;
     }
+
+    // A plausible release year, or null. Guards against typos / out-of-range values.
+    private static int? NormalizeYear(int? year) => year is int y && y >= 1860 && y <= 2100 ? y : null;
 
     private static void AddOptions(Question question, QuestionUpsertRequest req)
     {

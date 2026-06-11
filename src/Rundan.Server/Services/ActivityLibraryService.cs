@@ -66,6 +66,7 @@ public sealed class ActivityLibraryService(AppDbContext db, JoinCodeGenerator co
                     AcceptedFreeTextAnswer = q.AcceptedFreeTextAnswer,
                     SpotifyUrl = q.SpotifyUrl,
                     AcceptedArtist = q.AcceptedArtist,
+                    ReleaseYear = q.ReleaseYear,
                     Options = q.Options
                         .OrderBy(o => o.Order)
                         .Select(o => new AnswerOption { Order = o.Order, Text = o.Text, IsCorrect = o.IsCorrect })

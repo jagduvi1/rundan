@@ -99,6 +99,8 @@ public static class Mapping
             .OrderBy(o => o.Order)
             .Select(o => new AnswerOptionDto { Id = o.Id, Order = o.Order, Text = o.Text })
             .ToList(),
+        // Tell the player a year is expected — but never the year itself.
+        AsksYear = q.ReleaseYear.HasValue,
     };
 
     /// <summary>Admin question view including the answer key.</summary>
@@ -116,6 +118,7 @@ public static class Mapping
         AcceptedFreeTextAnswer = q.AcceptedFreeTextAnswer,
         SpotifyUrl = q.SpotifyUrl,
         AcceptedArtist = q.AcceptedArtist,
+        ReleaseYear = q.ReleaseYear,
         Options = q.Options
             .OrderBy(o => o.Order)
             .Select(o => new AnswerOptionAdminDto { Id = o.Id, Order = o.Order, Text = o.Text, IsCorrect = o.IsCorrect })

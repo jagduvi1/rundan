@@ -37,20 +37,31 @@ else
                        @oninput="e => _song[q.Id] = e.Value?.ToString() ?? string.Empty" />
                 <input placeholder="Artist" value="@_artist.GetValueOrDefault(q.Id)"
                        @oninput="e => _artist[q.Id] = e.Value?.ToString() ?? string.Empty" />
+                @if (q.AsksYear)
+                {
+                    <input type="number" min="1860" max="2100" placeholder="Release year" value="@_year.GetValueOrDefault(q.Id)"
+                           @oninput="e => _year[q.Id] = e.Value?.ToString() ?? string.Empty" />
+                }
                 <button class="btn block success" @onclick="() => SubmitAsync(q.Id)"
-                        disabled="@(_busy || (string.IsNullOrWhiteSpace(_song.GetValueOrDefault(q.Id)) && string.IsNullOrWhiteSpace(_artist.GetValueOrDefault(q.Id))))">
+                        disabled="@(_busy || !HasGuess(q))">
                     Lock in
                 </button>
             }
             else
             {
                 <div class="alert @(mine.AwardedPoints > 0 ? "success" : "")">
-                    <div>You said — Song: <b>@Shown(mine.FreeText)</b> · Artist: <b>@Shown(mine.ArtistText)</b></div>
+                    <div>
+                        You said — Song: <b>@Shown(mine.FreeText)</b> · Artist: <b>@Shown(mine.ArtistText)</b>@(q.AsksYear ? $" · Year: {(mine.Year?.ToString() ?? "—")}" : "")
+                    </div>
                     @if (res is not null)
                     {
                         <div style="margin-top:.25rem">
                             Song @(res.SongCorrect ? "✓" : "✗")@(string.IsNullOrWhiteSpace(res.CorrectSong) ? "" : $" — {res.CorrectSong}")
                             · Artist @(res.ArtistCorrect ? "✓" : "✗")@(string.IsNullOrWhiteSpace(res.CorrectArtist) ? "" : $" — {res.CorrectArtist}")
+                            @if (res.CorrectYear is int cy)
+                            {
+                                <text> · Year @(res.YearPoints > 0 ? "✓" : "✗") — @cy</text>
+                            }
                         </div>
                     }
                     <div style="margin-top:.25rem"><b>+@mine.AwardedPoints</b></div>
@@ -72,9 +83,16 @@ else
     private readonly Dictionary<int, AnswerResultDto> _results = new();
     private readonly Dictionary<int, string> _song = new();
     private readonly Dictionary<int, string> _artist = new();
+    private readonly Dictionary<int, string> _year = new();
 
     private static bool HasLabel(QuestionDto q, int i) =>
         !string.IsNullOrWhiteSpace(q.Text) && q.Text != $"Track {i + 1}";
+
+    // Enable "Lock in" once the player has typed at least one of song / artist / (year, when asked).
+    private bool HasGuess(QuestionDto q) =>
+        !string.IsNullOrWhiteSpace(_song.GetValueOrDefault(q.Id))
+        || !string.IsNullOrWhiteSpace(_artist.GetValueOrDefault(q.Id))
+        || (q.AsksYear && int.TryParse(_year.GetValueOrDefault(q.Id), out _));
 
     private static string Shown(string? s) => string.IsNullOrWhiteSpace(s) ? "—" : s;
 
@@ -97,7 +115,8 @@ else
     {
         var song = _song.GetValueOrDefault(questionId, string.Empty).Trim();
         var artist = _artist.GetValueOrDefault(questionId, string.Empty).Trim();
-        if (song.Length == 0 && artist.Length == 0)
+        int? year = int.TryParse(_year.GetValueOrDefault(questionId), out var y) ? y : null;
+        if (song.Length == 0 && artist.Length == 0 && year is null)
         {
             return;
         }
@@ -107,13 +126,14 @@ else
         try
         {
             var res = await Api.SubmitAnswerAsync(
-                Activity.Id, new SubmitAnswerRequest { QuestionId = questionId, FreeText = song, ArtistText = artist }, Session.Token);
+                Activity.Id, new SubmitAnswerRequest { QuestionId = questionId, FreeText = song, ArtistText = artist, Year = year }, Session.Token);
             _results[questionId] = res;
             _answered[questionId] = new MyAnswerDto
             {
                 QuestionId = questionId,
                 FreeText = song,
                 ArtistText = artist,
+                Year = year,
                 IsCorrect = res.IsCorrect,
                 AwardedPoints = res.AwardedPoints,
             };

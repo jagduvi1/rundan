@@ -28,6 +28,10 @@ public class QuestionDto
 
     public List<AnswerOptionDto> Options { get; set; } = new();
 
+    /// <summary>MusicQuiz (Hitster mode): this track also asks for the release year. The year itself is
+    /// never sent to players — only the fact that one is expected.</summary>
+    public bool AsksYear { get; set; }
+
     public bool HasLocation => Latitude.HasValue && Longitude.HasValue;
 }
 
@@ -61,6 +65,10 @@ public class QuestionUpsertRequest
     /// <summary>MusicQuiz: the Spotify link the host plays, and the correct artist.</summary>
     public string? SpotifyUrl { get; set; }
     public string? AcceptedArtist { get; set; }
+
+    /// <summary>MusicQuiz (Hitster mode): the track's release year. When set, players also guess the
+    /// year and are scored on how close they get.</summary>
+    public int? ReleaseYear { get; set; }
 }
 
 /// <summary>Reveals a question and its correct answer (after the activity is finished).</summary>

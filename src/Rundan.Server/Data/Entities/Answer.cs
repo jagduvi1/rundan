@@ -20,6 +20,9 @@ public class Answer
     /// <summary>MusicQuiz: the artist guess.</summary>
     public string? ArtistText { get; set; }
 
+    /// <summary>MusicQuiz (Hitster mode): the player's guessed release year.</summary>
+    public int? GuessedYear { get; set; }
+
     public bool IsCorrect { get; set; }
     public int AwardedPoints { get; set; }
     public DateTimeOffset SubmittedUtc { get; set; }

@@ -13,6 +13,9 @@ public class SubmitAnswerRequest
 
     /// <summary>MusicQuiz: the artist guess.</summary>
     public string? ArtistText { get; set; }
+
+    /// <summary>MusicQuiz (Hitster mode): the player's guessed release year.</summary>
+    public int? Year { get; set; }
 }
 
 /// <summary>A participant's own previously-submitted answer (used to restore UI state on reconnect).</summary>
@@ -22,6 +25,10 @@ public class MyAnswerDto
     public int? SelectedOptionId { get; set; }
     public string? FreeText { get; set; }
     public string? ArtistText { get; set; }
+
+    /// <summary>MusicQuiz (Hitster mode): the year the player guessed.</summary>
+    public int? Year { get; set; }
+
     public bool IsCorrect { get; set; }
     public int AwardedPoints { get; set; }
 }
@@ -42,4 +49,8 @@ public class AnswerResultDto
     public bool ArtistCorrect { get; set; }
     public string? CorrectSong { get; set; }
     public string? CorrectArtist { get; set; }
+
+    /// <summary>MusicQuiz (Hitster mode): the revealed release year, and how many points the year guess earned.</summary>
+    public int? CorrectYear { get; set; }
+    public int YearPoints { get; set; }
 }

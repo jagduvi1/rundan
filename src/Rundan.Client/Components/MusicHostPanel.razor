@@ -26,7 +26,7 @@
                 </div>
                 <div class="muted" style="font-size:.82rem">
                     Answer: <b>@(string.IsNullOrWhiteSpace(t.AcceptedFreeTextAnswer) ? "—" : t.AcceptedFreeTextAnswer)</b>
-                    by <b>@(string.IsNullOrWhiteSpace(t.AcceptedArtist) ? "—" : t.AcceptedArtist)</b>
+                    by <b>@(string.IsNullOrWhiteSpace(t.AcceptedArtist) ? "—" : t.AcceptedArtist)</b>@(t.ReleaseYear is int yr ? $" · {yr}" : "")
                 </div>
             </li>
         }
