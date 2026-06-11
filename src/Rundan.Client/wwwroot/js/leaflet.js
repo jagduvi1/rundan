@@ -85,7 +85,7 @@ export function dispose(handle) {
 // ---- Location picker: tap (or drag) to set a GPS point + radius ----
 export function createPicker(elementId, lat, lng, radius, dotNetRef) {
     const hasPoint = lat !== null && lng !== null && lat !== undefined && lng !== undefined;
-    const center = hasPoint ? [lat, lng] : [59.3293, 18.0686]; // Stockholm default
+    const center = hasPoint ? [lat, lng] : [57.7089, 11.9746]; // Gothenburg default
     const map = L.map(elementId, { zoomControl: true }).setView(center, hasPoint ? 16 : 11);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
