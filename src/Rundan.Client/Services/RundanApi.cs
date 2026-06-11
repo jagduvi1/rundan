@@ -67,6 +67,12 @@ public sealed class RundanApi(HttpClient http, AppState state)
     public Task DeleteUserAsync(int id) =>
         SendAsync(HttpMethod.Delete, $"api/users/{id}", admin: true);
 
+    // ---- Music auto-fill (admin) -------------------------------------------
+    /// <summary>Look up a Spotify track's title/artist/year from free public sources for auto-fill.</summary>
+    public async Task<MusicLookupResultDto> LookupTrackAsync(string spotifyUrl) =>
+        (await SendAsync<MusicLookupResultDto>(HttpMethod.Post, "api/music/lookup",
+            body: new MusicLookupRequest { SpotifyUrl = spotifyUrl }, admin: true))!;
+
     // ---- Image upload (admin) ----------------------------------------------
     public async Task<string> UploadImageAsync(Stream content, string fileName, string contentType)
     {
