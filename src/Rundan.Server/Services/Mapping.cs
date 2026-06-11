@@ -102,6 +102,7 @@ public static class Mapping
             .ToList(),
         // Tell the player a year is expected — but never the year itself.
         AsksYear = q.ReleaseYear.HasValue,
+        StartedUtc = q.PlayStartedUtc,
     };
 
     /// <summary>Admin question view including the answer key.</summary>

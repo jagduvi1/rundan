@@ -1,8 +1,12 @@
 @inject RundanApi Api
+@implements IDisposable
 
 <div class="card stack accent">
     <h2 style="margin:0">Tracks to play (host)</h2>
-    <p class="muted" style="margin:0;font-size:.85rem">Play each one out loud; players type the song and artist. Only you see this.</p>
+    <p class="muted" style="margin:0;font-size:.85rem">
+        Play each one out loud. Hit <b>Start</b> to begin a fastest-to-answer round — a correct answer
+        scores more the quicker it comes in (the bonus fades over @_window s). Only you see this.
+    </p>
 
     @if (_error is not null)
     {
@@ -12,16 +16,20 @@
     <ul class="list">
         @foreach (var (t, i) in _tracks.Select((t, i) => (t, i)))
         {
+            var live = _liveId == t.Id;
             <li style="flex-direction:column;align-items:stretch;gap:.3rem">
                 <div class="row">
                     <b class="grow">Track @(i + 1)</b>
+                    @if (live)
+                    {
+                        <span class="badge" style="background:var(--green-100);color:var(--green-700)">▶ LIVE · @Remaining s</span>
+                    }
+                    <button class="btn small @(live ? "secondary" : "success")" @onclick="() => StartAsync(t)" disabled="@_busy">
+                        @(live ? "Restart" : "Start")
+                    </button>
                     @if (!string.IsNullOrWhiteSpace(t.SpotifyUrl))
                     {
-                        <a class="btn small" href="@t.SpotifyUrl" target="_blank" rel="noopener">▶ Play on Spotify</a>
-                    }
-                    else
-                    {
-                        <span class="muted" style="font-size:.8rem">no link set</span>
+                        <a class="btn small ghost" href="@t.SpotifyUrl" target="_blank" rel="noopener">▶ Spotify</a>
                     }
                 </div>
                 <div class="muted" style="font-size:.82rem">
@@ -38,10 +46,50 @@
 
     private List<QuestionAdminDto> _tracks = new();
     private string? _error;
+    private bool _busy;
+
+    private int? _liveId;
+    private DateTimeOffset _liveStart;
+    private int _window = 30;
+    private System.Threading.Timer? _ticker;
+
+    private int Remaining => Math.Max(0, _window - (int)(DateTimeOffset.UtcNow - _liveStart).TotalSeconds);
 
     protected override async Task OnInitializedAsync()
     {
         try { _tracks = await Api.GetAdminQuestionsAsync(Activity.Id); }
         catch (ApiException ex) { _error = ex.Message; }
     }
+
+    private async Task StartAsync(QuestionAdminDto t)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var res = await Api.StartMusicTrackAsync(Activity.Id, t.Id);
+            _liveId = res.QuestionId;
+            _liveStart = res.StartedUtc;
+            _window = res.WindowSeconds;
+            EnsureTicking();
+        }
+        catch (ApiException ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    // Tick the countdown while a track is live; stop when the window elapses.
+    private void EnsureTicking() =>
+        _ticker ??= new System.Threading.Timer(_ => _ = InvokeAsync(() =>
+        {
+            if (_liveId is null || Remaining <= 0)
+            {
+                _liveId = null;
+                _ticker?.Dispose();
+                _ticker = null;
+            }
+
+            StateHasChanged();
+        }), null, 500, 500);
+
+    public void Dispose() => _ticker?.Dispose();
 }

@@ -32,6 +32,10 @@ public class QuestionDto
     /// never sent to players — only the fact that one is expected.</summary>
     public bool AsksYear { get; set; }
 
+    /// <summary>MusicQuiz (fastest-to-answer): when the host started this track for live play. Drives the
+    /// player's countdown; a correct answer earns a speed bonus that decays across the window. Null = not started.</summary>
+    public DateTimeOffset? StartedUtc { get; set; }
+
     public bool HasLocation => Latitude.HasValue && Longitude.HasValue;
 }
 

@@ -73,6 +73,11 @@ public sealed class RundanApi(HttpClient http, AppState state)
         (await SendAsync<MusicLookupResultDto>(HttpMethod.Post, "api/music/lookup",
             body: new MusicLookupRequest { SpotifyUrl = spotifyUrl }, admin: true))!;
 
+    /// <summary>Host starts a track for live, fastest-to-answer play (stamps the start + notifies players).</summary>
+    public async Task<MusicTrackStartedDto> StartMusicTrackAsync(int activityId, int questionId) =>
+        (await SendAsync<MusicTrackStartedDto>(HttpMethod.Post,
+            $"api/activities/{activityId}/music/start/{questionId}", admin: true))!;
+
     // ---- Image upload (admin) ----------------------------------------------
     public async Task<string> UploadImageAsync(Stream content, string fileName, string contentType)
     {

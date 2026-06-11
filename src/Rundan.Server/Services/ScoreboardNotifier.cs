@@ -44,4 +44,14 @@ public sealed class ScoreboardNotifier(
     /// <summary>Broadcast a new chat message to everyone watching the event.</summary>
     public Task PushChatAsync(int eventId, ChatMessageDto message)
         => hub.Clients.Group(ScoreboardGroups.ForEvent(eventId)).ChatPosted(message);
+
+    /// <summary>Tell everyone playing the activity that the host just started a track (fastest-to-answer).</summary>
+    public Task PushMusicTrackStartedAsync(int activityId, int questionId, DateTimeOffset startedUtc, int windowSeconds)
+        => hub.Clients.Group(ScoreboardGroups.For(activityId)).MusicTrackStarted(new MusicTrackStartedDto
+        {
+            ActivityId = activityId,
+            QuestionId = questionId,
+            StartedUtc = startedUtc,
+            WindowSeconds = windowSeconds,
+        });
 }
