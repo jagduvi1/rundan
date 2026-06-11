@@ -710,7 +710,12 @@ internal static class EventEndpoints
     // Newest-first list of every event as DTOs (SQLite can't ORDER BY DateTimeOffset; Id ≈ creation order).
     private static async Task<List<EventDto>> ListAllEventDtosAsync(AppDbContext db, CancellationToken ct)
     {
-        var events = await db.Events.AsNoTracking().OrderByDescending(e => e.Id).ToListAsync(ct);
+        // Newest day first: order by the event's scheduled date when it has one, otherwise when it was
+        // created (Id as a stable tiebreaker). Sorted in memory so the StartsAt/CreatedUtc fallback is exact.
+        var events = (await db.Events.AsNoTracking().ToListAsync(ct))
+            .OrderByDescending(e => e.StartsAt ?? e.CreatedUtc.UtcDateTime)
+            .ThenByDescending(e => e.Id)
+            .ToList();
         var result = new List<EventDto>();
         foreach (var ev in events)
         {
