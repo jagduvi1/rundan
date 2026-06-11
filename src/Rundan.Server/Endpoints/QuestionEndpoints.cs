@@ -26,7 +26,15 @@ internal static class QuestionEndpoints
             }
 
             var questions = await LoadOrderedAsync(db, id, ct);
-            return Results.Ok(questions.Select(q => q.ToPlayerDto()));
+            var dtos = questions.Select(q => q.ToPlayerDto()).ToList();
+
+            // Kahoot-style music quiz: attach the four artist options (never leaking which is correct).
+            if (activity.Type == ActivityType.MusicQuiz && activity.MusicChoices)
+            {
+                MusicChoices.Populate(dtos, questions);
+            }
+
+            return Results.Ok(dtos);
         });
 
         app.MapGet("/api/activities/{id:int}/results", async (int id, AppDbContext db, CancellationToken ct) =>
@@ -289,8 +297,11 @@ internal static class QuestionEndpoints
         Text = string.Empty,
         ImageUrl = null,
         AcceptedFreeTextAnswer = null,
-        SpotifyUrl = null,
+        // Keep the Spotify link so a host who's playing can still play the track — only the
+        // answers (song / artist / year) and the multiple-choice options are masked.
+        SpotifyUrl = q.SpotifyUrl,
         AcceptedArtist = null,
+        ReleaseYear = null,
         Options = new(),
     };
 

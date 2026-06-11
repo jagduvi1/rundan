@@ -163,6 +163,31 @@ else
             </div>
         }
 
+        @if (_activity.Type == ActivityType.MusicQuiz)
+        {
+            <div class="field">
+                <label class="row" style="font-weight:500">
+                    <input type="checkbox" style="width:auto;min-height:auto"
+                           checked="@_editMusicChoices" @onchange="e => _editMusicChoices = (bool)e.Value!" />
+                    <span>Multiple choice — players tap the artist (Kahoot-style)</span>
+                </label>
+                <p class="muted" style="font-size:.8rem;margin-top:-.3rem">
+                    Off = players type the song + artist (and the year, if you set one). The wrong options are drawn from the other artists in this quiz.
+                </p>
+            </div>
+            <div class="field">
+                <label class="row" style="font-weight:500">
+                    <input type="checkbox" style="width:auto;min-height:auto"
+                           checked="@_editHideQuestions" @onchange="e => _editHideQuestions = (bool)e.Value!" />
+                    <span>Hide the answers from me — I'm playing too</span>
+                </label>
+                <p class="muted" style="font-size:.8rem;margin-top:-.3rem">
+                    Masks the song / artist / year (and the multiple-choice options) here — handy when you imported them.
+                    You still see the Spotify link so you can play. Players still see everything.
+                </p>
+            </div>
+        }
+
         @if (_activity.UsesRounds)
         {
             <div class="field">
@@ -489,6 +514,7 @@ else
 
     private int _editMapCityCount = 5;
     private bool _editRandomize;
+    private bool _editMusicChoices;
     private bool _editHideQuestions;
     private bool _editPublic;
     private string _editCourtLabel = "Court";
@@ -553,6 +579,7 @@ else
 
             _editMapCityCount = _activity.MapCityCount ?? 5;
             _editRandomize = _activity.RandomizeQuestions;
+            _editMusicChoices = _activity.MusicChoices;
             _editHideQuestions = _activity.HideQuestionsFromHost;
             _editPublic = _activity.IsPublic;
             _editCourtLabel = _activity.CourtLabel;
@@ -675,6 +702,7 @@ else
                 Measurement = _editMeasurement,
                 TargetValue = _editTarget,
                 RandomizeQuestions = _editRandomize,
+                MusicChoices = _editMusicChoices,
                 HideQuestionsFromHost = _editHideQuestions,
                 IsPublic = _editPublic,
                 ScoreEntryMode = _editScoreEntryMode,
