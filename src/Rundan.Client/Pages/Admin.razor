@@ -242,7 +242,7 @@ else
     {
         await State.EnsureInitializedAsync(Api);
 
-        // Entering the host panel ends any "preview as player" session.
+        // Entering host settings ends any "preview as player" session.
         if (State.PreviewAsPlayer)
         {
             await State.SetPreviewAsync(false);
