@@ -36,6 +36,7 @@ public static class Mapping
         UseManualSeeding = a.UseManualSeeding,
         TournamentScoring = a.TournamentScoring,
         RandomizeQuestions = a.RandomizeQuestions,
+        MusicChoices = a.MusicChoices,
         HideQuestionsFromHost = a.HideQuestionsFromHost,
         IsPublic = a.IsPublic,
         CourtLabel = a.CourtLabel,

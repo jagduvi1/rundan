@@ -266,8 +266,10 @@ internal static class ActivityEndpoints
                 ? req.TargetValue
                 : null;
             activity.RandomizeQuestions = req.RandomizeQuestions;
-            // A music host must always see the Spotify links to play them — never hide them.
-            activity.HideQuestionsFromHost = req.HideQuestionsFromHost && activity.Type != ActivityType.MusicQuiz;
+            activity.MusicChoices = req.MusicChoices && activity.Type == ActivityType.MusicQuiz;
+            // Music hosts may now hide the answers (handy when they imported them and play too) — the
+            // host views still show the Spotify link so they can play; only the answers/options are masked.
+            activity.HideQuestionsFromHost = req.HideQuestionsFromHost;
             activity.IsPublic = req.IsPublic;
             activity.ScoreEntryMode = req.ScoreEntryMode;
             activity.RoundCount = Math.Clamp(req.RoundCount, 1, 50);
