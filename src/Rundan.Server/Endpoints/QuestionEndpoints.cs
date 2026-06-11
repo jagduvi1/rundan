@@ -14,7 +14,8 @@ internal static class QuestionEndpoints
     {
         // --- Players: questions to play, and the answer key once finished --------
 
-        app.MapGet("/api/activities/{id:int}/questions", async (int id, AppDbContext db, CancellationToken ct) =>
+        app.MapGet("/api/activities/{id:int}/questions", async (
+            int id, AppDbContext db, LastFmService lastFm, CancellationToken ct) =>
         {
             var activity = await db.Activities.AsNoTracking().FirstOrDefaultAsync(a => a.Id == id, ct)
                 ?? throw new RuleViolationException("Activity not found.", StatusCodes.Status404NotFound);
@@ -31,7 +32,17 @@ internal static class QuestionEndpoints
             // Kahoot-style music quiz: attach the four artist options (never leaking which is correct).
             if (activity.Type == ActivityType.MusicQuiz && activity.MusicChoices)
             {
-                MusicChoices.Populate(dtos, questions);
+                // Optional: Last.fm "similar artists" for sharper wrong options (cached, best-effort).
+                IReadOnlyDictionary<string, IReadOnlyList<string>>? similar = null;
+                if (lastFm.Enabled)
+                {
+                    var artists = questions.Select(q => (q.AcceptedArtist ?? string.Empty).Trim())
+                        .Where(a => a.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                    var pairs = await Task.WhenAll(artists.Select(async a => (a, await lastFm.SimilarAsync(a, ct))));
+                    similar = pairs.ToDictionary(p => p.a, p => p.Item2, StringComparer.OrdinalIgnoreCase);
+                }
+
+                MusicChoices.Populate(dtos, questions, similar);
             }
 
             return Results.Ok(dtos);

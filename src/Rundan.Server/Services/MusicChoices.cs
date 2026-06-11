@@ -25,12 +25,16 @@ public static class MusicChoices
         "Avicii", "Robyn", "Roxette", "Kent", "Veronica Maggio", "Håkan Hellström",
     };
 
-    public static void Populate(List<QuestionDto> dtos, List<Question> questions)
+    /// <param name="similar">Optional Last.fm "similar artists" per correct artist — preferred as the
+    /// wrong options when present; otherwise the quiz's own artists + the pool are used.</param>
+    public static void Populate(List<QuestionDto> dtos, List<Question> questions,
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? similar = null)
     {
+        var ic = StringComparer.OrdinalIgnoreCase;
         var quizArtists = questions
             .Select(q => (q.AcceptedArtist ?? string.Empty).Trim())
             .Where(a => a.Length > 0)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Distinct(ic)
             .ToList();
 
         foreach (var q in questions)
@@ -48,13 +52,16 @@ public static class MusicChoices
             }
 
             var rng = new Random(q.Id);
-            var distractors = quizArtists
-                .Where(a => !a.Equals(correct, StringComparison.OrdinalIgnoreCase))
-                .Concat(Pool.Where(p => !quizArtists.Contains(p, StringComparer.OrdinalIgnoreCase)))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(_ => rng.Next())
-                .Take(3)
-                .ToList();
+            bool NotCorrect(string a) => !a.Equals(correct, StringComparison.OrdinalIgnoreCase);
+
+            // Three tiers, shuffled within each then concatenated in priority order: Last.fm similar
+            // artists, then the quiz's other artists, then the built-in pool. Deterministic per track.
+            var sim = (similar is not null && similar.TryGetValue(correct, out var s) ? s : Array.Empty<string>())
+                .Where(NotCorrect).Distinct(ic).OrderBy(_ => rng.Next());
+            var others = quizArtists.Where(NotCorrect).OrderBy(_ => rng.Next());
+            var pool = Pool.Where(p => !quizArtists.Contains(p, ic)).OrderBy(_ => rng.Next());
+
+            var distractors = sim.Concat(others).Concat(pool).Distinct(ic).Take(3).ToList();
 
             dto.Options = distractors.Append(correct)
                 .OrderBy(_ => rng.Next())
