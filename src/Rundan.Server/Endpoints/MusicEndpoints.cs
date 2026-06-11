@@ -11,10 +11,12 @@ internal static class MusicEndpoints
 {
     public static void MapMusicEndpoints(this IEndpointRouteBuilder app)
     {
-        // Host design-time helper — look up a track's title/artist/year for auto-fill.
-        app.MapPost("/api/music/lookup", async (MusicLookupRequest req, MusicLookupService svc, CancellationToken ct) =>
+        // Host design-time helper — look up a track's title/artist/year for auto-fill. Activity-scoped so
+        // it authorizes the same way as the rest of music management (site host OR a promoted event admin).
+        app.MapPost("/api/activities/{id:int}/music/lookup", async (
+            int id, MusicLookupRequest req, MusicLookupService svc, CancellationToken ct) =>
             Results.Ok(await svc.LookupAsync(req.SpotifyUrl, ct)))
-           .AddEndpointFilter<AdminEndpointFilter>();
+           .AddEndpointFilter<ActivityManagerFilter>();
 
         // Host starts a track for live, fastest-to-answer play: stamp the start time (drives the speed
         // bonus) and tell everyone playing so their countdown begins.

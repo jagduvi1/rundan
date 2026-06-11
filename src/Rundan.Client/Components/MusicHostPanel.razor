@@ -52,6 +52,7 @@
     private DateTimeOffset _liveStart;
     private int _window = 30;
     private System.Threading.Timer? _ticker;
+    private bool _disposed;
 
     private int Remaining => Math.Max(0, _window - (int)(DateTimeOffset.UtcNow - _liveStart).TotalSeconds);
 
@@ -81,6 +82,7 @@
     private void EnsureTicking() =>
         _ticker ??= new System.Threading.Timer(_ => _ = InvokeAsync(() =>
         {
+            if (_disposed) return; // short-circuit a callback queued just before teardown
             if (_liveId is null || Remaining <= 0)
             {
                 _liveId = null;
@@ -91,5 +93,9 @@
             StateHasChanged();
         }), null, 500, 500);
 
-    public void Dispose() => _ticker?.Dispose();
+    public void Dispose()
+    {
+        _disposed = true;
+        _ticker?.Dispose();
+    }
 }

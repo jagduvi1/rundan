@@ -287,16 +287,28 @@ else
             // proxied player's token, so the server attributes the slap to them too).
             if (_activity.EventId is { } evId2)
             {
+                // A "play as" overlay from a different event must not shadow this one's token.
+                if (State.IsProxying && State.Proxy!.EventId != evId2)
+                {
+                    await State.ClearProxyAsync();
+                }
+
                 _eventUserId = State.IsProxying && State.Proxy!.EventId == evId2
                     ? State.Proxy.UserId
                     : await State.GetEventUserIdAsync(evId2);
 
-                var hadToken = State.ActiveMemberToken is not null;
-                State.ActiveMemberToken ??= await State.GetEventMemberTokenAsync(evId2);
+                // Attach THIS event's member token (overwrite — a leftover token from another event we
+                // visited must not stand in, or a genuine admin of this event is wrongly denied host UI).
+                // When proxying this event the proxy's token already wins (the getter prefers it).
+                var sentToken = State.ActiveMemberToken;
+                if (!State.IsProxying)
+                {
+                    State.ActiveMemberToken = await State.GetEventMemberTokenAsync(evId2);
+                }
 
-                // If we only just attached this event's member token (a cold deep-link), the first GET
-                // went out without it — re-read so _activity.CanManage reflects our event-admin status.
-                if (!hadToken && State.ActiveMemberToken is not null)
+                // The first GET went out with whatever token was set then; if it differs from this event's,
+                // re-read so _activity.CanManage reflects our real event-admin status here.
+                if (State.ActiveMemberToken != sentToken)
                 {
                     _activity = await Api.GetActivityAsync(Id) ?? _activity;
                 }
