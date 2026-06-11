@@ -103,6 +103,7 @@ else
     private readonly Dictionary<int, (DateTimeOffset Start, int Window)> _live = new();
     private ScoreboardConnection? _subscribed;
     private System.Threading.Timer? _ticker;
+    private bool _disposed;
 
     // Seconds left in the speed window for a track, or null if it isn't live right now.
     private int? LiveRemaining(QuestionDto q)
@@ -197,6 +198,7 @@ else
     private void EnsureTicking() =>
         _ticker ??= new System.Threading.Timer(_ => _ = InvokeAsync(() =>
         {
+            if (_disposed) return; // short-circuit a callback queued just before teardown
             if (_tracks.All(q => LiveRemaining(q) is null))
             {
                 _ticker?.Dispose();
@@ -208,6 +210,7 @@ else
 
     public void Dispose()
     {
+        _disposed = true;
         _ticker?.Dispose();
         if (_subscribed is not null) _subscribed.MusicTrackStarted -= OnTrackStarted;
     }

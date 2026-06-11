@@ -65,7 +65,6 @@ public sealed class MusicLookupService(IHttpClientFactory httpFactory)
         }
 
         var s = url.Trim();
-        const string marker = "track";
 
         // spotify:track:ID  or  …/track/ID
         var idx = s.IndexOf("track:", StringComparison.OrdinalIgnoreCase);

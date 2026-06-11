@@ -77,9 +77,11 @@ public sealed class GameService(AppDbContext db, TimeProvider clock)
             isCorrect = songOk && artistOk;
             awarded = (songOk ? question.Points : 0) + (artistOk ? question.Points : 0) + yearPoints;
 
-            // Fastest-to-answer: when the host started this track for live play, a correct answer earns a
-            // bonus that decays from the track's points to zero across the window.
-            if (awarded > 0 && question.PlayStartedUtc is { } startedAt)
+            // Fastest-to-answer: when the host started this track for live play, a *genuinely correct*
+            // answer earns a bonus that decays from the track's points to zero across the window. A merely
+            // close (half-credit) year does NOT unlock it — only a right song/artist or an EXACT year.
+            var exactYear = question.ReleaseYear is { } ry && guessedYear == ry;
+            if ((songOk || artistOk || exactYear) && question.PlayStartedUtc is { } startedAt)
             {
                 var elapsed = (clock.GetUtcNow() - startedAt).TotalSeconds;
                 var fraction = Math.Clamp(1d - elapsed / SpeedWindowSeconds, 0d, 1d);
@@ -135,7 +137,8 @@ public sealed class GameService(AppDbContext db, TimeProvider clock)
     private const int YearTolerance = 2;
     private static int ScoreYear(int? guess, int? correct, int points)
     {
-        if (guess is not int g || correct is not int c)
+        // points <= 0: nothing to award (and stops the half-credit floor from out-scoring an exact hit on a 0-pt track).
+        if (guess is not int g || correct is not int c || points <= 0)
         {
             return 0;
         }

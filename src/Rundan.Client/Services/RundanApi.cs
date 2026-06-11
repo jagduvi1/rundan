@@ -69,8 +69,8 @@ public sealed class RundanApi(HttpClient http, AppState state)
 
     // ---- Music auto-fill (admin) -------------------------------------------
     /// <summary>Look up a Spotify track's title/artist/year from free public sources for auto-fill.</summary>
-    public async Task<MusicLookupResultDto> LookupTrackAsync(string spotifyUrl) =>
-        (await SendAsync<MusicLookupResultDto>(HttpMethod.Post, "api/music/lookup",
+    public async Task<MusicLookupResultDto> LookupTrackAsync(int activityId, string spotifyUrl) =>
+        (await SendAsync<MusicLookupResultDto>(HttpMethod.Post, $"api/activities/{activityId}/music/lookup",
             body: new MusicLookupRequest { SpotifyUrl = spotifyUrl }, admin: true))!;
 
     /// <summary>Host starts a track for live, fastest-to-answer play (stamps the start + notifies players).</summary>

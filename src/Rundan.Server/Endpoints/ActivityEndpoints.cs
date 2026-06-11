@@ -354,7 +354,7 @@ internal static class ActivityEndpoints
             return Results.Ok(await LoadDtoAsync(db, id, ct));
         }).AddEndpointFilter<ActivityManagerFilter>();
 
-        app.MapDelete("/api/activities/{id:int}", async (int id, AppDbContext db, CancellationToken ct) =>
+        app.MapDelete("/api/activities/{id:int}", async (int id, AppDbContext db, StoragePaths paths, CancellationToken ct) =>
         {
             var activity = await db.Activities.FindAsync([id], ct);
             if (activity is null)
@@ -368,8 +368,13 @@ internal static class ActivityEndpoints
             // clean them — remove them here or a deleted activity's penalty haunts the standings.
             await db.Slaps.Where(s => s.ActivityId == id).ExecuteDeleteAsync(ct);
 
+            // Uploaded files (the activity image + its photos) to remove after the row is gone.
+            var files = new List<string?> { activity.ImageUrl };
+            files.AddRange(await db.ActivityPhotos.Where(p => p.ActivityId == id).Select(p => p.Url).ToListAsync(ct));
+
             db.Activities.Remove(activity);
             await db.SaveChangesAsync(ct);
+            paths.DeleteUploads(files);
 
             // Close the gap in the running order so the remaining activities stay numbered 1, 2, 3, …
             if (eventId is { } evId)

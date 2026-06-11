@@ -298,7 +298,7 @@ internal static class EventEndpoints
             return Results.NoContent();
         }).AddEndpointFilter<EventManagerFilter>();
 
-        app.MapDelete("/api/events/{id:int}", async (int id, AppDbContext db, CancellationToken ct) =>
+        app.MapDelete("/api/events/{id:int}", async (int id, AppDbContext db, StoragePaths paths, CancellationToken ct) =>
         {
             var ev = await db.Events.FindAsync([id], ct);
             if (ev is null)
@@ -306,8 +306,17 @@ internal static class EventEndpoints
                 return Results.NotFound();
             }
 
+            // Gather the uploaded files to remove after the cascade (event image, each activity's image,
+            // and every activity photo) so deleting the event doesn't orphan them on disk.
+            var activityIds = await db.Activities.Where(a => a.EventId == id).Select(a => a.Id).ToListAsync(ct);
+            var files = new List<string?> { ev.ImageUrl };
+            files.AddRange(await db.Activities.Where(a => a.EventId == id).Select(a => a.ImageUrl).ToListAsync(ct));
+            files.AddRange(await db.ActivityPhotos.Where(p => activityIds.Contains(p.ActivityId)).Select(p => p.Url).ToListAsync(ct));
+
             db.Events.Remove(ev);
             await db.SaveChangesAsync(ct);
+
+            paths.DeleteUploads(files);
             return Results.NoContent();
         }).AddEndpointFilter<AdminEndpointFilter>();
 

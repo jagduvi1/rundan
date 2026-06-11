@@ -89,7 +89,7 @@
         _error = null;
         try
         {
-            var found = await Api.LookupTrackAsync(t.SpotifyUrl);
+            var found = await Api.LookupTrackAsync(Activity.Id, t.SpotifyUrl);
             var added = new List<string>();
             if (!string.IsNullOrWhiteSpace(found.Title) && string.IsNullOrWhiteSpace(t.AcceptedFreeTextAnswer))
             {
