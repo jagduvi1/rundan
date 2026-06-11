@@ -14,26 +14,34 @@ public static class EventAuthorization
     public static async Task<bool> CanManageEventAsync(
         HttpContext http, AppDbContext db, RundanOptions options, int? eventId, CancellationToken ct = default)
     {
-        // Dev convenience: with no admin code configured, management is open.
-        if (!options.RequiresAdminCode)
+        // Site host (global admin code) — a super-admin for every event, when one is configured.
+        if (options.RequiresAdminCode &&
+            SecurityHelpers.FixedEquals(http.Request.Headers[AdminEndpointFilter.HeaderName].ToString(), options.AdminCode))
         {
             return true;
         }
 
-        // Site host (global admin code).
-        if (SecurityHelpers.FixedEquals(http.Request.Headers[AdminEndpointFilter.HeaderName].ToString(), options.AdminCode))
+        if (eventId is { } eid)
         {
-            return true;
+            // Per-event rule (so admin of one event ≠ admin of another):
+            //  • the event HAS admins  → only an admin OF THIS EVENT (by member token) may manage it;
+            //  • the event has NO admins → management is open so nobody gets locked out — unless the site
+            //    itself is locked by an admin code, in which case only the code holder (handled above) does.
+            var hasAdmins = await db.EventMembers.AsNoTracking()
+                .AnyAsync(m => m.EventId == eid && m.IsAdmin, ct);
+            if (!hasAdmins)
+            {
+                return !options.RequiresAdminCode;
+            }
+
+            return TryGetMemberToken(http, out var token)
+                   && await db.EventMembers.AsNoTracking()
+                       .AnyAsync(m => m.Token == token && m.EventId == eid && m.IsAdmin, ct);
         }
 
-        // Event admin (a promoted participant of this event).
-        if (eventId is { } eid && TryGetMemberToken(http, out var token))
-        {
-            return await db.EventMembers.AsNoTracking()
-                .AnyAsync(m => m.Token == token && m.EventId == eid && m.IsAdmin, ct);
-        }
-
-        return false;
+        // No specific event in context (creating an event, the library, a standalone activity): open on
+        // an open server; on a locked server only the admin code (already checked above) gets through.
+        return !options.RequiresAdminCode;
     }
 
     public static async Task<bool> CanManageActivityAsync(

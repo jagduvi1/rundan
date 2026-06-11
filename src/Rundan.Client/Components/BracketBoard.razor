@@ -4,7 +4,7 @@
 <div class="card stack">
     <div class="row">
         <h2 class="grow">Tournament</h2>
-        @if (State.IsHost && (_bracket?.Drawn ?? false))
+        @if (CanManage && (_bracket?.Drawn ?? false))
         {
             <button class="btn ghost small danger" @onclick="ResetAsync" disabled="@_busy">Reset</button>
         }
@@ -18,7 +18,7 @@
     @if (_bracket is null || !_bracket.Drawn)
     {
         @* ---- Pre-draw: optional manual seeding, then the draw ---- *@
-        @if (State.IsHost && Activity.UseManualSeeding && _seeds.Count > 1)
+        @if (CanManage && Activity.UseManualSeeding && _seeds.Count > 1)
         {
             <h3>Seed the teams</h3>
             <p class="muted" style="font-size:.85rem">
@@ -44,7 +44,7 @@
         {
             <p class="muted">Loading…</p>
         }
-        else if (State.IsHost)
+        else if (CanManage)
         {
             <button class="btn block success" @onclick="DrawAsync" disabled="@_busy">
                 @(Activity.UseGroupStage ? "Draw the groups" : "Draw the teams")
@@ -219,6 +219,10 @@
     [Parameter] public ActivityDto Activity { get; set; } = default!;
     [Parameter] public int RefreshKey { get; set; }
 
+    // Per-event management (draw / record / reset / seed) — the server gates these the same way via
+    // Activity.CanManage (admin of this event, the site host, or open when the event has no admins).
+    private bool CanManage => !State.PreviewAsPlayer && (State.HasAdminCode || Activity.CanManage);
+
     private BracketDto? _bracket;
     private List<TeamSeedDto> _seeds = new();
     private bool _busy;
@@ -340,7 +344,7 @@
     </text>;
 
     private bool CanPick(BracketMatchDto m, int? id)
-        => State.IsHost && !_busy && m.Ready && !m.Decided && id.HasValue;
+        => CanManage && !_busy && m.Ready && !m.Decided && id.HasValue;
 
     private string TeamCls(BracketMatchDto m, int? id)
     {
@@ -476,7 +480,7 @@
 
         // Load the seed order for the pre-draw editor (host + manual seeding only). Only on a genuine
         // (re)load or when we have nothing yet — never on a background RefreshKey refresh.
-        if (State.IsHost && Activity.UseManualSeeding && _bracket is { Drawn: false }
+        if (CanManage && Activity.UseManualSeeding && _bracket is { Drawn: false }
             && (reloadSeeds || _seeds.Count == 0))
         {
             try { _seeds = await Api.GetSeedsAsync(Activity.Id); } catch (ApiException) { _seeds = new(); }
@@ -514,7 +518,7 @@
         try
         {
             _bracket = await Api.ResetBracketAsync(Activity.Id);
-            if (State.IsHost && Activity.UseManualSeeding)
+            if (CanManage && Activity.UseManualSeeding)
             {
                 try { _seeds = await Api.GetSeedsAsync(Activity.Id); } catch (ApiException) { }
             }

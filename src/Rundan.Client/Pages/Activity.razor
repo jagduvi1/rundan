@@ -73,7 +73,7 @@ else
     @* Slap ceremony — appears the moment this activity finishes (any order), winners act here. *@
     @if (_slap is not null)
     {
-        <SlapCeremony Slap="_slap" ActingUserId="_eventUserId" CanManage="State.IsHost"
+        <SlapCeremony Slap="_slap" ActingUserId="_eventUserId" CanManage="CanManage"
                       OnChanged="OnSlapChangedAsync" />
     }
 
@@ -195,7 +195,7 @@ else
         }
     }
 
-    @if (State.IsHost && _activity.Type == ActivityType.MusicQuiz && _activity.Status != ActivityStatus.Draft)
+    @if (CanManage && _activity.Type == ActivityType.MusicQuiz && _activity.Status != ActivityStatus.Draft)
     {
         @* Host's "tracks to play" panel — kept at the end so the scoreboard and play form sit on top.
            Distinct key: a host playing a live music quiz renders this AND <MusicQuizPlay> into the
@@ -208,7 +208,7 @@ else
        unique across all keyed siblings (even of different types). *@
     @if (_activity.Status != ActivityStatus.Draft)
     {
-        <PhotoWall @key='$"photos-{_activity.Id}"' ActivityId="_activity.Id" Session="_session" CanManage="State.IsHost" />
+        <PhotoWall @key='$"photos-{_activity.Id}"' ActivityId="_activity.Id" Session="_session" CanManage="CanManage" />
     }
 
     @if (_activity.EventId is { } backId)
@@ -216,7 +216,7 @@ else
         <a class="btn ghost block" href="@($"e/{backId}")">← Back to all activities</a>
     }
 
-    @if (State.IsHost && !State.IsProxying)
+    @if (CanManage && !State.IsProxying)
     {
         <div class="card center muted">
             <a href="@($"manage/{_activity.Id}")">Manage this activity (host)</a>
@@ -240,6 +240,12 @@ else
     private bool _isViewer;
     private ActivitySlapDto? _slap;
     private int? _eventUserId;
+
+    // Per-event management (NOT the global host flag): an admin of THIS activity's event, the site host
+    // (global admin code), or anyone when the event has no admins — the server decides via _activity.CanManage.
+    private bool CanManage =>
+        !State.PreviewAsPlayer
+        && (State.HasAdminCode || (_activity?.CanManage ?? false));
 
     protected override async Task OnParametersSetAsync()
     {
@@ -284,7 +290,16 @@ else
                 _eventUserId = State.IsProxying && State.Proxy!.EventId == evId2
                     ? State.Proxy.UserId
                     : await State.GetEventUserIdAsync(evId2);
+
+                var hadToken = State.ActiveMemberToken is not null;
                 State.ActiveMemberToken ??= await State.GetEventMemberTokenAsync(evId2);
+
+                // If we only just attached this event's member token (a cold deep-link), the first GET
+                // went out without it — re-read so _activity.CanManage reflects our event-admin status.
+                if (!hadToken && State.ActiveMemberToken is not null)
+                {
+                    _activity = await Api.GetActivityAsync(Id) ?? _activity;
+                }
             }
 
             await LoadSlapAsync();
