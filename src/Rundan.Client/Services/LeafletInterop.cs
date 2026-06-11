@@ -15,6 +15,11 @@ public sealed class MapMarker
 /// <summary>Wraps the Leaflet map (leaflet.js module) with OpenStreetMap tiles.</summary>
 public sealed class LeafletInterop(IJSRuntime js) : IAsyncDisposable
 {
+    // leaflet.js is a hand-written wwwroot asset (not content-hashed like the Blazor framework files),
+    // so a browser can serve a stale copy after a deploy. Bump this version whenever leaflet.js changes
+    // to force a fresh fetch. (v3: geofence picker defaults to Gothenburg.)
+    private const string ModuleUrl = "./js/leaflet.js?v=3";
+
     private IJSObjectReference? _module;
     private IJSObjectReference? _handle;
     private IJSObjectReference? _picker;
@@ -22,7 +27,7 @@ public sealed class LeafletInterop(IJSRuntime js) : IAsyncDisposable
 
     public async Task InitAsync(string elementId, double lat, double lng, int zoom = 16)
     {
-        _module ??= await js.InvokeAsync<IJSObjectReference>("import", "./js/leaflet.js");
+        _module ??= await js.InvokeAsync<IJSObjectReference>("import", ModuleUrl);
         _handle = await _module.InvokeAsync<IJSObjectReference>("createMap", elementId, lat, lng, zoom);
     }
 
@@ -61,7 +66,7 @@ public sealed class LeafletInterop(IJSRuntime js) : IAsyncDisposable
     // ---- Location picker ----
     public async Task InitPickerAsync(string elementId, double? lat, double? lng, int radius, object dotNetRef)
     {
-        _module ??= await js.InvokeAsync<IJSObjectReference>("import", "./js/leaflet.js");
+        _module ??= await js.InvokeAsync<IJSObjectReference>("import", ModuleUrl);
         _picker = await _module.InvokeAsync<IJSObjectReference>("createPicker", elementId, lat, lng, radius, dotNetRef);
     }
 
@@ -92,7 +97,7 @@ public sealed class LeafletInterop(IJSRuntime js) : IAsyncDisposable
     // ---- MapPin guesser ----
     public async Task InitGuesserAsync(string elementId, object dotNetRef)
     {
-        _module ??= await js.InvokeAsync<IJSObjectReference>("import", "./js/leaflet.js");
+        _module ??= await js.InvokeAsync<IJSObjectReference>("import", ModuleUrl);
         _guesser = await _module.InvokeAsync<IJSObjectReference>("createGuesser", elementId, dotNetRef);
     }
 
