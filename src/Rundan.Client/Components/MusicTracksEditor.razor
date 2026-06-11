@@ -32,7 +32,17 @@
                 }
                 <button class="btn ghost small danger" @onclick="() => DeleteAsync(t)" disabled="@_busy">Remove</button>
             </div>
-            <input placeholder="Spotify track link (https://open.spotify.com/track/…)" @bind="t.SpotifyUrl" />
+            <div class="row" style="gap:.4rem">
+                <input class="grow" placeholder="Spotify track link (https://open.spotify.com/track/…)" @bind="t.SpotifyUrl" />
+                <button class="btn ghost small" @onclick="() => AutoFillAsync(t)"
+                        disabled="@(_busy || string.IsNullOrWhiteSpace(t.SpotifyUrl))" title="Look up title/artist/year from the link">
+                    @(_fillingId == t.Id ? "…" : "Auto-fill")
+                </button>
+            </div>
+            @if (_fillNote.TryGetValue(t.Id, out var note))
+            {
+                <p class="muted" style="font-size:.78rem;margin:0">@note</p>
+            }
             <div class="row wrap">
                 <input class="grow" placeholder="Song title (correct answer)" @bind="t.AcceptedFreeTextAnswer" />
                 <input class="grow" placeholder="Artist (correct answer)" @bind="t.AcceptedArtist" />
@@ -62,6 +72,45 @@
     private bool _busy;
     private string? _error;
     private int _loadedId = -1;
+    private int _fillingId = -1;
+    private readonly Dictionary<int, string> _fillNote = new();
+
+    // Auto-fill a track's title/artist/year from its Spotify link (free oEmbed + MusicBrainz lookup).
+    // Only fills blank fields so it never clobbers something the host already typed; they confirm + Save.
+    private async Task AutoFillAsync(QuestionAdminDto t)
+    {
+        if (string.IsNullOrWhiteSpace(t.SpotifyUrl))
+        {
+            return;
+        }
+
+        _fillingId = t.Id;
+        _fillNote.Remove(t.Id);
+        _error = null;
+        try
+        {
+            var found = await Api.LookupTrackAsync(t.SpotifyUrl);
+            var added = new List<string>();
+            if (!string.IsNullOrWhiteSpace(found.Title) && string.IsNullOrWhiteSpace(t.AcceptedFreeTextAnswer))
+            {
+                t.AcceptedFreeTextAnswer = found.Title; added.Add("song");
+            }
+            if (!string.IsNullOrWhiteSpace(found.Artist) && string.IsNullOrWhiteSpace(t.AcceptedArtist))
+            {
+                t.AcceptedArtist = found.Artist; added.Add("artist");
+            }
+            if (found.Year is int y && t.ReleaseYear is null)
+            {
+                t.ReleaseYear = y; added.Add("year");
+            }
+
+            _fillNote[t.Id] = added.Count > 0
+                ? $"Filled {string.Join(", ", added)} — check it and press Save."
+                : found.Found ? "Found it, but those fields were already set." : "Couldn't find it — type the answers in.";
+        }
+        catch (ApiException ex) { _error = ex.Message; }
+        finally { _fillingId = -1; }
+    }
 
     // Load once per activity — never re-fetch on a RefreshKey bump, which would clobber unsaved in-place edits.
     protected override async Task OnParametersSetAsync()

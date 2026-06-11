@@ -45,6 +45,15 @@ builder.Services.AddScoped<ScoreboardNotifier>();
 builder.Services.AddScoped<DataSeeder>();
 builder.Services.AddScoped<MaintenanceService>();
 
+// Outbound HTTP for music-quiz auto-fill (Spotify oEmbed + MusicBrainz). Short timeout + a polite
+// User-Agent (MusicBrainz requires one). All callers are best-effort and degrade to manual entry.
+builder.Services.AddHttpClient("music", c =>
+{
+    c.Timeout = TimeSpan.FromSeconds(6);
+    c.DefaultRequestHeaders.UserAgent.ParseAdd("Rundan/1.0 (https://rundan.azurewebsites.net)");
+});
+builder.Services.AddScoped<MusicLookupService>();
+
 builder.Services.AddSignalR();
 
 builder.Services.AddProblemDetails();
@@ -124,6 +133,7 @@ app.MapQuestionEndpoints();
 app.MapGameplayEndpoints();
 app.MapMapPinEndpoints();
 app.MapMemoryEndpoints();
+app.MapMusicEndpoints();
 app.MapBracketEndpoints();
 app.MapWordGameEndpoints();
 app.MapSimulationEndpoints();
