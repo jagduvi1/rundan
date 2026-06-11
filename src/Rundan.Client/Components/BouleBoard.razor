@@ -136,7 +136,7 @@
                     <span class="badge">R@(s.Round)</span>
                     <span class="grow">@(s.UserName ?? s.ParticipantName)</span>
                     <b style="font-variant-numeric:tabular-nums">@(IsPoints ? (s.Points >= 0 ? "+" : "") + Fmt.Num(s.Points) : Format(s.Points))</b>
-                    @if (State.IsHost)
+                    @if (CanManage)
                     {
                         <button class="btn ghost small danger" @onclick="() => DeleteAsync(s.Id)" disabled="@_busy">✕</button>
                     }
@@ -151,6 +151,9 @@
     [Parameter] public PlayerSession Session { get; set; } = default!;
     [Parameter] public List<ParticipantDto> Participants { get; set; } = new();
     [Parameter] public int RefreshKey { get; set; }
+
+    // Per-event management (deleting a score): the server-computed Activity.CanManage.
+    private bool CanManage => !State.PreviewAsPlayer && (State.HasAdminCode || Activity.CanManage);
 
     /// <summary>The activity's live connection — used to broadcast/receive the running stopwatch so
     /// everyone watching sees the time-counter tick, not just the scorekeeper running it.</summary>

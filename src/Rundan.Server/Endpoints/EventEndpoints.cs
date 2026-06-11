@@ -452,7 +452,8 @@ internal static class EventEndpoints
 
         // --- Players: look up + standings ---------------------------------------
 
-        app.MapGet("/api/events/{id:int}", async (int id, AppDbContext db, SlapService slaps, CancellationToken ct) =>
+        app.MapGet("/api/events/{id:int}", async (
+            int id, AppDbContext db, SlapService slaps, HttpContext http, RundanOptions options, CancellationToken ct) =>
         {
             var ev = await db.Events.AsNoTracking().FirstOrDefaultAsync(e => e.Id == id, ct);
             if (ev is null)
@@ -462,10 +463,12 @@ internal static class EventEndpoints
 
             var dto = await LoadEventDtoAsync(db, ev, ct);
             dto.PendingSlap = await slaps.PendingAsync(id, ct);
+            dto.CanManage = await EventAuthorization.CanManageEventAsync(http, db, options, id, ct);
             return Results.Ok(dto);
         });
 
-        app.MapGet("/api/events/by-code/{code}", async (string code, AppDbContext db, SlapService slaps, CancellationToken ct) =>
+        app.MapGet("/api/events/by-code/{code}", async (
+            string code, AppDbContext db, SlapService slaps, HttpContext http, RundanOptions options, CancellationToken ct) =>
         {
             var normalized = code.Trim().ToUpperInvariant();
             var ev = await db.Events.AsNoTracking().FirstOrDefaultAsync(e => e.JoinCode == normalized, ct);
@@ -476,6 +479,7 @@ internal static class EventEndpoints
 
             var dto = await LoadEventDtoAsync(db, ev, ct);
             dto.PendingSlap = await slaps.PendingAsync(ev.Id, ct);
+            dto.CanManage = await EventAuthorization.CanManageEventAsync(http, db, options, ev.Id, ct);
             return Results.Ok(dto);
         });
 

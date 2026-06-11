@@ -43,6 +43,10 @@ public class ActivityDto
     /// <summary>Short human-friendly code people type in to join (e.g. "FOX-417").</summary>
     public string JoinCode { get; set; } = string.Empty;
 
+    /// <summary>True if the requesting device may manage this activity (its event's admin, the site host,
+    /// or anyone when the event has no admins). Server-computed per request; drives the host UI.</summary>
+    public bool CanManage { get; set; }
+
     public ScoringMode ScoringMode { get; set; }
 
     /// <summary>What this score game measures (points / time / length).</summary>

@@ -4,7 +4,7 @@
 <div class="card stack">
     <h2>Answers</h2>
 
-    @if (State.IsHost && _results.Count > 0)
+    @if (CanManage && _results.Count > 0)
     {
         <p class="muted" style="font-size:.85rem">Wrong answer marked correct? Tap the right one (or edit the accepted text) — everyone's score updates automatically.</p>
     }
@@ -32,7 +32,7 @@
 
                 @if (result.Kind == QuestionKind.FreeText)
                 {
-                    @if (State.IsHost)
+                    @if (CanManage)
                     {
                         <div class="row" style="gap:.4rem">
                             <input class="grow" maxlength="200" value="@_freeTextEdits.GetValueOrDefault(result.QuestionId, result.CorrectAnswerText ?? string.Empty)"
@@ -53,7 +53,7 @@
                         {
                             var isCorrect = opt.Id == result.CorrectOptionId;
                             var isMine = mine?.SelectedOptionId == opt.Id;
-                            @if (State.IsHost)
+                            @if (CanManage)
                             {
                                 <li>
                                     <button class="btn block @(isCorrect ? "success" : "secondary")"
@@ -90,6 +90,9 @@
 @code {
     [Parameter] public ActivityDto Activity { get; set; } = default!;
     [Parameter] public PlayerSession? Session { get; set; }
+
+    // Per-event management: the server-computed Activity.CanManage (admin of this event / open / site host).
+    private bool CanManage => !State.PreviewAsPlayer && (State.HasAdminCode || Activity.CanManage);
 
     private bool _loading = true;
     private string? _error;

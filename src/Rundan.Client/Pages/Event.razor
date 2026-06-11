@@ -436,7 +436,7 @@ else
                 Add to event
             </button>
 
-            @if (State.IsHost && !ProxyHere)
+            @if (CanManage && !ProxyHere)
             {
                 <h3 style="margin-top:.5rem">…or add from the activity library</h3>
                 @if (_library.Count == 0)
@@ -502,7 +502,7 @@ else
         </div>
     }
 
-    @if (State.IsHost && !ProxyHere)
+    @if (CanManage && !ProxyHere)
     {
         <div class="card stack accent">
             <h3>Players &amp; event admins</h3>
@@ -537,7 +537,7 @@ else
         </div>
     }
 
-    @if (State.IsHost && _event.HasRoster && !ProxyHere)
+    @if (CanManage && _event.HasRoster && !ProxyHere)
     {
         <div class="card stack accent">
             <h3>Play for a player</h3>
@@ -683,7 +683,7 @@ else
         ProxyHere ? State.Proxy!.Name
         : !string.IsNullOrWhiteSpace(_eventName) ? _eventName!
         : !string.IsNullOrWhiteSpace(_viewerName) ? _viewerName
-        : State.IsHost ? "Host"
+        : CanManage ? "Host"
         : string.Empty;
     private bool CanChat => !string.IsNullOrWhiteSpace(ChatAuthor);
 
@@ -731,7 +731,13 @@ else
     private bool _isViewer;
     private string _viewerName = string.Empty;
 
-    private bool CanManage => State.IsHost || _isEventAdmin;
+    // Per-event management — NOT the global host flag. The server tells us via EventDto.CanManage
+    // (an admin of THIS event by member token, or anyone when the event has no admins); we also allow
+    // the site-host (global admin code) and a just-claimed event admin. A host previewing as a player
+    // sees none of it. So being an admin of one event no longer grants management of another.
+    private bool CanManage =>
+        !State.PreviewAsPlayer
+        && (State.HasAdminCode || _isEventAdmin || (_event?.CanManage ?? false));
 
     private string _editName = string.Empty;
     private string? _editDescription;
@@ -938,6 +944,19 @@ else
             await State.ClearProxyAsync();
         }
 
+        // This page instance is reused across /e/{id} navigations — clear the previous event's admin
+        // flag so it can't leak into an event where we're not an admin.
+        _isEventAdmin = false;
+
+        // Attach THIS event's stored member token to the very first GET so the server can compute
+        // EventDto.CanManage (are we an admin of THIS event?) correctly on the initial load. Set it
+        // explicitly — a leftover token from another event we visited must not shadow this one. When
+        // proxying this event the proxy's token already wins (the getter prefers it).
+        if (!State.IsProxying)
+        {
+            State.ActiveMemberToken = await State.GetEventMemberTokenAsync(Id);
+        }
+
         _event = await Api.GetEventAsync(Id);
 
         if (_event is not null)
@@ -984,7 +1003,7 @@ else
                 }
             }
 
-            if (State.IsHost)
+            if (CanManage)
             {
                 try { _allUsers = await Api.ListUsersAsync(); } catch (ApiException) { }
                 try { _library = await Api.GetLibraryAsync(); } catch (ApiException) { }

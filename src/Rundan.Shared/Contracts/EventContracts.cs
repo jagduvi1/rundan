@@ -38,6 +38,10 @@ public class EventDto
     /// <summary>User ids among the members who are event admins (can manage this event).</summary>
     public List<int> AdminUserIds { get; set; } = new();
 
+    /// <summary>True if the requesting device may manage THIS event — an event admin (by member token),
+    /// the site host (admin code), or anyone when the event has no admins set. Server-computed per request.</summary>
+    public bool CanManage { get; set; }
+
     /// <summary>Names of people currently watching the event (recently seen).</summary>
     public List<string> Viewers { get; set; } = new();
 

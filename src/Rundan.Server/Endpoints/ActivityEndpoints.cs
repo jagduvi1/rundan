@@ -389,17 +389,25 @@ internal static class ActivityEndpoints
 
         // --- Players: look up the activity --------------------------------------
 
-        app.MapGet("/api/activities/{id:int}", async (int id, AppDbContext db, CancellationToken ct) =>
+        app.MapGet("/api/activities/{id:int}", async (
+            int id, AppDbContext db, HttpContext http, RundanOptions options, CancellationToken ct) =>
         {
             var dto = await LoadDtoAsync(db, id, ct);
-            return dto is null ? Results.NotFound() : Results.Ok(dto);
+            if (dto is null)
+            {
+                return Results.NotFound();
+            }
+
+            dto.CanManage = await EventAuthorization.CanManageActivityAsync(http, db, options, id, ct);
+            return Results.Ok(dto);
         });
 
         // The slap ceremony for one finished activity (pending to take, or the resolved outcome).
         app.MapGet("/api/activities/{id:int}/slap", async (int id, SlapService slaps, CancellationToken ct) =>
             Results.Ok(await slaps.ActivitySlapAsync(id, ct)));
 
-        app.MapGet("/api/activities/by-code/{code}", async (string code, AppDbContext db, CancellationToken ct) =>
+        app.MapGet("/api/activities/by-code/{code}", async (
+            string code, AppDbContext db, HttpContext http, RundanOptions options, CancellationToken ct) =>
         {
             var normalized = code.Trim().ToUpperInvariant();
             var activity = await db.Activities.AsNoTracking()
@@ -411,7 +419,9 @@ internal static class ActivityEndpoints
 
             var pc = await db.Participants.CountAsync(p => p.ActivityId == activity.Id, ct);
             var qc = await db.Questions.CountAsync(q => q.ActivityId == activity.Id, ct);
-            return Results.Ok(activity.ToDto(pc, qc));
+            var dto = activity.ToDto(pc, qc);
+            dto.CanManage = await EventAuthorization.CanManageActivityAsync(http, db, options, activity.Id, ct);
+            return Results.Ok(dto);
         });
     }
 
