@@ -7,6 +7,15 @@ using Rundan.Shared.Contracts;
 
 namespace Rundan.Server.Services;
 
+/// <summary>One track read from a Spotify playlist (for bulk import).</summary>
+public sealed class PlaylistTrack
+{
+    public string? Title { get; init; }
+    public string? Artist { get; init; }
+    public int? Year { get; init; }
+    public string Url { get; init; } = string.Empty;
+}
+
 /// <summary>
 /// Spotify Premium connections for music-quiz auto-fill. A host completes the browser OAuth (Authorization
 /// Code + PKCE — no client secret) and the server exchanges the code for tokens, stores them as a reusable
@@ -179,6 +188,132 @@ public sealed class SpotifyService(IHttpClientFactory httpFactory, RundanOptions
         {
             return null;
         }
+    }
+
+    /// <summary>Extracts the playlist id from a Spotify playlist link or URI (…/playlist/ID, spotify:playlist:ID).</summary>
+    public static string? TryGetPlaylistId(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return null;
+        }
+
+        var s = url.Trim();
+        var idx = s.IndexOf("playlist:", StringComparison.OrdinalIgnoreCase);
+        if (idx >= 0)
+        {
+            return CleanId(s[(idx + "playlist:".Length)..]);
+        }
+
+        idx = s.IndexOf("/playlist/", StringComparison.OrdinalIgnoreCase);
+        return idx >= 0 ? CleanId(s[(idx + "/playlist/".Length)..]) : null;
+
+        static string? CleanId(string rest)
+        {
+            var end = rest.IndexOfAny(new[] { '?', '/', '#', '&' });
+            var id = (end >= 0 ? rest[..end] : rest).Trim();
+            return id.Length is >= 16 and <= 40 && id.All(char.IsLetterOrDigit) ? id : null;
+        }
+    }
+
+    /// <summary>Reads a playlist's tracks (title/artist/year + the track link), following pages up to
+    /// <paramref name="max"/>. Null if the connection is gone; throws with a clear message if Spotify rejects it.</summary>
+    public async Task<List<PlaylistTrack>?> GetPlaylistTracksAsync(int connectionId, string playlistId, int max, CancellationToken ct = default)
+    {
+        var conn = await db.SpotifyConnections.FirstOrDefaultAsync(c => c.Id == connectionId, ct);
+        if (conn is null)
+        {
+            return null;
+        }
+
+        await EnsureFreshAsync(conn, ct);
+
+        var all = new List<PlaylistTrack>();
+        var fields = Uri.EscapeDataString("items(track(id,name,is_local,artists(name),album(release_date))),next");
+        var url = $"{ApiBase}/playlists/{Uri.EscapeDataString(playlistId)}/tracks?limit=50&fields={fields}";
+        for (var guard = 0; url is not null && all.Count < max && guard < 12; guard++)
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Get, url);
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", conn.AccessToken);
+            using var resp = await Http.SendAsync(req, ct);
+            if (!resp.IsSuccessStatusCode)
+            {
+                throw new RuleViolationException(
+                    $"Couldn't read that playlist ({(int)resp.StatusCode}). Check the link and that the connected account can open it.");
+            }
+
+            var (tracks, next) = ParsePlaylistPage(await resp.Content.ReadAsStringAsync(ct));
+            all.AddRange(tracks);
+            url = next;
+        }
+
+        return all;
+    }
+
+    /// <summary>Parses one page of a playlist-tracks response into tracks (skipping local/empty entries) + the next-page URL.</summary>
+    public static (List<PlaylistTrack> Tracks, string? Next) ParsePlaylistPage(string json)
+    {
+        var list = new List<PlaylistTrack>();
+        string? next = null;
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            if (root.TryGetProperty("next", out var n) && n.ValueKind == JsonValueKind.String)
+            {
+                next = n.GetString();
+            }
+
+            if (root.TryGetProperty("items", out var items) && items.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var it in items.EnumerateArray())
+                {
+                    if (!it.TryGetProperty("track", out var t) || t.ValueKind != JsonValueKind.Object)
+                    {
+                        continue;
+                    }
+
+                    if (t.TryGetProperty("is_local", out var loc) && loc.ValueKind == JsonValueKind.True)
+                    {
+                        continue;
+                    }
+
+                    var id = t.TryGetProperty("id", out var idp) ? idp.GetString() : null;
+                    if (string.IsNullOrEmpty(id))
+                    {
+                        continue;
+                    }
+
+                    string? artist = null;
+                    if (t.TryGetProperty("artists", out var ar) && ar.ValueKind == JsonValueKind.Array && ar.GetArrayLength() > 0
+                        && ar[0].TryGetProperty("name", out var an))
+                    {
+                        artist = an.GetString();
+                    }
+
+                    int? year = null;
+                    if (t.TryGetProperty("album", out var al) && al.TryGetProperty("release_date", out var rd)
+                        && rd.GetString() is { Length: >= 4 } d && int.TryParse(d[..4], out var y) && y is >= 1860 and <= 2100)
+                    {
+                        year = y;
+                    }
+
+                    list.Add(new PlaylistTrack
+                    {
+                        Title = t.TryGetProperty("name", out var nm) ? nm.GetString() : null,
+                        Artist = artist,
+                        Year = year,
+                        Url = $"https://open.spotify.com/track/{id}",
+                    });
+                }
+            }
+        }
+        catch
+        {
+            // malformed page — return whatever parsed
+        }
+
+        return (list, next);
     }
 
     // ---- internals ----

@@ -1,4 +1,5 @@
 @inject RundanApi Api
+@inject AppState State
 
 <div class="card stack">
     <div class="row">
@@ -10,6 +11,35 @@
         each correct guess is worth the track's points. Add a <b>release year</b> for a Hitster-style round —
         players then also guess the year (exact = full points, within 2 years = half). Players never see the link or the answers.
     </p>
+
+    @if (SpotifyConfigured)
+    {
+        <div class="card stack" style="background:var(--paper-2, #faf7f2)">
+            <b>Import from a Spotify playlist</b>
+            <p class="muted" style="font-size:.82rem;margin:0">
+                Paste a playlist link and pick how many tracks to add. We grab a random selection and auto-fill
+                each one's title, artist and release year — then you can tidy them up below.
+            </p>
+            <div class="row" style="gap:.4rem;flex-wrap:wrap;align-items:flex-end">
+                <div class="field grow" style="margin:0;min-width:220px">
+                    <label class="muted" style="font-size:.85rem">Playlist link</label>
+                    <input placeholder="https://open.spotify.com/playlist/…" @bind="_importUrl" />
+                </div>
+                <div class="field" style="margin:0">
+                    <label class="muted" style="font-size:.85rem">How many</label>
+                    <input type="number" min="1" max="50" style="width:90px" @bind="_importCount" />
+                </div>
+                <button class="btn small" @onclick="ImportAsync"
+                        disabled="@(_busy || _importing || string.IsNullOrWhiteSpace(_importUrl))">
+                    @(_importing ? "Importing…" : "Import")
+                </button>
+            </div>
+            @if (_importNote is not null)
+            {
+                <p class="muted" style="font-size:.8rem;margin:0">@_importNote</p>
+            }
+        </div>
+    }
 
     @if (_error is not null)
     {
@@ -75,6 +105,40 @@
     private int _loadedId = -1;
     private int _fillingId = -1;
     private readonly Dictionary<int, string> _fillNote = new();
+
+    private string _importUrl = string.Empty;
+    private int _importCount = 10;
+    private bool _importing;
+    private string? _importNote;
+
+    /// <summary>Spotify is set up (a Client ID exists), so playlist import is available.</summary>
+    private bool SpotifyConfigured => !string.IsNullOrWhiteSpace(State.Bootstrap?.SpotifyClientId);
+
+    // Pull a random batch of tracks from a Spotify playlist into this quiz, then reload the list so the
+    // host sees them. The server auto-fills title/artist/year; the host can still edit each row.
+    private async Task ImportAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_importUrl))
+        {
+            return;
+        }
+
+        _importing = true;
+        _importNote = null;
+        _error = null;
+        try
+        {
+            var result = await Api.ImportPlaylistAsync(Activity.Id, _importUrl.Trim(), _importCount);
+            _tracks = await Api.GetAdminQuestionsAsync(Activity.Id);
+            _importNote = result.Imported > 0
+                ? $"Added {result.Imported} track{(result.Imported == 1 ? "" : "s")} — check the answers below and Save any you tweak."
+                : "Nothing was added.";
+            _importUrl = string.Empty;
+            await OnChanged.InvokeAsync();
+        }
+        catch (ApiException ex) { _error = ex.Message; }
+        finally { _importing = false; }
+    }
 
     // Auto-fill a track's title/artist/year from its Spotify link (free oEmbed + MusicBrainz lookup).
     // Only fills blank fields so it never clobbers something the host already typed; they confirm + Save.

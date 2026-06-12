@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Rundan.Server.Data;
+using Rundan.Server.Data.Entities;
 using Rundan.Server.Security;
 using Rundan.Server.Services;
+using Rundan.Shared;
 using Rundan.Shared.Contracts;
 
 namespace Rundan.Server.Endpoints;
@@ -29,6 +31,60 @@ internal static class MusicEndpoints
             }
 
             return Results.Ok(await lookup.LookupAsync(req.SpotifyUrl, ct));
+        }).AddEndpointFilter<ActivityManagerFilter>();
+
+        // Bulk-import a random selection of tracks from a Spotify playlist into a music quiz.
+        app.MapPost("/api/activities/{id:int}/music/import", async (
+            int id, MusicImportRequest req, SpotifyService spotify, AppDbContext db, CancellationToken ct) =>
+        {
+            var activity = await db.Activities.FirstOrDefaultAsync(a => a.Id == id, ct);
+            if (activity is null)
+            {
+                return Results.NotFound();
+            }
+
+            if (activity.Type != ActivityType.MusicQuiz)
+            {
+                throw new RuleViolationException("Only a music quiz can import tracks.");
+            }
+
+            var playlistId = SpotifyService.TryGetPlaylistId(req.PlaylistUrl)
+                ?? throw new RuleViolationException("That doesn't look like a Spotify playlist link.");
+
+            // Use the quiz's selected Spotify connection, or any saved one.
+            var connId = activity.SpotifyConnectionId
+                ?? await db.SpotifyConnections.Select(c => (int?)c.Id).FirstOrDefaultAsync(ct)
+                ?? throw new RuleViolationException("Connect a Spotify account first (in host settings).");
+
+            var count = Math.Clamp(req.Count, 1, 50);
+            var pool = await spotify.GetPlaylistTracksAsync(connId, playlistId, max: Math.Clamp(count * 6, 60, 300), ct)
+                ?? throw new RuleViolationException("That Spotify connection no longer exists.");
+            if (pool.Count == 0)
+            {
+                throw new RuleViolationException("No playable tracks found in that playlist.");
+            }
+
+            var picked = pool.OrderBy(_ => Random.Shared.Next()).Take(count).ToList();
+            var order = await db.Questions.Where(q => q.ActivityId == id).Select(q => q.Order).DefaultIfEmpty(0).MaxAsync(ct);
+            foreach (var tr in picked)
+            {
+                order++;
+                db.Questions.Add(new Question
+                {
+                    ActivityId = id,
+                    Order = order,
+                    Text = $"Track {order}",
+                    Kind = QuestionKind.FreeText,
+                    Points = 1,
+                    SpotifyUrl = tr.Url,
+                    AcceptedFreeTextAnswer = tr.Title,
+                    AcceptedArtist = tr.Artist,
+                    ReleaseYear = tr.Year,
+                });
+            }
+
+            await db.SaveChangesAsync(ct);
+            return Results.Ok(new MusicImportResultDto { Imported = picked.Count });
         }).AddEndpointFilter<ActivityManagerFilter>();
 
         // Host starts a track for live, fastest-to-answer play: stamp the start time (drives the speed
