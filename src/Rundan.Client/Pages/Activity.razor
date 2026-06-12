@@ -113,6 +113,11 @@ else
         else if (_activity.Status == ActivityStatus.Finished && _activity.UsesQuestions)
         {
             <ResultsView Activity="_activity" />
+            <ResultsSummary @key='$"summary-{_activity.Id}"' Activity="_activity" />
+        }
+        else if (_activity.Status == ActivityStatus.Finished && _activity.Type == ActivityType.MusicQuiz)
+        {
+            <ResultsSummary @key='$"summary-{_activity.Id}"' Activity="_activity" />
         }
         else
         {
@@ -177,6 +182,11 @@ else
         @if (_activity.UsesQuestions)
         {
             <ResultsView Activity="_activity" Session="_session" />
+            <ResultsSummary @key='$"summary-{_activity.Id}"' Activity="_activity" />
+        }
+        else if (_activity.Type == ActivityType.MusicQuiz)
+        {
+            <ResultsSummary @key='$"summary-{_activity.Id}"' Activity="_activity" />
         }
         else if (_activity.Type == ActivityType.Boule)
         {
