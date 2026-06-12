@@ -14,7 +14,7 @@ else
     <div class="card stack">
         <h2 style="margin:0">Music quiz</h2>
         <p class="muted" style="margin:0;font-size:.85rem">
-            The host plays the tracks one at a time — @(Activity.MusicChoices ? "tap the artist" : "type the song and the artist") when each one appears. @_answered.Count of @_tracks.Count answered.
+            The host plays the tracks one at a time — @(_tracks.Any(t => t.Options.Count > 0) ? "tap the artist" : "type the song and the artist") when each one appears. @_answered.Count of @_tracks.Count answered.
         </p>
         @if (_error is not null)
         {
@@ -160,8 +160,10 @@ else
         || !string.IsNullOrWhiteSpace(_artist.GetValueOrDefault(q.Id))
         || (q.AsksYear && int.TryParse(_year.GetValueOrDefault(q.Id), out _));
 
-    // Multiple-choice ("pick the artist") track: the host enabled it and we have the options.
-    private bool IsChoice(QuestionDto q) => Activity.MusicChoices && q.Options.Count > 0;
+    // Multiple-choice ("tap the artist") track: the server attaches options only for a Kahoot-style
+    // music quiz, so their presence is the reliable signal. Don't gate on Activity.MusicChoices — that
+    // flag can be stale on the client if the host turned Kahoot on after this play view first loaded.
+    private bool IsChoice(QuestionDto q) => q.Options.Count > 0;
 
     // A track is shown to the player once the host has started it (or we've already answered it).
     private bool IsRevealed(QuestionDto q) => _answered.ContainsKey(q.Id) || _live.ContainsKey(q.Id);
@@ -271,6 +273,14 @@ else
                     _live[q.Id] = (q.StartedUtc!.Value, 30);
                     changed = true;
                 }
+
+                // Pick up content that can appear after we first loaded — chiefly the multiple-choice
+                // options once the host turns Kahoot on (or imports the tracks). Options are deterministic
+                // per track, so refreshing never reshuffles what someone is already looking at.
+                var gainedOptions = fresh.Any(f => f.Options.Count > 0
+                    && (_tracks.FirstOrDefault(t => t.Id == f.Id)?.Options.Count ?? 0) == 0);
+                _tracks = fresh;
+                changed = changed || gainedOptions;
 
                 if (changed)
                 {

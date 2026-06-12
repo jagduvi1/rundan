@@ -56,8 +56,15 @@
                     }
                 </div>
                 <div class="muted" style="font-size:.82rem">
-                    Answer: <b>@(string.IsNullOrWhiteSpace(t.AcceptedFreeTextAnswer) ? "—" : t.AcceptedFreeTextAnswer)</b>
-                    by <b>@(string.IsNullOrWhiteSpace(t.AcceptedArtist) ? "—" : t.AcceptedArtist)</b>@(t.ReleaseYear is int yr ? $" · {yr}" : "")
+                    @if (t.Hidden)
+                    {
+                        <text>Answer hidden while you play</text>
+                    }
+                    else
+                    {
+                        <text>Answer: <b>@(string.IsNullOrWhiteSpace(t.AcceptedFreeTextAnswer) ? "—" : t.AcceptedFreeTextAnswer)</b> by <b>@(string.IsNullOrWhiteSpace(t.AcceptedArtist) ? "—" : t.AcceptedArtist)</b>@(t.ReleaseYear is int yr ? $" · {yr}" : "")</text>
+                    }
+                    · <b>@t.Points pt</b>
                 </div>
             </li>
         }
