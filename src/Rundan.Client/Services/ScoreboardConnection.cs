@@ -5,6 +5,9 @@ using Rundan.Shared.Realtime;
 
 namespace Rundan.Client.Services;
 
+/// <summary>Coarse live-connection health, for a "Live" indicator.</summary>
+public enum LiveState { Connecting, Live, Reconnecting, Offline }
+
 /// <summary>
 /// Wraps the in-process SignalR hub connection for one activity's live scoreboard.
 /// Auto-reconnects (mobile signal drops) and re-joins the activity group on reconnect.
@@ -28,6 +31,42 @@ public sealed class ScoreboardConnection(NavigationManager nav, AppState state) 
 
     public bool IsConnected => _connection?.State == HubConnectionState.Connected;
     public bool IsReconnecting => _connection?.State == HubConnectionState.Reconnecting;
+
+    /// <summary>A coarse health for a "Live" indicator. Offline only happens when a connect attempt
+    /// failed outright (the auto-reconnect keeps us in Reconnecting otherwise).</summary>
+    public LiveState GetLiveState() => _connection?.State switch
+    {
+        HubConnectionState.Connected => LiveState.Live,
+        HubConnectionState.Reconnecting => LiveState.Reconnecting,
+        HubConnectionState.Connecting => LiveState.Connecting,
+        HubConnectionState.Disconnected => LiveState.Offline,
+        _ => LiveState.Connecting, // null = being set up
+    };
+
+    /// <summary>Tear down the current hub connection and connect again from scratch (a manual reconnect),
+    /// re-joining the same activities/events. The wrapper's event subscriptions are kept.</summary>
+    public async Task RestartAsync()
+    {
+        var activities = _activityIds.ToList();
+        var events = _eventIds.ToList();
+        var old = _connection;
+        _connection = null;
+        if (old is not null)
+        {
+            try { await old.DisposeAsync(); }
+            catch { /* best effort */ }
+        }
+
+        if (activities.Count > 0)
+        {
+            await StartAsync(activities);
+        }
+
+        foreach (var e in events)
+        {
+            await JoinEventAsync(e);
+        }
+    }
 
     public Task StartAsync(int activityId) => StartAsync(new[] { activityId });
 

@@ -29,14 +29,23 @@ else
             <h1 class="grow">@_activity.Title</h1>
             <StatusBadge Status="_activity.Status" />
         </div>
-        <div class="row muted" style="font-size:.85rem">
+        <div class="row muted" style="font-size:.85rem;align-items:center">
             <span>@Fmt.TypeLabel(_activity.Type)</span>
             <span>·</span>
             <span>code @_activity.JoinCode</span>
-            @if (_reconnecting)
+            <span class="grow"></span>
+            @switch (Live)
             {
-                <span class="grow"></span>
-                <span class="badge">Reconnecting…</span>
+                case LiveState.Live:
+                    <span class="badge" style="background:var(--green-100);color:var(--green-700)" title="Live updates are on">● Live</span>
+                    break;
+                case LiveState.Offline:
+                    <span class="badge" style="background:var(--red-100,#fde8e8);color:var(--red-700,#b42318)" title="Live updates are off">● Offline</span>
+                    <button class="btn ghost small" @onclick="ReconnectAsync" disabled="@_reconnectBusy">@(_reconnectBusy ? "…" : "Reconnect")</button>
+                    break;
+                default:
+                    <span class="badge" title="Connecting to live updates">○ Connecting…</span>
+                    break;
             }
         </div>
     </div>
@@ -414,6 +423,37 @@ else
             _participants = await Api.GetParticipantsAsync(Id);
             StateHasChanged();
         });
+
+    /// <summary>Health of the live (SignalR) connection, for the "Live" indicator.</summary>
+    private LiveState Live => _conn?.GetLiveState() ?? LiveState.Connecting;
+    private bool _reconnectBusy;
+
+    // Manual reconnect: rebuild the live connection and pull fresh data right away (a phone that's been
+    // offline catches up the moment they tap it, rather than waiting on the next poll).
+    private async Task ReconnectAsync()
+    {
+        _reconnectBusy = true;
+        StateHasChanged();
+        try
+        {
+            if (_conn is not null)
+            {
+                await _conn.RestartAsync();
+            }
+            else
+            {
+                await StartConnectionAsync();
+            }
+
+            await PollAsync();
+        }
+        catch { /* best effort — the indicator will reflect whether it came back */ }
+        finally
+        {
+            _reconnectBusy = false;
+            StateHasChanged();
+        }
+    }
 
     private void StartPoll() =>
         _poll ??= new System.Threading.Timer(_ => _ = InvokeAsync(PollAsync), null, PollMs, PollMs);
