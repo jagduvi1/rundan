@@ -57,6 +57,19 @@ public sealed class SimulationService(AppDbContext db, TeamService teams, Bracke
             ?? throw new RuleViolationException("Activity not found.", StatusCodes.Status404NotFound);
 
         await ClearResultsAsync(activityId, ct);
+
+        // Drop the generated roster teams so they re-form from the event's CURRENT roster when the
+        // activity is re-opened — the host may have added/removed players since it first opened, and
+        // EnsureTeamsAsync is idempotent (it would otherwise keep the stale line-up). Results were
+        // cleared above, so nothing references these participants. Self-joined players are left alone.
+        var teams = await db.Participants
+            .Where(p => p.ActivityId == activityId && p.IsTeam)
+            .ToListAsync(ct);
+        if (teams.Count > 0)
+        {
+            db.Participants.RemoveRange(teams); // ParticipantMember rows cascade-delete
+        }
+
         activity.Status = ActivityStatus.Draft;
         activity.StartedUtc = null;
         activity.FinishedUtc = null;
