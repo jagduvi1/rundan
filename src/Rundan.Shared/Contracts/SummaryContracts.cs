@@ -27,6 +27,8 @@ public class SummaryAnswerDto
     /// <summary>What they gave, formatted for display ("—" if they didn't answer).</summary>
     public string Given { get; set; } = "—";
 
-    public bool IsCorrect { get; set; }
+    /// <summary>Right/wrong for quiz-style answers; null where there's no such thing (a distance, a time).</summary>
+    public bool? IsCorrect { get; set; }
+
     public int Points { get; set; }
 }

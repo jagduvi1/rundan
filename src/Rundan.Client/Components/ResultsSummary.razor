@@ -25,8 +25,11 @@ else if (_summary is { Questions.Count: > 0 })
                     <ul class="list" style="margin:0">
                         @foreach (var a in q.Answers)
                         {
-                            <li class="@(a.IsCorrect ? "" : "muted")" style="gap:.5rem">
-                                <span>@(a.IsCorrect ? "✓" : "✗")</span>
+                            <li class="@(a.IsCorrect == false ? "muted" : "")" style="gap:.5rem">
+                                @if (a.IsCorrect is bool ic)
+                                {
+                                    <span>@(ic ? "✓" : "✗")</span>
+                                }
                                 <span class="grow"><b>@a.Player</b> — @a.Given</span>
                                 @if (a.Points > 0)
                                 {
