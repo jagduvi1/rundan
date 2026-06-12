@@ -34,9 +34,9 @@ else
         <div class="card stack">
             <div class="row">
                 <b class="grow">Track @(i + 1)@(HasLabel(q, i) ? $" · {q.Text}" : "")</b>
-                @if (rem is int r)
+                @if (rem is int r && (Activity.SpeedScoring || IsChoice(q)))
                 {
-                    <span class="badge" style="background:var(--green-100);color:var(--green-700)">⏱ answer fast · @r s</span>
+                    <span class="badge" style="background:var(--green-100);color:var(--green-700)">⏱ @(Activity.SpeedScoring ? $"answer fast · {r} s" : $"{r} s left")</span>
                 }
                 else if (timeUp)
                 {

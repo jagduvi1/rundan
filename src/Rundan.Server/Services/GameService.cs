@@ -77,11 +77,12 @@ public sealed class GameService(AppDbContext db, TimeProvider clock)
             isCorrect = songOk && artistOk;
             awarded = (songOk ? question.Points : 0) + (artistOk ? question.Points : 0) + yearPoints;
 
-            // Fastest-to-answer: when the host started this track for live play, a *genuinely correct*
-            // answer earns a bonus that decays from the track's points to zero across the window. A merely
-            // close (half-credit) year does NOT unlock it — only a right song/artist or an EXACT year.
+            // Speed scoring (opt-in, Kahoot-style): when enabled and the host started this track for live
+            // play, a *genuinely correct* answer earns a bonus that decays from the track's points to zero
+            // across the window. A merely close (half-credit) year does NOT unlock it — only a right
+            // song/artist or an EXACT year. Off = a correct answer is worth flat points regardless of speed.
             var exactYear = question.ReleaseYear is { } ry && guessedYear == ry;
-            if ((songOk || artistOk || exactYear) && question.PlayStartedUtc is { } startedAt)
+            if (activity.SpeedScoring && (songOk || artistOk || exactYear) && question.PlayStartedUtc is { } startedAt)
             {
                 var elapsed = (clock.GetUtcNow() - startedAt).TotalSeconds;
                 var fraction = Math.Clamp(1d - elapsed / SpeedWindowSeconds, 0d, 1d);

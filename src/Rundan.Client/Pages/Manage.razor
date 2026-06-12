@@ -175,6 +175,17 @@ else
                     Off = players type the song + artist (and the year, if you set one). The wrong options are drawn from the other artists in this quiz.
                 </p>
             </div>
+            <div class="field">
+                <label class="row" style="font-weight:500">
+                    <input type="checkbox" style="width:auto;min-height:auto"
+                           checked="@_editSpeedScoring" @onchange="e => _editSpeedScoring = (bool)e.Value!" />
+                    <span>Speed scoring — the faster they answer, the more points (Kahoot-style)</span>
+                </label>
+                <p class="muted" style="font-size:.8rem;margin-top:-.3rem">
+                    A correct answer earns a bonus that fades from full points to zero over the ~30 s after you hit <b>Start</b> on a track.
+                    Off = a correct answer is worth flat points no matter how quick.
+                </p>
+            </div>
             @if (!string.IsNullOrWhiteSpace(State.Bootstrap?.SpotifyClientId))
             {
                 <div class="field">
@@ -535,6 +546,7 @@ else
     private int _editMapCityCount = 5;
     private bool _editRandomize;
     private bool _editMusicChoices;
+    private bool _editSpeedScoring;
     private int _editSpotifyConn; // 0 = free (oEmbed); otherwise a Spotify connection id
     private List<SpotifyConnectionDto> _spotifyConnections = new();
     private bool _editHideQuestions;
@@ -602,6 +614,7 @@ else
             _editMapCityCount = _activity.MapCityCount ?? 5;
             _editRandomize = _activity.RandomizeQuestions;
             _editMusicChoices = _activity.MusicChoices;
+            _editSpeedScoring = _activity.SpeedScoring;
             _editSpotifyConn = _activity.SpotifyConnectionId ?? 0;
             if (_activity.Type == ActivityType.MusicQuiz && !string.IsNullOrWhiteSpace(State.Bootstrap?.SpotifyClientId))
             {
@@ -730,6 +743,7 @@ else
                 TargetValue = _editTarget,
                 RandomizeQuestions = _editRandomize,
                 MusicChoices = _editMusicChoices,
+                SpeedScoring = _editSpeedScoring,
                 SpotifyConnectionId = _editSpotifyConn == 0 ? null : _editSpotifyConn,
                 HideQuestionsFromHost = _editHideQuestions,
                 IsPublic = _editPublic,

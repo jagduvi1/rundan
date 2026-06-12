@@ -8,10 +8,11 @@
         @(CanPlayInApp
             ? "Play full tracks here with your Spotify Premium connection, or open them in Spotify. "
             : "Play each one out loud. ")
-        Hit <b>Start</b> to reveal a track to the players and begin a fastest-to-answer round — a correct
-        answer scores more the quicker it comes in (the bonus fades over @_window s). Players only see a
-        track once you start it, and in tap-the-artist mode their options lock when the timer runs out.
-        This panel is yours alone.
+        Hit <b>Start</b> to reveal a track to the players@(Activity.SpeedScoring
+            ? $" and begin a fastest-to-answer round — a correct answer scores more the quicker it comes in (the bonus fades over {_window} s)."
+            : ".")
+        Players only see a track once you start it, and in tap-the-artist mode their options lock when the
+        timer runs out. This panel is yours alone.
     </p>
 
     @if (_error is not null)
