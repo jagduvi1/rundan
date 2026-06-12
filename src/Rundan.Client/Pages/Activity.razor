@@ -115,7 +115,8 @@ else
             <ResultsView Activity="_activity" />
             <ResultsSummary @key='$"summary-{_activity.Id}"' Activity="_activity" />
         }
-        else if (_activity.Status == ActivityStatus.Finished && _activity.Type == ActivityType.MusicQuiz)
+        else if (_activity.Status == ActivityStatus.Finished
+            && _activity.Type is ActivityType.MusicQuiz or ActivityType.MapPin or ActivityType.Memory)
         {
             <ResultsSummary @key='$"summary-{_activity.Id}"' Activity="_activity" />
         }
@@ -184,7 +185,7 @@ else
             <ResultsView Activity="_activity" Session="_session" />
             <ResultsSummary @key='$"summary-{_activity.Id}"' Activity="_activity" />
         }
-        else if (_activity.Type == ActivityType.MusicQuiz)
+        else if (_activity.Type is ActivityType.MusicQuiz or ActivityType.MapPin or ActivityType.Memory)
         {
             <ResultsSummary @key='$"summary-{_activity.Id}"' Activity="_activity" />
         }

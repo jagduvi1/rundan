@@ -87,6 +87,57 @@ internal static class QuestionEndpoints
             }
 
             var dto = new ActivitySummaryDto();
+
+            // Pin the city: one row per city, each player's distance (closest first); no right/wrong.
+            if (activity.Type == ActivityType.MapPin)
+            {
+                var cities = await db.MapCities.AsNoTracking()
+                    .Where(c => c.ActivityId == id).OrderBy(c => c.Order)
+                    .Select(c => new { c.Order, c.Name }).ToListAsync(ct);
+                var pins = await db.ScoreEntries.AsNoTracking()
+                    .Where(s => s.ActivityId == id)
+                    .Select(s => new { s.Round, Player = s.Participant!.DisplayName, s.Points }).ToListAsync(ct);
+                foreach (var c in cities)
+                {
+                    var sq = new SummaryQuestionDto { Order = c.Order, Text = c.Name };
+                    foreach (var p in pins.Where(x => x.Round == c.Order).OrderBy(x => x.Points))
+                    {
+                        var km = p.Points.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture);
+                        sq.Answers.Add(new SummaryAnswerDto { Player = p.Player, Given = $"{km} km away" });
+                    }
+
+                    dto.Questions.Add(sq);
+                }
+
+                return Results.Ok(dto);
+            }
+
+            // Memory: one row, each team's time (or flip count) to clear their board, fastest first.
+            if (activity.Type == ActivityType.Memory)
+            {
+                var measuresTime = activity.Measurement == Measurement.TimeSeconds;
+                var raw = await db.ScoreEntries.AsNoTracking()
+                    .Where(s => s.ActivityId == id)
+                    .Select(s => new { Player = s.Participant!.DisplayName, s.Points }).ToListAsync(ct);
+                var totals = raw.GroupBy(r => r.Player).Select(g => new { Player = g.Key, Total = g.Sum(x => x.Points) });
+                var sq = new SummaryQuestionDto { Order = 1, Text = measuresTime ? "Time to clear the board" : "Flips to clear the board" };
+                foreach (var t in totals.OrderBy(x => x.Total))
+                {
+                    sq.Answers.Add(new SummaryAnswerDto
+                    {
+                        Player = t.Player,
+                        Given = measuresTime ? FormatClock(t.Total) : $"{t.Total:0.#} flips",
+                    });
+                }
+
+                if (sq.Answers.Count > 0)
+                {
+                    dto.Questions.Add(sq);
+                }
+
+                return Results.Ok(dto);
+            }
+
             if (activity.Type is not (ActivityType.Quiz or ActivityType.Tipspromenad or ActivityType.MusicQuiz))
             {
                 return Results.Ok(dto); // no per-question breakdown for this kind of activity
@@ -491,6 +542,13 @@ internal static class QuestionEndpoints
 
     // A plausible release year, or null. Guards against typos / out-of-range values.
     private static int? NormalizeYear(int? year) => year is int y && y >= 1860 && y <= 2100 ? y : null;
+
+    /// <summary>Seconds as m:ss for a memory-game time (e.g. 83 → "1:23").</summary>
+    private static string FormatClock(double seconds)
+    {
+        var s = (int)Math.Round(Math.Max(0, seconds));
+        return $"{s / 60}:{s % 60:00}";
+    }
 
     private static void AddOptions(Question question, QuestionUpsertRequest req)
     {
