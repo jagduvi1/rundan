@@ -145,9 +145,21 @@ else
                     <li>
                         <a class="activity-link grow" href="@($"manage/{a.Id}")">
                             <b>@a.Title</b>
-                            <div class="muted" style="font-size:.8rem">@Fmt.TypeLabel(a.Type) · code @a.JoinCode · @a.ParticipantCount player(s)</div>
+                            <div class="muted" style="font-size:.8rem">
+                                @Fmt.TypeLabel(a.Type) · code @a.JoinCode · @a.ParticipantCount player(s)@(a.IsPublic ? " · in library" : "")
+                            </div>
                         </a>
                         <StatusBadge Status="a.Status" />
+                        @if (_confirmDeleteActivityId == a.Id)
+                        {
+                            <button class="btn small danger" @onclick="() => RemoveStandaloneAsync(a.Id)" disabled="@_busy">Remove?</button>
+                            <button class="btn small ghost" @onclick="() => _confirmDeleteActivityId = null" disabled="@_busy">Cancel</button>
+                        }
+                        else
+                        {
+                            <button class="btn small ghost danger" @onclick="() => _confirmDeleteActivityId = a.Id" disabled="@_busy"
+                                    title="@(a.IsPublic ? "Deletes this activity and removes it from the library" : "Delete this activity")">Remove</button>
+                        }
                     </li>
                 }
             </ul>
@@ -307,6 +319,7 @@ else
     private bool _resetDone;
     private string _confirmText = string.Empty;
     private int? _confirmDeleteId;
+    private int? _confirmDeleteActivityId;
 
     private List<EventDto> _events = new();
     private List<ActivityDto> _standalone = new();
@@ -391,6 +404,21 @@ else
         {
             _busy = false;
         }
+    }
+
+    // Delete a standalone (no-event) activity and its data. If it was public, it also leaves the library.
+    private async Task RemoveStandaloneAsync(int activityId)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            await Api.DeleteActivityAsync(activityId);
+            _confirmDeleteActivityId = null;
+            _standalone.RemoveAll(a => a.Id == activityId);
+        }
+        catch (ApiException ex) { _error = ex.Message; }
+        finally { _busy = false; }
     }
 
     private async Task SaveSpotifyClientIdAsync()
