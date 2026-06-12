@@ -125,13 +125,25 @@
             if (_disposed) return;
             if (_liveId is null || Remaining <= 0)
             {
+                var justEnded = _liveId is not null; // a track's window ran out this tick
                 _liveId = null;
                 _ticker?.Dispose();
                 _ticker = null;
+                if (justEnded)
+                {
+                    // The clock ran out on a track — ask the server to wrap up if that was the last one.
+                    _ = MaybeFinishAsync();
+                }
             }
 
             StateHasChanged();
         }), null, 500, 500);
+
+    private async Task MaybeFinishAsync()
+    {
+        try { await Api.MaybeFinishMusicAsync(Activity.Id); }
+        catch (ApiException) { /* best effort — the host can also finish manually */ }
+    }
 
     // ---- in-app playback ----
     private async Task PlayAsync(QuestionAdminDto t)

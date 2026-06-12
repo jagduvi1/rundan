@@ -107,5 +107,25 @@ internal static class MusicEndpoints
                 ActivityId = id, QuestionId = questionId, StartedUtc = now, WindowSeconds = GameService.SpeedWindowSeconds,
             });
         }).AddEndpointFilter<ActivityManagerFilter>();
+
+        // Time-based finish: the host panel pings this when a track's window ends, so a music quiz wraps
+        // up once every track has played and the clock's run out — even if some players never answered.
+        app.MapPost("/api/activities/{id:int}/music/maybe-finish", async (
+            int id, AppDbContext db, GameService game, ScoreboardNotifier notifier, PushService push, CancellationToken ct) =>
+        {
+            var activity = await db.Activities.FirstOrDefaultAsync(a => a.Id == id, ct);
+            if (activity is null)
+            {
+                return Results.NotFound();
+            }
+
+            if (await game.TryAutoFinishQuestionsAsync(activity, ct))
+            {
+                await notifier.PushStatusAsync(id, ActivityStatus.Finished);
+                _ = push.NotifyActivityFinishedAsync(id);
+            }
+
+            return Results.Ok();
+        }).AddEndpointFilter<ActivityManagerFilter>();
     }
 }
