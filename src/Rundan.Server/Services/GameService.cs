@@ -441,23 +441,43 @@ public sealed class GameService(AppDbContext db, TimeProvider clock)
             return false;
         }
 
-        var teamIds = await db.Participants
-            .Where(p => p.ActivityId == activity.Id && p.IsTeam)
+        // Music quiz: also finish once every track has been played and its answer window has run out —
+        // even if some players never responded in time. (Quiz / tipspromenad have no such clock.)
+        if (activity.Type == ActivityType.MusicQuiz)
+        {
+            var starts = await db.Questions.Where(q => q.ActivityId == activity.Id)
+                .Select(q => q.PlayStartedUtc).ToListAsync(ct);
+            if (starts.Count > 0 && starts.All(s => s is not null)
+                && clock.GetUtcNow() >= starts.Max()!.Value.AddSeconds(SpeedWindowSeconds))
+            {
+                return await MarkFinishedAsync(activity, ct);
+            }
+        }
+
+        // Everyone answered every question. Roster team games are a bounded set; for a music quiz we also
+        // count individual players, so an open-join quiz finishes the moment they're all in.
+        var players = await db.Participants
+            .Where(p => p.ActivityId == activity.Id && (p.IsTeam || activity.Type == ActivityType.MusicQuiz))
             .Select(p => p.Id)
             .ToListAsync(ct);
         var questionCount = await db.Questions.CountAsync(q => q.ActivityId == activity.Id, ct);
-        var expected = teamIds.Count * questionCount;
+        var expected = players.Count * questionCount;
         if (expected <= 0)
         {
             return false;
         }
 
-        var recorded = await db.Answers.CountAsync(a => teamIds.Contains(a.ParticipantId), ct);
+        var recorded = await db.Answers.CountAsync(a => players.Contains(a.ParticipantId), ct);
         if (recorded < expected)
         {
             return false;
         }
 
+        return await MarkFinishedAsync(activity, ct);
+    }
+
+    private async Task<bool> MarkFinishedAsync(Activity activity, CancellationToken ct)
+    {
         activity.Status = ActivityStatus.Finished;
         activity.FinishedUtc = clock.GetUtcNow();
         await db.SaveChangesAsync(ct);
