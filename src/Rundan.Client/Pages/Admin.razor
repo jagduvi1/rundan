@@ -175,25 +175,31 @@ else
         </button>
     </div>
 
-    @* ---- Spotify connections (only when a Spotify app is configured on the server) ---- *@
-    @if (!string.IsNullOrWhiteSpace(State.Bootstrap?.SpotifyClientId))
-    {
-        <div class="card stack">
-            <h2>Spotify connections</h2>
-            <p class="muted" style="font-size:.85rem">
-                Log in with a Spotify <b>Premium</b> account to auto-fill music-quiz tracks with the exact
-                title, artist and release year. Set it up once here, then pick it as a quiz's auto-fill source.
-                Without a connection, auto-fill uses the free oEmbed + MusicBrainz lookup.
-            </p>
+    @* ---- Spotify (optional): connections + a step-by-step setup guide ---- *@
+    <div class="card stack">
+        <h2>Spotify (music auto-fill — optional)</h2>
+        <p class="muted" style="font-size:.85rem">
+            Log in with a Spotify <b>Premium</b> account to auto-fill music-quiz tracks with the exact title,
+            artist and release year. Set it up once here, then pick it as a quiz's auto-fill source. Without a
+            connection, auto-fill uses the free Spotify oEmbed + MusicBrainz lookup (no login needed).
+        </p>
 
-            @if (_spotifyError is not null)
-            {
-                <div class="alert error">@_spotifyError</div>
-            }
+        @if (_spotifyError is not null)
+        {
+            <div class="alert error">@_spotifyError</div>
+        }
 
+        @if (string.IsNullOrWhiteSpace(State.Bootstrap?.SpotifyClientId))
+        {
+            <div class="alert" style="background:var(--sun-50, #fef6e6);color:var(--slate-700, #44515c);border:1px solid var(--sun-300, #f2a40c)">
+                Spotify isn't set up on the server yet. Follow the steps below, then reload this page.
+            </div>
+        }
+        else
+        {
             @if (_spotify.Count == 0)
             {
-                <p class="muted">No connections yet.</p>
+                <p class="muted">No accounts connected yet.</p>
             }
             else
             {
@@ -216,8 +222,24 @@ else
             }
 
             <button class="btn block success" @onclick="ConnectSpotifyAsync" disabled="@_busy">Connect a Spotify account</button>
-        </div>
-    }
+        }
+
+        <details style="font-size:.85rem">
+            <summary style="cursor:pointer;font-weight:600">How to set up Spotify (one-time)</summary>
+            <ol style="margin:.5rem 0 0;padding-left:1.25rem;line-height:1.6">
+                <li>Create an app in the <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener">Spotify Developer Dashboard</a> and copy its <b>Client ID</b>.</li>
+                <li>In that app's settings, add this exact <b>Redirect URI</b> (must match character-for-character):<br />
+                    <code style="display:inline-block;margin-top:.2rem;padding:.15rem .4rem;background:var(--card-2, #f3f0ea);border-radius:6px;user-select:all">@RedirectUri</code></li>
+                <li>In Azure → your App Service → <b>Environment variables</b>, add <code>Rundan__SpotifyClientId</code> = the Client ID, then <b>Save</b> (the app restarts). Reload this page afterwards.</li>
+                <li>The app stays in Spotify <b>development mode</b>, so add each host's Spotify account under <b>User Management</b> in the dashboard — dev mode allows about <b>5 Premium</b> accounts.</li>
+                <li>Back here, tap <b>Connect a Spotify account</b> and log in. Use <b>Test</b> any time to re-check a connection.</li>
+            </ol>
+            <p class="muted" style="margin:.5rem 0 0">
+                If a connect fails, the return page shows Spotify's exact error — a <b>redirect-URI mismatch</b> is the
+                usual cause (it must equal step 2 exactly, including <code>https</code> and no trailing slash).
+            </p>
+        </details>
+    </div>
 
     @* ---- Danger zone: destructive maintenance, gated by the hardcoded confirmation code ---- *@
     <div class="card stack" style="border:1px solid var(--coral-100)">
@@ -277,6 +299,9 @@ else
     private List<ActivityDto> _standalone = new();
     private List<SpotifyConnectionDto> _spotify = new();
     private string? _spotifyError;
+
+    // The exact redirect URI to register in the Spotify app (derived from this site's address).
+    private string RedirectUri => $"{Nav.BaseUri}spotify-callback";
     private int _peopleCount;
     private int _libraryAvailable;
     private int _libraryTopics;
