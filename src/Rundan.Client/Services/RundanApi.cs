@@ -78,6 +78,11 @@ public sealed class RundanApi(HttpClient http, AppState state)
         (await SendAsync<MusicTrackStartedDto>(HttpMethod.Post,
             $"api/activities/{activityId}/music/start/{questionId}", admin: true))!;
 
+    /// <summary>Bulk-import a random pick of tracks from a Spotify playlist (auto-filled title/artist/year).</summary>
+    public async Task<MusicImportResultDto> ImportPlaylistAsync(int activityId, string playlistUrl, int count) =>
+        (await SendAsync<MusicImportResultDto>(HttpMethod.Post, $"api/activities/{activityId}/music/import",
+            body: new MusicImportRequest { PlaylistUrl = playlistUrl, Count = count }, admin: true))!;
+
     // ---- Spotify connections (admin) ---------------------------------------
     /// <summary>Set (or clear, when blank) the Spotify app Client ID from the UI.</summary>
     public Task SetSpotifyClientIdAsync(string? clientId) =>

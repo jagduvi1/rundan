@@ -19,3 +19,19 @@ public class MusicLookupResultDto
 
     public bool Found => !string.IsNullOrWhiteSpace(Title) || !string.IsNullOrWhiteSpace(Artist) || Year.HasValue;
 }
+
+/// <summary>Host bulk-imports tracks from a Spotify playlist (via a saved Spotify connection).</summary>
+public class MusicImportRequest
+{
+    /// <summary>A Spotify playlist link or URI.</summary>
+    public string PlaylistUrl { get; set; } = string.Empty;
+
+    /// <summary>How many tracks to add (a random pick from the playlist).</summary>
+    public int Count { get; set; } = 10;
+}
+
+/// <summary>Result of a playlist import.</summary>
+public class MusicImportResultDto
+{
+    public int Imported { get; set; }
+}

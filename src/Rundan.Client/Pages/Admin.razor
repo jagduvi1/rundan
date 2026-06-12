@@ -422,8 +422,9 @@ else
         {
             var module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/spotify.js");
             var redirect = await module.InvokeAsync<string>("redirectUri");
-            // Scopes: profile (name) + the full-playback set (Web Playback SDK + remote control).
-            const string scope = "user-read-private user-read-email streaming user-modify-playback-state user-read-playback-state";
+            // Scopes: profile (name) + full playback (Web Playback SDK + remote control) + reading
+            // playlists (so the host can bulk-import tracks from their own/private playlists too).
+            const string scope = "user-read-private user-read-email streaming user-modify-playback-state user-read-playback-state playlist-read-private playlist-read-collaborative";
             await module.InvokeVoidAsync("startLogin", clientId, redirect, scope);
             // startLogin navigates away to Spotify; nothing runs after this.
         }
