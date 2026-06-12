@@ -124,8 +124,16 @@ internal static class QuestionEndpoints
                 return Results.NotFound();
             }
 
+            // When the answers are hidden from the host ("I'm playing too"), a save from that masked view
+            // must not wipe them — the host can't see what they'd be clearing. Keep the stored value
+            // whenever the incoming one is blank. This also shields against an older/masked client that
+            // round-trips empty answer fields and would otherwise blank a whole imported track.
+            var hidden = activity.HideQuestionsFromHost;
+            string? Keep(string? stored, string? incoming) =>
+                hidden && string.IsNullOrWhiteSpace(incoming) ? stored : incoming;
+
             question.Order = req.Order > 0 ? req.Order : question.Order;
-            question.Text = req.Text.Trim();
+            question.Text = hidden && string.IsNullOrWhiteSpace(req.Text) ? question.Text : req.Text.Trim();
             question.Kind = req.Kind;
             question.Points = Math.Max(0, req.Points);
             question.ImageUrl = TextHelpers.Clean(req.ImageUrl);
@@ -133,14 +141,18 @@ internal static class QuestionEndpoints
             question.Longitude = req.Longitude;
             question.RadiusMeters = req.RadiusMeters;
             question.AcceptedFreeTextAnswer =
-                req.Kind == QuestionKind.FreeText ? TextHelpers.Clean(req.AcceptedFreeTextAnswer) : null;
-            question.SpotifyUrl = TextHelpers.Clean(req.SpotifyUrl);
-            question.AcceptedArtist = TextHelpers.Clean(req.AcceptedArtist);
-            question.ReleaseYear = NormalizeYear(req.ReleaseYear);
+                req.Kind == QuestionKind.FreeText ? Keep(question.AcceptedFreeTextAnswer, TextHelpers.Clean(req.AcceptedFreeTextAnswer)) : null;
+            question.SpotifyUrl = Keep(question.SpotifyUrl, TextHelpers.Clean(req.SpotifyUrl));
+            question.AcceptedArtist = Keep(question.AcceptedArtist, TextHelpers.Clean(req.AcceptedArtist));
+            question.ReleaseYear = hidden && NormalizeYear(req.ReleaseYear) is null ? question.ReleaseYear : NormalizeYear(req.ReleaseYear);
 
-            db.AnswerOptions.RemoveRange(question.Options);
-            question.Options.Clear();
-            AddOptions(question, req);
+            // A masked save carries no options; don't let it wipe the stored ones (regular quizzes).
+            if (!(hidden && (req.Options is null || req.Options.Count == 0)))
+            {
+                db.AnswerOptions.RemoveRange(question.Options);
+                question.Options.Clear();
+                AddOptions(question, req);
+            }
 
             await db.SaveChangesAsync(ct);
             return Results.Ok(question.ToAdminDto());
