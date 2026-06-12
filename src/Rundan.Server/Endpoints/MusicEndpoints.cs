@@ -65,7 +65,7 @@ internal static class MusicEndpoints
             }
 
             var picked = pool.OrderBy(_ => Random.Shared.Next()).Take(count).ToList();
-            var order = await db.Questions.Where(q => q.ActivityId == id).Select(q => q.Order).DefaultIfEmpty(0).MaxAsync(ct);
+            var order = await db.Questions.Where(q => q.ActivityId == id).MaxAsync(q => (int?)q.Order, ct) ?? 0;
             foreach (var tr in picked)
             {
                 order++;
