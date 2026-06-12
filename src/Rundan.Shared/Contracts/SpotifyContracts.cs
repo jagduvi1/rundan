@@ -33,3 +33,10 @@ public class SpotifyValidateResultDto
     /// <summary>"valid", or a short human-readable reason it failed.</summary>
     public string Message { get; set; } = string.Empty;
 }
+
+/// <summary>A short-lived Spotify access token handed to the host's browser for the Web Playback SDK
+/// (full-track playback in-app). Admin-only; the long-lived refresh token never leaves the server.</summary>
+public class SpotifyTokenDto
+{
+    public string AccessToken { get; set; } = string.Empty;
+}

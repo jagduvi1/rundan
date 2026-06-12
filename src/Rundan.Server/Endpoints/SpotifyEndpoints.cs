@@ -28,5 +28,12 @@ internal static class SpotifyEndpoints
             await svc.DeleteAsync(id, ct);
             return Results.NoContent();
         }).AddEndpointFilter<AdminEndpointFilter>();
+
+        // A short-lived access token for the host's browser to run the Web Playback SDK (full playback).
+        app.MapGet("/api/spotify/connections/{id:int}/token", async (int id, SpotifyService svc, CancellationToken ct) =>
+        {
+            var token = await svc.GetAccessTokenAsync(id, ct);
+            return token is null ? Results.NotFound() : Results.Ok(new SpotifyTokenDto { AccessToken = token });
+        }).AddEndpointFilter<AdminEndpointFilter>();
     }
 }

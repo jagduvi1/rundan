@@ -179,9 +179,10 @@ else
     <div class="card stack">
         <h2>Spotify (music auto-fill — optional)</h2>
         <p class="muted" style="font-size:.85rem">
-            Log in with a Spotify <b>Premium</b> account to auto-fill music-quiz tracks with the exact title,
-            artist and release year. Set it up once here, then pick it as a quiz's auto-fill source. Without a
-            connection, auto-fill uses the free Spotify oEmbed + MusicBrainz lookup (no login needed).
+            Log in with a Spotify <b>Premium</b> account to (1) auto-fill music-quiz tracks with the exact title,
+            artist and release year, and (2) <b>play full tracks in-app</b> from the host panel. Set it up once
+            here, then pick it as a quiz's source. Without a connection, auto-fill uses the free Spotify oEmbed +
+            MusicBrainz lookup (no login) and you play tracks via the “Spotify ↗” links.
         </p>
 
         @if (_spotifyError is not null)
@@ -392,7 +393,9 @@ else
         {
             var module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/spotify.js");
             var redirect = await module.InvokeAsync<string>("redirectUri");
-            await module.InvokeVoidAsync("startLogin", clientId, redirect, "user-read-private");
+            // Scopes: profile (name) + the full-playback set (Web Playback SDK + remote control).
+            const string scope = "user-read-private user-read-email streaming user-modify-playback-state user-read-playback-state";
+            await module.InvokeVoidAsync("startLogin", clientId, redirect, scope);
             // startLogin navigates away to Spotify; nothing runs after this.
         }
         catch (Exception ex)
