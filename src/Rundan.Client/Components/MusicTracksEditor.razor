@@ -81,10 +81,15 @@
             </div>
             @if (Activity.HideQuestionsFromHost)
             {
-                <p class="muted" style="font-size:.82rem;margin:0">
-                    Answers hidden while you play · <b>@t.Points pt</b>. Use ▶ Open to play it. Turn off
-                    “Hide the answers from me — I'm playing too” to edit.
+                <input class="grow" placeholder="Spotify track link (https://open.spotify.com/track/…)" @bind="t.SpotifyUrl" />
+                <p class="muted" style="font-size:.78rem;margin:0">
+                    Answers hidden while you play. Turn off “Hide the answers from me — I'm playing too” to see or change them.
                 </p>
+                <div class="field" style="margin:0">
+                    <label class="muted" style="font-size:.85rem">Points each</label>
+                    <input type="number" min="0" max="100" style="width:140px" @bind="t.Points" />
+                </div>
+                <button class="btn small success" @onclick="() => SaveAsync(t)" disabled="@_busy">Save</button>
             }
             else
             {
@@ -130,7 +135,6 @@
     private bool _busy;
     private string? _error;
     private int _loadedId = -1;
-    private bool _loadedHidden;
     private int _fillingId = -1;
     private bool _fillingAll;
     private string? _fillAllNote;
@@ -210,13 +214,13 @@
     // Load once per activity — never re-fetch on a RefreshKey bump, which would clobber unsaved in-place edits.
     protected override async Task OnParametersSetAsync()
     {
-        // Reload on a new activity, or when the "hide answers" toggle flips — so the masked/unmasked
-        // server data matches the toggle (and a later reveal shows the real answers, not blanks).
-        if (_loadedId != Activity.Id || _loadedHidden != Activity.HideQuestionsFromHost)
+        if (_loadedId != Activity.Id)
         {
             _loadedId = Activity.Id;
-            _loadedHidden = Activity.HideQuestionsFromHost;
-            try { _tracks = await Api.GetAdminQuestionsAsync(Activity.Id); }
+            // Always load the real answers (reveal) — even with "hide from host" on, we blank the fields
+            // in the UI rather than the data, so the host can still edit points/the link and a save keeps
+            // the answers. Toggling hide then just shows/hides fields, no reload, no blanks.
+            try { _tracks = await Api.GetAdminQuestionsAsync(Activity.Id, reveal: true); }
             catch (ApiException ex) { _error = ex.Message; }
         }
     }

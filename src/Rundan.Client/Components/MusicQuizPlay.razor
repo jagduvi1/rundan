@@ -83,15 +83,19 @@ else
             else
             {
                 <div class="alert @(mine.AwardedPoints > 0 ? "success" : "")">
+                    @* Kahoot ("tap the artist") only contests the artist — don't show the song/year there. *@
                     <div>
-                        You said — Song: <b>@Shown(mine.FreeText)</b> · Artist: <b>@Shown(mine.ArtistText)</b>@(q.AsksYear ? $" · Year: {(mine.Year?.ToString() ?? "—")}" : "")
+                        You said —@if (!IsChoice(q)) { <text> Song: <b>@Shown(mine.FreeText)</b> ·</text> } Artist: <b>@Shown(mine.ArtistText)</b>@(!IsChoice(q) && q.AsksYear ? $" · Year: {(mine.Year?.ToString() ?? "—")}" : "")
                     </div>
                     @if (res is not null)
                     {
                         <div style="margin-top:.25rem">
-                            Song @(res.SongCorrect ? "✓" : "✗")@(string.IsNullOrWhiteSpace(res.CorrectSong) ? "" : $" — {res.CorrectSong}")
-                            · Artist @(res.ArtistCorrect ? "✓" : "✗")@(string.IsNullOrWhiteSpace(res.CorrectArtist) ? "" : $" — {res.CorrectArtist}")
-                            @if (res.CorrectYear is int cy)
+                            @if (!IsChoice(q))
+                            {
+                                <text>Song @(res.SongCorrect ? "✓" : "✗")@(string.IsNullOrWhiteSpace(res.CorrectSong) ? "" : $" — {res.CorrectSong}") · </text>
+                            }
+                            Artist @(res.ArtistCorrect ? "✓" : "✗")@(string.IsNullOrWhiteSpace(res.CorrectArtist) ? "" : $" — {res.CorrectArtist}")
+                            @if (!IsChoice(q) && res.CorrectYear is int cy)
                             {
                                 <text> · Year @(res.YearPoints > 0 ? "✓" : "✗") — @cy</text>
                             }
