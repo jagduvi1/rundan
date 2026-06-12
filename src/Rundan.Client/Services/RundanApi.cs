@@ -333,6 +333,10 @@ public sealed class RundanApi(HttpClient http, AppState state)
     public Task<List<QuestionResultDto>> GetResultsAsync(int id) =>
         GetListAsync<QuestionResultDto>($"api/activities/{id}/results");
 
+    /// <summary>Finished-activity breakdown: every question with the correct answer and what each player gave.</summary>
+    public Task<ActivitySummaryDto?> GetActivitySummaryAsync(int id) =>
+        TryGetAsync<ActivitySummaryDto>($"api/activities/{id}/summary");
+
     /// <summary>Host fixes a question's correct answer after finish; re-scores everyone (host / event admin).</summary>
     public async Task<QuestionResultDto> UpdateAnswerKeyAsync(int id, int questionId, int? correctOptionId, string? acceptedText) =>
         (await SendAsync<QuestionResultDto>(HttpMethod.Put, $"api/activities/{id}/questions/{questionId}/answer-key",

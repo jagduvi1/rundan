@@ -1,0 +1,56 @@
+@inject RundanApi Api
+
+@if (_loading)
+{
+    <div class="card center muted"><div class="spinner" style="margin:1rem auto"></div></div>
+}
+else if (_summary is { Questions.Count: > 0 })
+{
+    <div class="card stack">
+        <h2 style="margin:0">Everyone's answers</h2>
+        @foreach (var q in _summary.Questions)
+        {
+            <div style="border-bottom:1px solid var(--line);padding:.55rem 0">
+                <div style="margin-bottom:.15rem"><b>@q.Order.</b> @q.Text</div>
+                @if (!string.IsNullOrWhiteSpace(q.Correct))
+                {
+                    <div class="muted" style="font-size:.85rem;margin-bottom:.25rem">Answer: <b>@q.Correct</b></div>
+                }
+                @if (q.Answers.Count == 0)
+                {
+                    <div class="muted" style="font-size:.85rem">No one answered.</div>
+                }
+                else
+                {
+                    <ul class="list" style="margin:0">
+                        @foreach (var a in q.Answers)
+                        {
+                            <li class="@(a.IsCorrect ? "" : "muted")" style="gap:.5rem">
+                                <span>@(a.IsCorrect ? "✓" : "✗")</span>
+                                <span class="grow"><b>@a.Player</b> — @a.Given</span>
+                                @if (a.Points > 0)
+                                {
+                                    <span class="badge">+@a.Points</span>
+                                }
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public ActivityDto Activity { get; set; } = default!;
+
+    private bool _loading = true;
+    private ActivitySummaryDto? _summary;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { _summary = await Api.GetActivitySummaryAsync(Activity.Id); }
+        catch (ApiException) { /* not ready / no access — show nothing */ }
+        finally { _loading = false; }
+    }
+}

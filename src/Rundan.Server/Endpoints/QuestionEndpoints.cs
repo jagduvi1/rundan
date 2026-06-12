@@ -70,6 +70,84 @@ internal static class QuestionEndpoints
             return Results.Ok(questions.Select(q => q.ToResultDto()));
         });
 
+        // Finished-activity summary: every question with the correct answer and what each player gave.
+        // Available once finished — the game's over, so the answers are no longer secret.
+        app.MapGet("/api/activities/{id:int}/summary", async (int id, AppDbContext db, CancellationToken ct) =>
+        {
+            var activity = await db.Activities.AsNoTracking().FirstOrDefaultAsync(a => a.Id == id, ct);
+            if (activity is null)
+            {
+                return Results.NotFound();
+            }
+
+            if (activity.Status != ActivityStatus.Finished)
+            {
+                throw new RuleViolationException("The summary is ready once the activity is finished.",
+                    StatusCodes.Status409Conflict);
+            }
+
+            var dto = new ActivitySummaryDto();
+            if (activity.Type is not (ActivityType.Quiz or ActivityType.Tipspromenad or ActivityType.MusicQuiz))
+            {
+                return Results.Ok(dto); // no per-question breakdown for this kind of activity
+            }
+
+            var isMusic = activity.Type == ActivityType.MusicQuiz;
+            var questions = await db.Questions.AsNoTracking().Include(q => q.Options)
+                .Where(q => q.ActivityId == id).OrderBy(q => q.Order).ToListAsync(ct);
+            var answers = await db.Answers.AsNoTracking()
+                .Where(a => a.Participant!.ActivityId == id)
+                .Select(a => new
+                {
+                    a.QuestionId, Player = a.Participant!.DisplayName,
+                    a.FreeText, a.ArtistText, a.GuessedYear, a.SelectedOptionId, a.IsCorrect, a.AwardedPoints,
+                })
+                .ToListAsync(ct);
+
+            static string? Combine(string? song, string? artist, int? year)
+            {
+                var s = string.Join(" — ", new[] { song, artist }.Where(p => !string.IsNullOrWhiteSpace(p)));
+                if (year is int y)
+                {
+                    s = s.Length > 0 ? $"{s} · {y}" : y.ToString();
+                }
+
+                return s.Length > 0 ? s : null;
+            }
+
+            foreach (var q in questions)
+            {
+                var correctOption = q.Options.FirstOrDefault(o => o.IsCorrect)?.Text;
+                var sq = new SummaryQuestionDto
+                {
+                    Order = q.Order,
+                    Text = string.IsNullOrWhiteSpace(q.Text) ? $"Track {q.Order}" : q.Text,
+                    Correct = isMusic
+                        ? Combine(q.AcceptedFreeTextAnswer, q.AcceptedArtist, q.ReleaseYear)
+                        : q.Kind == QuestionKind.FreeText ? q.AcceptedFreeTextAnswer : correctOption,
+                };
+
+                foreach (var a in answers.Where(x => x.QuestionId == q.Id)
+                    .OrderByDescending(x => x.AwardedPoints).ThenBy(x => x.Player))
+                {
+                    var given = isMusic
+                        ? Combine(a.FreeText, a.ArtistText, a.GuessedYear) ?? "—"
+                        : q.Kind == QuestionKind.FreeText
+                            ? (string.IsNullOrWhiteSpace(a.FreeText) ? "—" : a.FreeText!)
+                            : q.Options.FirstOrDefault(o => o.Id == a.SelectedOptionId)?.Text ?? "—";
+
+                    sq.Answers.Add(new SummaryAnswerDto
+                    {
+                        Player = a.Player, Given = given, IsCorrect = a.IsCorrect, Points = a.AwardedPoints,
+                    });
+                }
+
+                dto.Questions.Add(sq);
+            }
+
+            return Results.Ok(dto);
+        });
+
         // --- Admin: build the question set (only while Draft) --------------------
 
         app.MapGet("/api/activities/{id:int}/questions/admin", async (int id, bool? reveal, AppDbContext db, CancellationToken ct) =>
