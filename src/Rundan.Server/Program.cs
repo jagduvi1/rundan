@@ -53,6 +53,7 @@ builder.Services.AddHttpClient("music", c =>
     c.DefaultRequestHeaders.UserAgent.ParseAdd("Rundan/1.0 (https://rundan.azurewebsites.net)");
 });
 builder.Services.AddScoped<MusicLookupService>();
+builder.Services.AddScoped<SpotifyService>();
 // Singleton so the "similar artists" cache survives across requests (a busy quiz hits Last.fm once per artist).
 builder.Services.AddSingleton<LastFmService>();
 
@@ -136,6 +137,7 @@ app.MapGameplayEndpoints();
 app.MapMapPinEndpoints();
 app.MapMemoryEndpoints();
 app.MapMusicEndpoints();
+app.MapSpotifyEndpoints();
 app.MapBracketEndpoints();
 app.MapWordGameEndpoints();
 app.MapSimulationEndpoints();

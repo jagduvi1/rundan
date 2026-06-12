@@ -175,6 +175,23 @@ else
                     Off = players type the song + artist (and the year, if you set one). The wrong options are drawn from the other artists in this quiz.
                 </p>
             </div>
+            @if (!string.IsNullOrWhiteSpace(State.Bootstrap?.SpotifyClientId))
+            {
+                <div class="field">
+                    <label>Auto-fill source (paste a Spotify link → fill title/artist/year)</label>
+                    <select @bind="_editSpotifyConn">
+                        <option value="0">Free — Spotify oEmbed + MusicBrainz (no login)</option>
+                        @foreach (var c in _spotifyConnections)
+                        {
+                            <option value="@c.Id">Spotify: @c.Name</option>
+                        }
+                    </select>
+                    @if (_spotifyConnections.Count == 0)
+                    {
+                        <p class="muted" style="font-size:.78rem">Connect a Spotify Premium account in host settings for exact metadata.</p>
+                    }
+                </div>
+            }
             <div class="field">
                 <label class="row" style="font-weight:500">
                     <input type="checkbox" style="width:auto;min-height:auto"
@@ -515,6 +532,8 @@ else
     private int _editMapCityCount = 5;
     private bool _editRandomize;
     private bool _editMusicChoices;
+    private int _editSpotifyConn; // 0 = free (oEmbed); otherwise a Spotify connection id
+    private List<SpotifyConnectionDto> _spotifyConnections = new();
     private bool _editHideQuestions;
     private bool _editPublic;
     private string _editCourtLabel = "Court";
@@ -580,6 +599,11 @@ else
             _editMapCityCount = _activity.MapCityCount ?? 5;
             _editRandomize = _activity.RandomizeQuestions;
             _editMusicChoices = _activity.MusicChoices;
+            _editSpotifyConn = _activity.SpotifyConnectionId ?? 0;
+            if (_activity.Type == ActivityType.MusicQuiz && !string.IsNullOrWhiteSpace(State.Bootstrap?.SpotifyClientId))
+            {
+                try { _spotifyConnections = await Api.GetSpotifyConnectionsAsync(); } catch (ApiException) { }
+            }
             _editHideQuestions = _activity.HideQuestionsFromHost;
             _editPublic = _activity.IsPublic;
             _editCourtLabel = _activity.CourtLabel;
@@ -703,6 +727,7 @@ else
                 TargetValue = _editTarget,
                 RandomizeQuestions = _editRandomize,
                 MusicChoices = _editMusicChoices,
+                SpotifyConnectionId = _editSpotifyConn == 0 ? null : _editSpotifyConn,
                 HideQuestionsFromHost = _editHideQuestions,
                 IsPublic = _editPublic,
                 ScoreEntryMode = _editScoreEntryMode,

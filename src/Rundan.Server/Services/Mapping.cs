@@ -37,6 +37,7 @@ public static class Mapping
         TournamentScoring = a.TournamentScoring,
         RandomizeQuestions = a.RandomizeQuestions,
         MusicChoices = a.MusicChoices,
+        SpotifyConnectionId = a.SpotifyConnectionId,
         HideQuestionsFromHost = a.HideQuestionsFromHost,
         IsPublic = a.IsPublic,
         CourtLabel = a.CourtLabel,

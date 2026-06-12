@@ -1,0 +1,71 @@
+@page "/spotify-callback"
+@inject IJSRuntime JS
+@inject RundanApi Api
+@inject AppState State
+
+<PageTitle>Connecting Spotify · Rundan</PageTitle>
+
+<div class="card stack center">
+    <img src="img/rundan-mark.svg" width="56" height="56" alt="" style="margin:0 auto" />
+    <h1>Spotify</h1>
+    @if (_error is not null)
+    {
+        <div class="alert error">@_error</div>
+        <a class="btn" href="admin">Back to host settings</a>
+    }
+    else if (_done)
+    {
+        <div class="alert success">Connected as <b>@_name</b> ✓</div>
+        <a class="btn success" href="admin">Back to host settings</a>
+    }
+    else
+    {
+        <p class="muted">Finishing the connection…</p>
+        <div class="center muted"><div class="spinner" style="margin:1rem auto"></div></div>
+    }
+</div>
+
+@code {
+    private string? _error;
+    private bool _done;
+    private string? _name;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await State.EnsureInitializedAsync(Api);
+        try
+        {
+            var module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/spotify.js");
+            var cb = await module.InvokeAsync<CallbackResult>("readCallback");
+            var redirect = await module.InvokeAsync<string>("redirectUri");
+            await module.DisposeAsync();
+
+            if (!string.IsNullOrEmpty(cb.Error))
+            {
+                _error = $"Spotify reported: {cb.Error}.";
+                return;
+            }
+
+            if (string.IsNullOrEmpty(cb.Code) || !cb.StateOk || string.IsNullOrEmpty(cb.Verifier))
+            {
+                _error = "The login didn't complete (missing or mismatched response). Start again from host settings.";
+                return;
+            }
+
+            var conn = await Api.ConnectSpotifyAsync(cb.Code, cb.Verifier, redirect);
+            _name = conn.Name;
+            _done = true;
+        }
+        catch (ApiException ex) { _error = ex.Message; }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    // Shape returned by spotify.js readCallback().
+    private sealed class CallbackResult
+    {
+        public string? Code { get; set; }
+        public string? Error { get; set; }
+        public string Verifier { get; set; } = string.Empty;
+        public bool StateOk { get; set; }
+    }
+}

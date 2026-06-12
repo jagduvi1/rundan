@@ -17,6 +17,7 @@ internal static class BootstrapEndpoints
             AppName = options.AppName,
             RequiresAccessCode = options.RequiresAccessCode,
             RequiresAdminCode = options.RequiresAdminCode,
+            SpotifyClientId = options.SpotifyClientId ?? string.Empty,
         }));
 
         // Gated by the access-code middleware: reaching it means the code is valid.

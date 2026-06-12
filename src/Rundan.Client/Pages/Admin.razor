@@ -2,6 +2,7 @@
 @inject RundanApi Api
 @inject AppState State
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 
 <PageTitle>Host dashboard · Rundan</PageTitle>
 
@@ -174,6 +175,50 @@ else
         </button>
     </div>
 
+    @* ---- Spotify connections (only when a Spotify app is configured on the server) ---- *@
+    @if (!string.IsNullOrWhiteSpace(State.Bootstrap?.SpotifyClientId))
+    {
+        <div class="card stack">
+            <h2>Spotify connections</h2>
+            <p class="muted" style="font-size:.85rem">
+                Log in with a Spotify <b>Premium</b> account to auto-fill music-quiz tracks with the exact
+                title, artist and release year. Set it up once here, then pick it as a quiz's auto-fill source.
+                Without a connection, auto-fill uses the free oEmbed + MusicBrainz lookup.
+            </p>
+
+            @if (_spotifyError is not null)
+            {
+                <div class="alert error">@_spotifyError</div>
+            }
+
+            @if (_spotify.Count == 0)
+            {
+                <p class="muted">No connections yet.</p>
+            }
+            else
+            {
+                <ul class="list">
+                    @foreach (var c in _spotify)
+                    {
+                        <li>
+                            <span class="grow">
+                                <b>@c.Name</b>
+                                @if (!string.IsNullOrWhiteSpace(c.Status))
+                                {
+                                    <span class="badge @(c.Status == "valid" ? "finished" : "admin")" style="margin-left:.4rem">@(c.Status == "valid" ? "✓ valid" : c.Status)</span>
+                                }
+                            </span>
+                            <button class="btn ghost small" @onclick="() => TestSpotifyAsync(c.Id)" disabled="@_busy">Test</button>
+                            <button class="btn ghost small danger" @onclick="() => RemoveSpotifyAsync(c.Id)" disabled="@_busy">Remove</button>
+                        </li>
+                    }
+                </ul>
+            }
+
+            <button class="btn block success" @onclick="ConnectSpotifyAsync" disabled="@_busy">Connect a Spotify account</button>
+        </div>
+    }
+
     @* ---- Danger zone: destructive maintenance, gated by the hardcoded confirmation code ---- *@
     <div class="card stack" style="border:1px solid var(--coral-100)">
         <h2>Danger zone</h2>
@@ -230,6 +275,8 @@ else
 
     private List<EventDto> _events = new();
     private List<ActivityDto> _standalone = new();
+    private List<SpotifyConnectionDto> _spotify = new();
+    private string? _spotifyError;
     private int _peopleCount;
     private int _libraryAvailable;
     private int _libraryTopics;
@@ -286,6 +333,11 @@ else
                 _libraryTopics = (await Api.GetLibraryTagsAsync()).Count(t => t.StartsWith("topic:", StringComparison.Ordinal));
             }
             catch (ApiException) { }
+
+            if (!string.IsNullOrWhiteSpace(State.Bootstrap?.SpotifyClientId))
+            {
+                try { _spotify = await Api.GetSpotifyConnectionsAsync(); } catch (ApiException) { }
+            }
         }
         catch (ApiException ex) when (ex.IsForbidden || ex.IsUnauthorized)
         {
@@ -299,6 +351,60 @@ else
         {
             _busy = false;
         }
+    }
+
+    // Start the Spotify OAuth (PKCE) — redirects to Spotify, returns to /spotify-callback.
+    private async Task ConnectSpotifyAsync()
+    {
+        _spotifyError = null;
+        var clientId = State.Bootstrap?.SpotifyClientId;
+        if (string.IsNullOrWhiteSpace(clientId))
+        {
+            return;
+        }
+
+        try
+        {
+            var module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/spotify.js");
+            var redirect = await module.InvokeAsync<string>("redirectUri");
+            await module.InvokeVoidAsync("startLogin", clientId, redirect, "user-read-private");
+            // startLogin navigates away to Spotify; nothing runs after this.
+        }
+        catch (Exception ex)
+        {
+            _spotifyError = ex.Message;
+        }
+    }
+
+    private async Task TestSpotifyAsync(int id)
+    {
+        _busy = true;
+        _spotifyError = null;
+        try
+        {
+            var res = await Api.ValidateSpotifyAsync(id);
+            if (!res.Valid)
+            {
+                _spotifyError = $"Connection check failed: {res.Message}";
+            }
+
+            _spotify = await Api.GetSpotifyConnectionsAsync();
+        }
+        catch (ApiException ex) { _spotifyError = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task RemoveSpotifyAsync(int id)
+    {
+        _busy = true;
+        _spotifyError = null;
+        try
+        {
+            await Api.DeleteSpotifyConnectionAsync(id);
+            _spotify = await Api.GetSpotifyConnectionsAsync();
+        }
+        catch (ApiException ex) { _spotifyError = ex.Message; }
+        finally { _busy = false; }
     }
 
     private async Task CreateEventAsync()
