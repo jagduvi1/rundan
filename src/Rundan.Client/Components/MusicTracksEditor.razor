@@ -4,8 +4,19 @@
 <div class="card stack">
     <div class="row">
         <h3 class="grow" style="margin:0">Tracks</h3>
+        @if (!Activity.HideQuestionsFromHost && _tracks.Any(t => !string.IsNullOrWhiteSpace(t.SpotifyUrl)))
+        {
+            <button class="btn ghost small" @onclick="AutoFillAllAsync" disabled="@_busy"
+                    title="Look up the title, artist and year for every track from its link">
+                @(_fillingAll ? "Filling…" : "Auto-fill all")
+            </button>
+        }
         <button class="btn small" @onclick="AddAsync" disabled="@_busy">Add a track</button>
     </div>
+    @if (_fillAllNote is not null)
+    {
+        <p class="muted" style="font-size:.8rem;margin:0">@_fillAllNote</p>
+    }
     <p class="muted" style="font-size:.82rem;margin:0">
         Paste a Spotify track link (you'll play it), then the correct song and artist. Players type both;
         each correct guess is worth the track's points. Add a <b>release year</b> for a Hitster-style round —
@@ -68,34 +79,44 @@
                 }
                 <button class="btn ghost small danger" @onclick="() => DeleteAsync(t)" disabled="@_busy">Remove</button>
             </div>
-            <div class="row" style="gap:.4rem">
-                <input class="grow" placeholder="Spotify track link (https://open.spotify.com/track/…)" @bind="t.SpotifyUrl" />
-                <button class="btn ghost small" @onclick="() => AutoFillAsync(t)"
-                        disabled="@(_busy || string.IsNullOrWhiteSpace(t.SpotifyUrl))" title="Look up title/artist/year from the link">
-                    @(_fillingId == t.Id ? "…" : "Auto-fill")
-                </button>
-            </div>
-            @if (_fillNote.TryGetValue(t.Id, out var note))
+            @if (Activity.HideQuestionsFromHost)
             {
-                <p class="muted" style="font-size:.78rem;margin:0">@note</p>
+                <p class="muted" style="font-size:.82rem;margin:0">
+                    Answers hidden while you play · <b>@t.Points pt</b>. Use ▶ Open to play it. Turn off
+                    “Hide the answers from me — I'm playing too” to edit.
+                </p>
             }
-            <div class="field" style="margin:0">
-                <label class="muted" style="font-size:.85rem">Song title (correct answer)</label>
-                <input placeholder="e.g. Bohemian Rhapsody" @bind="t.AcceptedFreeTextAnswer" />
-            </div>
-            <div class="field" style="margin:0">
-                <label class="muted" style="font-size:.85rem">Artist (correct answer)</label>
-                <input placeholder="e.g. Queen" @bind="t.AcceptedArtist" />
-            </div>
-            <div class="field" style="margin:0">
-                <label class="muted" style="font-size:.85rem">Release year <span style="font-weight:400">(optional — for a Hitster-style round)</span></label>
-                <input type="number" min="1860" max="2100" placeholder="e.g. 1985" style="width:140px" @bind="t.ReleaseYear" />
-            </div>
-            <div class="field" style="margin:0">
-                <label class="muted" style="font-size:.85rem">Points each</label>
-                <input type="number" min="0" max="100" style="width:140px" @bind="t.Points" />
-            </div>
-            <button class="btn small success" @onclick="() => SaveAsync(t)" disabled="@_busy">Save</button>
+            else
+            {
+                <div class="row" style="gap:.4rem">
+                    <input class="grow" placeholder="Spotify track link (https://open.spotify.com/track/…)" @bind="t.SpotifyUrl" />
+                    <button class="btn ghost small" @onclick="() => AutoFillAsync(t)"
+                            disabled="@(_busy || string.IsNullOrWhiteSpace(t.SpotifyUrl))" title="Look up title/artist/year from the link">
+                        @(_fillingId == t.Id ? "…" : "Auto-fill")
+                    </button>
+                </div>
+                @if (_fillNote.TryGetValue(t.Id, out var note))
+                {
+                    <p class="muted" style="font-size:.78rem;margin:0">@note</p>
+                }
+                <div class="field" style="margin:0">
+                    <label class="muted" style="font-size:.85rem">Song title (correct answer)</label>
+                    <input placeholder="e.g. Bohemian Rhapsody" @bind="t.AcceptedFreeTextAnswer" />
+                </div>
+                <div class="field" style="margin:0">
+                    <label class="muted" style="font-size:.85rem">Artist (correct answer)</label>
+                    <input placeholder="e.g. Queen" @bind="t.AcceptedArtist" />
+                </div>
+                <div class="field" style="margin:0">
+                    <label class="muted" style="font-size:.85rem">Release year <span style="font-weight:400">(optional — for a Hitster-style round)</span></label>
+                    <input type="number" min="1860" max="2100" placeholder="e.g. 1985" style="width:140px" @bind="t.ReleaseYear" />
+                </div>
+                <div class="field" style="margin:0">
+                    <label class="muted" style="font-size:.85rem">Points each</label>
+                    <input type="number" min="0" max="100" style="width:140px" @bind="t.Points" />
+                </div>
+                <button class="btn small success" @onclick="() => SaveAsync(t)" disabled="@_busy">Save</button>
+            }
         </div>
     }
 </div>
@@ -109,7 +130,10 @@
     private bool _busy;
     private string? _error;
     private int _loadedId = -1;
+    private bool _loadedHidden;
     private int _fillingId = -1;
+    private bool _fillingAll;
+    private string? _fillAllNote;
     private readonly Dictionary<int, string> _fillNote = new();
 
     private string _importUrl = string.Empty;
@@ -186,9 +210,12 @@
     // Load once per activity — never re-fetch on a RefreshKey bump, which would clobber unsaved in-place edits.
     protected override async Task OnParametersSetAsync()
     {
-        if (_loadedId != Activity.Id)
+        // Reload on a new activity, or when the "hide answers" toggle flips — so the masked/unmasked
+        // server data matches the toggle (and a later reveal shows the real answers, not blanks).
+        if (_loadedId != Activity.Id || _loadedHidden != Activity.HideQuestionsFromHost)
         {
             _loadedId = Activity.Id;
+            _loadedHidden = Activity.HideQuestionsFromHost;
             try { _tracks = await Api.GetAdminQuestionsAsync(Activity.Id); }
             catch (ApiException ex) { _error = ex.Message; }
         }
@@ -219,22 +246,70 @@
     {
         _busy = true;
         _error = null;
-        try
-        {
-            await Api.UpdateQuestionAsync(Activity.Id, t.Id, new QuestionUpsertRequest
-            {
-                Order = t.Order,
-                Text = string.IsNullOrWhiteSpace(t.Text) ? $"Track {t.Order}" : t.Text,
-                Kind = QuestionKind.FreeText,
-                Points = Math.Max(0, t.Points),
-                SpotifyUrl = t.SpotifyUrl,
-                AcceptedFreeTextAnswer = t.AcceptedFreeTextAnswer,
-                AcceptedArtist = t.AcceptedArtist,
-                ReleaseYear = t.ReleaseYear,
-            });
-        }
+        try { await PersistAsync(t); }
         catch (ApiException ex) { _error = ex.Message; }
         finally { _busy = false; }
+    }
+
+    private Task PersistAsync(QuestionAdminDto t) =>
+        Api.UpdateQuestionAsync(Activity.Id, t.Id, new QuestionUpsertRequest
+        {
+            Order = t.Order,
+            Text = string.IsNullOrWhiteSpace(t.Text) ? $"Track {t.Order}" : t.Text,
+            Kind = QuestionKind.FreeText,
+            Points = Math.Max(0, t.Points),
+            SpotifyUrl = t.SpotifyUrl,
+            AcceptedFreeTextAnswer = t.AcceptedFreeTextAnswer,
+            AcceptedArtist = t.AcceptedArtist,
+            ReleaseYear = t.ReleaseYear,
+        });
+
+    // Look up the title/artist/year for every track that has a link, filling only blank fields (never
+    // clobbering what's already there) and saving each as it goes. Skips a track whose lookup fails.
+    private async Task AutoFillAllAsync()
+    {
+        _busy = true;
+        _fillingAll = true;
+        _error = null;
+        _fillAllNote = null;
+        _fillNote.Clear();
+        var filled = 0;
+        try
+        {
+            foreach (var t in _tracks.Where(t => !string.IsNullOrWhiteSpace(t.SpotifyUrl)).ToList())
+            {
+                try
+                {
+                    var found = await Api.LookupTrackAsync(Activity.Id, t.SpotifyUrl!);
+                    var changed = false;
+                    if (!string.IsNullOrWhiteSpace(found.Title) && string.IsNullOrWhiteSpace(t.AcceptedFreeTextAnswer))
+                    {
+                        t.AcceptedFreeTextAnswer = found.Title; changed = true;
+                    }
+                    if (!string.IsNullOrWhiteSpace(found.Artist) && string.IsNullOrWhiteSpace(t.AcceptedArtist))
+                    {
+                        t.AcceptedArtist = found.Artist; changed = true;
+                    }
+                    if (found.Year is int y && t.ReleaseYear is null)
+                    {
+                        t.ReleaseYear = y; changed = true;
+                    }
+
+                    if (changed)
+                    {
+                        await PersistAsync(t);
+                        filled++;
+                        StateHasChanged();
+                    }
+                }
+                catch (ApiException) { /* skip this track, keep going */ }
+            }
+
+            _fillAllNote = filled > 0
+                ? $"Auto-filled {filled} track{(filled == 1 ? "" : "s")}."
+                : "Nothing to fill — every track already had its details.";
+        }
+        finally { _fillingAll = false; _busy = false; }
     }
 
     private async Task DeleteAsync(QuestionAdminDto t)
