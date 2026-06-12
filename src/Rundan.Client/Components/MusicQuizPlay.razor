@@ -125,6 +125,8 @@ else
     private readonly Dictionary<int, (DateTimeOffset Start, int Window)> _live = new();
     private ScoreboardConnection? _subscribed;
     private System.Threading.Timer? _ticker;
+    private System.Threading.Timer? _poll;
+    private bool _polling;
     private bool _disposed;
 
     // Seconds left in the speed window for a track, or null if it isn't live right now.
@@ -195,6 +197,11 @@ else
             }
 
             if (_live.Count > 0) EnsureTicking();
+
+            // Reveal is driven by the host's live "track started" cue. Live updates can be missed (a flaky
+            // connection) or unavailable (e.g. WebSockets blocked), so also poll for newly-started tracks
+            // until every track is showing — that way the UI reveals on its own without a manual refresh.
+            if (RevealedCount < _tracks.Count) EnsurePolling();
         }
         catch (ApiException ex) { _error = ex.Message; }
         finally { _loading = false; }
@@ -235,10 +242,58 @@ else
             StateHasChanged();
         }), null, 500, 500);
 
+    // Poll the server for tracks the host has started, in case a live cue was missed. Stops once every
+    // track is revealed. A no-op while a previous poll is still in flight or after teardown.
+    private void EnsurePolling() =>
+        _poll ??= new System.Threading.Timer(_ => _ = PollStartedAsync(), null, 3000, 3000);
+
+    private async Task PollStartedAsync()
+    {
+        if (_disposed || _polling)
+        {
+            return;
+        }
+
+        _polling = true;
+        try
+        {
+            var fresh = await Api.GetQuestionsAsync(Activity.Id);
+            await InvokeAsync(() =>
+            {
+                if (_disposed)
+                {
+                    return;
+                }
+
+                var changed = false;
+                foreach (var q in fresh.Where(q => q.StartedUtc is not null && !_live.ContainsKey(q.Id)))
+                {
+                    _live[q.Id] = (q.StartedUtc!.Value, 30);
+                    changed = true;
+                }
+
+                if (changed)
+                {
+                    EnsureTicking();
+                    StateHasChanged();
+                }
+
+                if (RevealedCount >= _tracks.Count) // everything's showing — no need to keep polling
+                {
+                    _poll?.Dispose();
+                    _poll = null;
+                }
+            });
+        }
+        catch { /* transient — try again next tick */ }
+        finally { _polling = false; }
+    }
+
     public void Dispose()
     {
         _disposed = true;
         _ticker?.Dispose();
+        _poll?.Dispose();
         if (_subscribed is not null) _subscribed.MusicTrackStarted -= OnTrackStarted;
     }
 
