@@ -248,6 +248,15 @@ else
     private int _scoreVersion;
     private bool _loading = true;
     private bool _reconnecting;
+
+    // Live-update self-heal: SignalR pushes the status change (the moment the play view / question
+    // appears) and score updates, but a phone can miss a push — flaky signal, or WebSockets blocked in
+    // the deployment. So we also poll every few seconds and catch up, so the question pops up for
+    // everyone, on every activity type, without a manual refresh.
+    private const int PollMs = 4000;
+    private System.Threading.Timer? _poll;
+    private bool _polling;
+    private bool _disposed;
     private bool _isViewer;
     private ActivitySlapDto? _slap;
     private int? _eventUserId;
@@ -331,6 +340,7 @@ else
             // handshake (or a slow long-polling fallback). Messages arrive once it's up; the data
             // above is already loaded, so the page is usable immediately.
             _ = StartConnectionAsync();
+            StartPoll();
         }
 
         _loading = false;
@@ -405,6 +415,46 @@ else
             StateHasChanged();
         });
 
+    private void StartPoll() =>
+        _poll ??= new System.Threading.Timer(_ => _ = InvokeAsync(PollAsync), null, PollMs, PollMs);
+
+    // Re-fetch the activity (and, on a status change, the rest) so a missed live push can't leave a
+    // phone stuck on the lobby while everyone else is answering. Cheap GET; the host's "start" is the
+    // status change we're racing to catch.
+    private async Task PollAsync()
+    {
+        if (_disposed || _polling || _activity is null)
+        {
+            return;
+        }
+
+        _polling = true;
+        try
+        {
+            var fresh = await Api.GetActivityAsync(Id);
+            if (_disposed || fresh is null || _activity is null)
+            {
+                return;
+            }
+
+            var statusChanged = fresh.Status != _activity.Status;
+            _activity = fresh;
+            if (statusChanged)
+            {
+                // The big moment — the host opened / started / finished it. Pull the rest so the play
+                // view (the question) appears and the slap ceremony arms, just like the live push would.
+                _participants = await Api.GetParticipantsAsync(Id);
+                await LoadSlapAsync();
+                _scoreVersion++;
+            }
+
+            _board = await Api.GetScoreboardAsync(Id);
+            StateHasChanged();
+        }
+        catch (ApiException) { /* transient — try again next tick */ }
+        finally { _polling = false; }
+    }
+
     private void OnConnectionStateChanged()
     {
         var wasReconnecting = _reconnecting;
@@ -458,6 +508,8 @@ else
 
     private async Task TeardownConnectionAsync()
     {
+        _poll?.Dispose();
+        _poll = null;
         if (_conn is not null)
         {
             _conn.ScoreboardUpdated -= OnScoreboard;
@@ -469,6 +521,10 @@ else
         }
     }
 
-    public async ValueTask DisposeAsync() => await TeardownConnectionAsync();
+    public async ValueTask DisposeAsync()
+    {
+        _disposed = true;
+        await TeardownConnectionAsync();
+    }
 
 }

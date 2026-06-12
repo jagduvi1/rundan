@@ -44,7 +44,9 @@ public sealed class ScoreboardConnection(NavigationManager nav, AppState state) 
                 // the access code as the access_token query string (read by the gate middleware).
                 opts.AccessTokenProvider = () => Task.FromResult(state.AccessCode);
             })
-            .WithAutomaticReconnect()
+            // Retry forever — the default policy gives up after ~42 s, which on flaky phone signal would
+            // silently strand live updates for the rest of a game. (The page also polls as a backstop.)
+            .WithAutomaticReconnect(new ForeverRetryPolicy())
             .Build();
 
         _connection.On<ScoreboardDto>(ScoreboardMessages.ScoreboardUpdated, d => ScoreboardUpdated?.Invoke(d));
@@ -152,6 +154,19 @@ public sealed class ScoreboardConnection(NavigationManager nav, AppState state) 
             try { await connection.InvokeAsync(method, activityId, key); }
             catch { /* best effort — the timer is just a live indicator */ }
         }
+    }
+
+    // Reconnect forever with a gentle backoff that settles at a steady 15 s, so a long outage recovers
+    // on its own once signal returns instead of staying dead.
+    private sealed class ForeverRetryPolicy : IRetryPolicy
+    {
+        public TimeSpan? NextRetryDelay(RetryContext retryContext) => retryContext.PreviousRetryCount switch
+        {
+            0 => TimeSpan.Zero,
+            1 => TimeSpan.FromSeconds(2),
+            2 => TimeSpan.FromSeconds(5),
+            _ => TimeSpan.FromSeconds(15),
+        };
     }
 
     public async ValueTask DisposeAsync()
