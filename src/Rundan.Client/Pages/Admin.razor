@@ -185,6 +185,18 @@ else
             MusicBrainz lookup (no login) and you play tracks via the “Spotify ↗” links.
         </p>
 
+        <div class="field">
+            <label>Spotify app Client ID</label>
+            <div class="row" style="gap:.4rem">
+                <input class="grow" placeholder="Paste your Spotify app's Client ID" @bind="_spotifyClientId" />
+                <button class="btn small success" @onclick="SaveSpotifyClientIdAsync" disabled="@_busy">Save</button>
+            </div>
+            <p class="muted" style="font-size:.78rem;margin:.2rem 0 0">
+                One app for everyone — set this once, then each host connects their <b>own</b> Spotify account below.
+                (Or set <code>Rundan__SpotifyClientId</code> on the server.)
+            </p>
+        </div>
+
         @if (_spotifyError is not null)
         {
             <div class="alert error">@_spotifyError</div>
@@ -231,7 +243,7 @@ else
                 <li>Create an app in the <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener">Spotify Developer Dashboard</a> and copy its <b>Client ID</b>.</li>
                 <li>In that app's settings, add this exact <b>Redirect URI</b> (must match character-for-character):<br />
                     <code style="display:inline-block;margin-top:.2rem;padding:.15rem .4rem;background:var(--card-2, #f3f0ea);border-radius:6px;user-select:all">@RedirectUri</code></li>
-                <li>In Azure → your App Service → <b>Environment variables</b>, add <code>Rundan__SpotifyClientId</code> = the Client ID, then <b>Save</b> (the app restarts). Reload this page afterwards.</li>
+                <li>Paste that Client ID into the <b>field above</b> and <b>Save</b> (no Azure or restart needed). One app is shared by everyone — each host still connects their own account.</li>
                 <li>The app stays in Spotify <b>development mode</b>, so add each host's Spotify account under <b>User Management</b> in the dashboard — dev mode allows about <b>5 Premium</b> accounts.</li>
                 <li>Back here, tap <b>Connect a Spotify account</b> and log in. Use <b>Test</b> any time to re-check a connection.</li>
             </ol>
@@ -300,6 +312,7 @@ else
     private List<ActivityDto> _standalone = new();
     private List<SpotifyConnectionDto> _spotify = new();
     private string? _spotifyError;
+    private string _spotifyClientId = string.Empty;
 
     // The exact redirect URI to register in the Spotify app (derived from this site's address).
     private string RedirectUri => $"{Nav.BaseUri}spotify-callback";
@@ -314,6 +327,7 @@ else
     protected override async Task OnInitializedAsync()
     {
         await State.EnsureInitializedAsync(Api);
+        _spotifyClientId = State.Bootstrap?.SpotifyClientId ?? string.Empty;
 
         // Entering host settings ends any "preview as player" session.
         if (State.PreviewAsPlayer)
@@ -377,6 +391,21 @@ else
         {
             _busy = false;
         }
+    }
+
+    private async Task SaveSpotifyClientIdAsync()
+    {
+        _busy = true;
+        _spotifyError = null;
+        try
+        {
+            await Api.SetSpotifyClientIdAsync(_spotifyClientId);
+            await State.RefreshBootstrapAsync(Api); // so the rest of the UI sees the new (or cleared) id
+            _spotifyClientId = State.Bootstrap?.SpotifyClientId ?? string.Empty;
+            try { _spotify = await Api.GetSpotifyConnectionsAsync(); } catch (ApiException) { }
+        }
+        catch (ApiException ex) { _spotifyError = ex.Message; }
+        finally { _busy = false; }
     }
 
     // Start the Spotify OAuth (PKCE) — redirects to Spotify, returns to /spotify-callback.

@@ -79,6 +79,11 @@ public sealed class RundanApi(HttpClient http, AppState state)
             $"api/activities/{activityId}/music/start/{questionId}", admin: true))!;
 
     // ---- Spotify connections (admin) ---------------------------------------
+    /// <summary>Set (or clear, when blank) the Spotify app Client ID from the UI.</summary>
+    public Task SetSpotifyClientIdAsync(string? clientId) =>
+        SendAsync(HttpMethod.Put, "api/spotify/client-id",
+            body: new SetSpotifyClientIdRequest { ClientId = clientId }, admin: true);
+
     public Task<List<SpotifyConnectionDto>> GetSpotifyConnectionsAsync() =>
         GetListAsync<SpotifyConnectionDto>("api/spotify/connections", admin: true);
 

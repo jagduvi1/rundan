@@ -105,6 +105,17 @@ public sealed class AppState(IJSRuntime js)
         Initialized = Bootstrap is not null;
     }
 
+    /// <summary>Re-fetch the public bootstrap (e.g. after changing the Spotify Client ID from the UI).</summary>
+    public async Task RefreshBootstrapAsync(RundanApi api)
+    {
+        var b = await api.GetBootstrapAsync();
+        if (b is not null)
+        {
+            Bootstrap = b;
+            Changed?.Invoke();
+        }
+    }
+
     public async Task SetAccessCodeAsync(string code)
     {
         AccessCode = code;

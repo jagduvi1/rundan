@@ -32,6 +32,7 @@ public class AppDbContext : DbContext
     public DbSet<PushSubscription> PushSubscriptions => Set<PushSubscription>();
     public DbSet<MemoryCard> MemoryCards => Set<MemoryCard>();
     public DbSet<SpotifyConnection> SpotifyConnections => Set<SpotifyConnection>();
+    public DbSet<AppSetting> AppSettings => Set<AppSetting>();
     public DbSet<QuestionTemplate> QuestionTemplates => Set<QuestionTemplate>();
     public DbSet<QuestionTemplateOption> QuestionTemplateOptions => Set<QuestionTemplateOption>();
     public DbSet<QuestionTemplateTag> QuestionTemplateTags => Set<QuestionTemplateTag>();
@@ -252,6 +253,13 @@ public class AppDbContext : DbContext
             e.HasIndex(x => new { x.ActivityId, x.Order });
             e.HasOne(x => x.Activity).WithMany()
                 .HasForeignKey(x => x.ActivityId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<AppSetting>(e =>
+        {
+            e.HasKey(x => x.Key);
+            e.Property(x => x.Key).HasMaxLength(80);
+            e.Property(x => x.Value).HasMaxLength(500);
         });
 
         b.Entity<SpotifyConnection>(e =>
