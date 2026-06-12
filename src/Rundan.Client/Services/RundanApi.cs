@@ -92,6 +92,10 @@ public sealed class RundanApi(HttpClient http, AppState state)
     public Task DeleteSpotifyConnectionAsync(int id) =>
         SendAsync(HttpMethod.Delete, $"api/spotify/connections/{id}", admin: true);
 
+    /// <summary>A fresh Spotify access token for the host's browser (Web Playback SDK).</summary>
+    public async Task<string?> GetSpotifyTokenAsync(int connectionId) =>
+        (await SendAsync<SpotifyTokenDto>(HttpMethod.Get, $"api/spotify/connections/{connectionId}/token", admin: true))?.AccessToken;
+
     // ---- Image upload (admin) ----------------------------------------------
     public async Task<string> UploadImageAsync(Stream content, string fileName, string contentType)
     {

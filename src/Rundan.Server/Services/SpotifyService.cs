@@ -102,6 +102,20 @@ public sealed class SpotifyService(IHttpClientFactory httpFactory, RundanOptions
         }
     }
 
+    /// <summary>A fresh access token for the host's browser to drive the Web Playback SDK. Null if the
+    /// connection is gone; throws if the refresh fails.</summary>
+    public async Task<string?> GetAccessTokenAsync(int connectionId, CancellationToken ct = default)
+    {
+        var conn = await db.SpotifyConnections.FirstOrDefaultAsync(c => c.Id == connectionId, ct);
+        if (conn is null)
+        {
+            return null;
+        }
+
+        await EnsureFreshAsync(conn, ct);
+        return conn.AccessToken;
+    }
+
     /// <summary>Exact metadata for a track via a connection, or null if the connection is gone/failed.</summary>
     public async Task<MusicLookupResultDto?> GetTrackAsync(int connectionId, string trackId, CancellationToken ct = default)
     {
