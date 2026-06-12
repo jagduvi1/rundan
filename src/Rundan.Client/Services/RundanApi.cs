@@ -440,8 +440,10 @@ public sealed class RundanApi(HttpClient http, AppState state)
     public Task DeleteActivityAsync(int id) =>
         SendAsync(HttpMethod.Delete, $"api/activities/{id}", admin: true);
 
-    public Task<List<QuestionAdminDto>> GetAdminQuestionsAsync(int id) =>
-        GetListAsync<QuestionAdminDto>($"api/activities/{id}/questions/admin", admin: true);
+    /// <summary>Host's questions. Pass reveal=true from an editing surface to load the real answers even
+    /// when "hide from host" is on (the UI blanks the fields instead, so a save never wipes them).</summary>
+    public Task<List<QuestionAdminDto>> GetAdminQuestionsAsync(int id, bool reveal = false) =>
+        GetListAsync<QuestionAdminDto>($"api/activities/{id}/questions/admin{(reveal ? "?reveal=true" : "")}", admin: true);
 
     /// <summary>Sets how many stations a tipspromenad/quiz has — adds blank stations or trims empty ones.</summary>
     public async Task<List<QuestionAdminDto>> SetStationCountAsync(int id, int count) =>

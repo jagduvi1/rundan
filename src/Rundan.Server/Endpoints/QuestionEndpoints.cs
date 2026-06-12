@@ -72,7 +72,7 @@ internal static class QuestionEndpoints
 
         // --- Admin: build the question set (only while Draft) --------------------
 
-        app.MapGet("/api/activities/{id:int}/questions/admin", async (int id, AppDbContext db, CancellationToken ct) =>
+        app.MapGet("/api/activities/{id:int}/questions/admin", async (int id, bool? reveal, AppDbContext db, CancellationToken ct) =>
         {
             var activity = await db.Activities.AsNoTracking().FirstOrDefaultAsync(a => a.Id == id, ct);
             if (activity is null)
@@ -80,8 +80,11 @@ internal static class QuestionEndpoints
                 return Results.NotFound();
             }
 
+            // The editing surfaces pass reveal=true to load the real answers even when "hide from host"
+            // is on — they blank the fields in the UI instead, so the host can still edit and a save never
+            // wipes the answers. The live host panel omits it, so it stays masked while the host plays.
             var questions = await LoadOrderedAsync(db, id, ct);
-            var dtos = MaskIfHidden(questions.Select(q => q.ToAdminDto()), activity.HideQuestionsFromHost);
+            var dtos = MaskIfHidden(questions.Select(q => q.ToAdminDto()), activity.HideQuestionsFromHost && reveal != true);
             return Results.Ok(dtos.ToList());
         }).AddEndpointFilter<ActivityManagerFilter>();
 
