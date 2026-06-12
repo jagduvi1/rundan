@@ -504,43 +504,48 @@ else
 
     @if (CanManage && !ProxyHere)
     {
-        <div class="card stack accent">
-            <h3>Players &amp; event admins</h3>
-            <p class="muted">Pick players from your roster, and tick <b>admin</b> to make someone a co-host. Manage the roster under <a href="admin/users">People</a>.</p>
-            @if (_allUsers.Count == 0)
-            {
-                <p class="muted">No people in the roster yet.</p>
-            }
-            else
-            {
-                @foreach (var u in _allUsers)
+        <details class="card accent" open="@(_playersOpen == true)">
+            <summary style="cursor:pointer;font-weight:700;font-size:1.05rem">
+                Players &amp; event admins@(_selectedMemberIds.Count > 0 ? $" ({_selectedMemberIds.Count})" : "")
+            </summary>
+            <div class="stack" style="margin-top:.6rem">
+                <p class="muted">Pick players from your roster, and tick <b>admin</b> to make someone a co-host. Manage the roster under <a href="admin/users">People</a>.</p>
+                @if (_allUsers.Count == 0)
                 {
-                    <div class="row" style="font-weight:500">
-                        <label class="row grow" style="font-weight:500">
-                            <input type="checkbox" style="width:auto;min-height:auto"
-                                   checked="@_selectedMemberIds.Contains(u.Id)"
-                                   @onchange="e => ToggleMember(u.Id, (bool)e.Value!)" />
-                            <span class="grow">@u.Name</span>
-                        </label>
-                        @if (_selectedMemberIds.Contains(u.Id))
-                        {
-                            <label class="muted" style="font-weight:500;font-size:.85rem">
-                                <input type="checkbox" style="width:auto;min-height:auto"
-                                       checked="@_selectedAdminIds.Contains(u.Id)"
-                                       @onchange="e => ToggleAdmin(u.Id, (bool)e.Value!)" /> admin
-                            </label>
-                        }
-                    </div>
+                    <p class="muted">No people in the roster yet.</p>
                 }
-                <button class="btn block success" @onclick="SaveMembersAsync" disabled="@_busy">Save players</button>
-            }
-        </div>
+                else
+                {
+                    @foreach (var u in _allUsers)
+                    {
+                        <div class="row" style="font-weight:500">
+                            <label class="row grow" style="font-weight:500">
+                                <input type="checkbox" style="width:auto;min-height:auto"
+                                       checked="@_selectedMemberIds.Contains(u.Id)"
+                                       @onchange="e => ToggleMember(u.Id, (bool)e.Value!)" />
+                                <span class="grow">@u.Name</span>
+                            </label>
+                            @if (_selectedMemberIds.Contains(u.Id))
+                            {
+                                <label class="muted" style="font-weight:500;font-size:.85rem">
+                                    <input type="checkbox" style="width:auto;min-height:auto"
+                                           checked="@_selectedAdminIds.Contains(u.Id)"
+                                           @onchange="e => ToggleAdmin(u.Id, (bool)e.Value!)" /> admin
+                                </label>
+                            }
+                        </div>
+                    }
+                    <button class="btn block success" @onclick="SaveMembersAsync" disabled="@_busy">Save players</button>
+                }
+            </div>
+        </details>
     }
 
     @if (CanManage && _event.HasRoster && !ProxyHere)
     {
-        <div class="card stack accent">
-            <h3>Play for a player</h3>
+        <details class="card accent">
+            <summary style="cursor:pointer;font-weight:700;font-size:1.05rem">Play for a player</summary>
+            <div class="stack" style="margin-top:.6rem">
             <p class="muted">If someone's phone dies or runs out of battery, take over here — you'll answer, score and slap as them on your own device. Tap Stop to go back to being yourself.</p>
             @foreach (var m in _event.Members)
             {
@@ -558,7 +563,8 @@ else
                     }
                 </div>
             }
-        </div>
+            </div>
+        </details>
     }
 
     @if (CanManage && !ProxyHere)
@@ -720,6 +726,7 @@ else
     private List<UserDto> _allUsers = new();
     private HashSet<int> _selectedMemberIds = new();
     private HashSet<int> _selectedAdminIds = new();
+    private bool? _playersOpen; // initial open-state for the players accordion (null = not yet decided)
     private bool _isEventAdmin;
 
     private List<ActivityDto> _library = new();
@@ -947,6 +954,7 @@ else
         // This page instance is reused across /e/{id} navigations — clear the previous event's admin
         // flag so it can't leak into an event where we're not an admin.
         _isEventAdmin = false;
+        _playersOpen = null; // recompute the players-accordion start state for this event
 
         // Attach THIS event's stored member token to the very first GET so the server can compute
         // EventDto.CanManage (are we an admin of THIS event?) correctly on the initial load. Set it
@@ -1009,6 +1017,9 @@ else
                 try { _library = await Api.GetLibraryAsync(); } catch (ApiException) { }
                 _selectedMemberIds = _event.Members.Select(m => m.Id).ToHashSet();
                 _selectedAdminIds = _event.AdminUserIds.ToHashSet();
+                // First load only: open the players accordion when none are set up yet, otherwise start
+                // it collapsed (it's been "checked and saved"). The ??= keeps the host's manual toggle.
+                _playersOpen ??= _selectedMemberIds.Count == 0;
             }
 
             if (CanManage && _event.TeamShuffle == TeamShuffle.FixedForEvent)
