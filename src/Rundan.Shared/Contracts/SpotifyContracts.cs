@@ -34,6 +34,12 @@ public class SpotifyValidateResultDto
     public string Message { get; set; } = string.Empty;
 }
 
+/// <summary>Host sets (or clears) the Spotify app Client ID from the UI — stored server-side, overrides env.</summary>
+public class SetSpotifyClientIdRequest
+{
+    public string? ClientId { get; set; }
+}
+
 /// <summary>A short-lived Spotify access token handed to the host's browser for the Web Playback SDK
 /// (full-track playback in-app). Admin-only; the long-lived refresh token never leaves the server.</summary>
 public class SpotifyTokenDto

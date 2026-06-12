@@ -17,25 +17,45 @@ public sealed class SpotifyService(IHttpClientFactory httpFactory, RundanOptions
 {
     private const string TokenUrl = "https://accounts.spotify.com/api/token";
     private const string ApiBase = "https://api.spotify.com/v1";
-
-    public bool Configured => !string.IsNullOrWhiteSpace(options.SpotifyClientId);
+    public const string ClientIdSettingKey = "Spotify.ClientId";
 
     private HttpClient Http => httpFactory.CreateClient("music");
+
+    /// <summary>The effective Spotify app Client ID: the UI-saved setting if present, else the env config.</summary>
+    public async Task<string?> ClientIdAsync(CancellationToken ct = default)
+    {
+        var fromDb = await db.AppSettings.AsNoTracking()
+            .Where(s => s.Key == ClientIdSettingKey).Select(s => s.Value).FirstOrDefaultAsync(ct);
+        var id = !string.IsNullOrWhiteSpace(fromDb) ? fromDb : options.SpotifyClientId;
+        return string.IsNullOrWhiteSpace(id) ? null : id.Trim();
+    }
+
+    /// <summary>Save (or clear, when blank) the Spotify Client ID set from the UI.</summary>
+    public async Task SetClientIdAsync(string? clientId, CancellationToken ct = default)
+    {
+        var val = (clientId ?? string.Empty).Trim();
+        var existing = await db.AppSettings.FirstOrDefaultAsync(s => s.Key == ClientIdSettingKey, ct);
+        if (val.Length == 0)
+        {
+            if (existing is not null) db.AppSettings.Remove(existing);
+        }
+        else if (existing is not null) existing.Value = val;
+        else db.AppSettings.Add(new AppSetting { Key = ClientIdSettingKey, Value = val });
+        await db.SaveChangesAsync(ct);
+    }
 
     /// <summary>Exchanges the OAuth code for tokens (PKCE) and saves a new connection named after the account.</summary>
     public async Task<SpotifyConnectionDto> ConnectAsync(string code, string codeVerifier, string redirectUri, CancellationToken ct = default)
     {
-        if (!Configured)
-        {
-            throw new RuleViolationException("Spotify isn't set up on the server (no client id configured).");
-        }
+        var clientId = await ClientIdAsync(ct)
+            ?? throw new RuleViolationException("Spotify isn't set up yet (no Client ID).");
 
         var token = await ExchangeAsync(new Dictionary<string, string>
         {
             ["grant_type"] = "authorization_code",
             ["code"] = code,
             ["redirect_uri"] = redirectUri,
-            ["client_id"] = options.SpotifyClientId!,
+            ["client_id"] = clientId,
             ["code_verifier"] = codeVerifier,
         }, ct);
 
@@ -170,11 +190,13 @@ public sealed class SpotifyService(IHttpClientFactory httpFactory, RundanOptions
             return;
         }
 
+        var clientId = await ClientIdAsync(ct)
+            ?? throw new RuleViolationException("Spotify isn't set up yet (no Client ID).");
         var token = await ExchangeAsync(new Dictionary<string, string>
         {
             ["grant_type"] = "refresh_token",
             ["refresh_token"] = conn.RefreshToken,
-            ["client_id"] = options.SpotifyClientId!,
+            ["client_id"] = clientId,
         }, ct);
 
         conn.AccessToken = token.AccessToken;

@@ -9,6 +9,13 @@ internal static class SpotifyEndpoints
 {
     public static void MapSpotifyEndpoints(this IEndpointRouteBuilder app)
     {
+        // Set (or clear) the Spotify app Client ID from the UI — stored server-side, overrides env config.
+        app.MapPut("/api/spotify/client-id", async (SetSpotifyClientIdRequest req, SpotifyService svc, CancellationToken ct) =>
+        {
+            await svc.SetClientIdAsync(req.ClientId, ct);
+            return Results.NoContent();
+        }).AddEndpointFilter<AdminEndpointFilter>();
+
         // Finish the browser OAuth: exchange the code (PKCE) for tokens and save a named connection.
         app.MapPost("/api/spotify/connect", async (SpotifyConnectRequest req, SpotifyService svc, CancellationToken ct) =>
             Results.Ok(await svc.ConnectAsync(req.Code, req.CodeVerifier, req.RedirectUri, ct)))

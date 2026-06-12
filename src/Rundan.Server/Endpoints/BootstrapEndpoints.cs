@@ -12,13 +12,15 @@ internal static class BootstrapEndpoints
     {
         // Public (excluded from the access-code gate): lets the client know whether to
         // show the access-code screen at all.
-        app.MapGet("/api/bootstrap", (RundanOptions options) => Results.Ok(new BootstrapDto
-        {
-            AppName = options.AppName,
-            RequiresAccessCode = options.RequiresAccessCode,
-            RequiresAdminCode = options.RequiresAdminCode,
-            SpotifyClientId = options.SpotifyClientId ?? string.Empty,
-        }));
+        app.MapGet("/api/bootstrap", async (RundanOptions options, SpotifyService spotify, CancellationToken ct) =>
+            Results.Ok(new BootstrapDto
+            {
+                AppName = options.AppName,
+                RequiresAccessCode = options.RequiresAccessCode,
+                RequiresAdminCode = options.RequiresAdminCode,
+                // The effective Client ID (UI-saved setting overrides the env config).
+                SpotifyClientId = await spotify.ClientIdAsync(ct) ?? string.Empty,
+            }));
 
         // Gated by the access-code middleware: reaching it means the code is valid.
         app.MapGet("/api/session/verify", () => Results.Ok(new { ok = true }));
