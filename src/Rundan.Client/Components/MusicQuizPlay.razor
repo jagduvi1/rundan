@@ -14,7 +14,7 @@ else
     <div class="card stack">
         <h2 style="margin:0">Music quiz</h2>
         <p class="muted" style="margin:0;font-size:.85rem">
-            The host plays each track — @(Activity.MusicChoices ? "tap the artist" : "type the song and the artist"). @_answered.Count of @_tracks.Count answered.
+            The host plays the tracks one at a time — @(Activity.MusicChoices ? "tap the artist" : "type the song and the artist") when each one appears. @_answered.Count of @_tracks.Count answered.
         </p>
         @if (_error is not null)
         {
@@ -24,19 +24,28 @@ else
 
     @foreach (var (q, i) in _tracks.Select((q, i) => (q, i)))
     {
+        // One by one: only show a track once the host has played it (or we've already answered it).
+        if (!IsRevealed(q)) { continue; }
         var mine = _answered.GetValueOrDefault(q.Id);
         var res = _results.GetValueOrDefault(q.Id);
+        var rem = mine is null ? LiveRemaining(q) : null;
+        // Kahoot-style is timed — once the window closes the options lock and "time's up" shows.
+        var timeUp = mine is null && IsChoice(q) && _live.ContainsKey(q.Id) && rem is null;
         <div class="card stack">
             <div class="row">
                 <b class="grow">Track @(i + 1)@(HasLabel(q, i) ? $" · {q.Text}" : "")</b>
-                @if (mine is null && LiveRemaining(q) is int rem)
+                @if (rem is int r)
                 {
-                    <span class="badge" style="background:var(--green-100);color:var(--green-700)">⏱ answer fast · @rem s</span>
+                    <span class="badge" style="background:var(--green-100);color:var(--green-700)">⏱ answer fast · @r s</span>
+                }
+                else if (timeUp)
+                {
+                    <span class="badge" style="background:var(--red-100,#fde8e8);color:var(--red-700,#b42318)">⏰ Time's up</span>
                 }
                 <span class="muted" style="font-size:.8rem">@q.Points pt each</span>
             </div>
 
-            @if (mine is null && IsChoice(q))
+            @if (mine is null && IsChoice(q) && !timeUp)
             {
                 @* Kahoot-style: tap the artist. *@
                 @for (var oi = 0; oi < q.Options.Count; oi++)
@@ -50,6 +59,10 @@ else
                         <span class="option__mark"></span>
                     </button>
                 }
+            }
+            else if (timeUp)
+            {
+                <div class="alert">⏰ Time's up — you didn't lock in an answer for this track.</div>
             }
             else if (mine is null)
             {
@@ -88,6 +101,15 @@ else
                 </div>
             }
         </div>
+    }
+
+    @if (RevealedCount == 0)
+    {
+        <div class="card center muted" style="padding:1.1rem"><div class="spinner" style="margin:.4rem auto"></div>Waiting for the host to play the first track…</div>
+    }
+    else if (RevealedCount < _tracks.Count)
+    {
+        <div class="card center muted" style="font-size:.85rem">⏯ Waiting for the host to play the next track — @(_tracks.Count - RevealedCount) to go.</div>
     }
 }
 
@@ -138,6 +160,11 @@ else
 
     // Multiple-choice ("pick the artist") track: the host enabled it and we have the options.
     private bool IsChoice(QuestionDto q) => Activity.MusicChoices && q.Options.Count > 0;
+
+    // A track is shown to the player once the host has started it (or we've already answered it).
+    private bool IsRevealed(QuestionDto q) => _answered.ContainsKey(q.Id) || _live.ContainsKey(q.Id);
+
+    private int RevealedCount => _tracks.Count(IsRevealed);
 
     // Tapping an artist option submits it as the artist guess (reuses the artist-match scoring).
     private Task SubmitChoiceAsync(int questionId, string artist)
