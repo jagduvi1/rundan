@@ -78,6 +78,20 @@ public sealed class RundanApi(HttpClient http, AppState state)
         (await SendAsync<MusicTrackStartedDto>(HttpMethod.Post,
             $"api/activities/{activityId}/music/start/{questionId}", admin: true))!;
 
+    // ---- Spotify connections (admin) ---------------------------------------
+    public Task<List<SpotifyConnectionDto>> GetSpotifyConnectionsAsync() =>
+        GetListAsync<SpotifyConnectionDto>("api/spotify/connections", admin: true);
+
+    public async Task<SpotifyConnectionDto> ConnectSpotifyAsync(string code, string verifier, string redirectUri) =>
+        (await SendAsync<SpotifyConnectionDto>(HttpMethod.Post, "api/spotify/connect",
+            body: new SpotifyConnectRequest { Code = code, CodeVerifier = verifier, RedirectUri = redirectUri }, admin: true))!;
+
+    public async Task<SpotifyValidateResultDto> ValidateSpotifyAsync(int id) =>
+        (await SendAsync<SpotifyValidateResultDto>(HttpMethod.Post, $"api/spotify/connections/{id}/validate", admin: true))!;
+
+    public Task DeleteSpotifyConnectionAsync(int id) =>
+        SendAsync(HttpMethod.Delete, $"api/spotify/connections/{id}", admin: true);
+
     // ---- Image upload (admin) ----------------------------------------------
     public async Task<string> UploadImageAsync(Stream content, string fileName, string contentType)
     {

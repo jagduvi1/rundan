@@ -83,6 +83,10 @@ public class Activity
     /// of typing the song + artist. Options are generated when the activity starts.</summary>
     public bool MusicChoices { get; set; }
 
+    /// <summary>MusicQuiz auto-fill source: null = free oEmbed + MusicBrainz; set = use this saved Spotify
+    /// connection for exact title/artist/year. Loose reference — a deleted connection falls back to free.</summary>
+    public int? SpotifyConnectionId { get; set; }
+
     /// <summary>For question activities: blank out the question text/answers in the host's management
     /// view (so a host who's also playing doesn't spoil library-pulled questions). Players still see them.</summary>
     public bool HideQuestionsFromHost { get; set; }
