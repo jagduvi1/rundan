@@ -414,27 +414,30 @@ else
         </button>
     </div>
 
-    <div class="card stack">
-        <h2>Courts / lanes</h2>
-        <p class="muted" style="font-size:.85rem">Add the playing surfaces (courts, fields, tracks, lanes). For a knockout tournament they're used to schedule the order of play.</p>
-        <div class="field">
-            <label>What they're called</label>
-            <input @bind="_editCourtLabel" maxlength="30" placeholder="Court" style="width:180px" />
-        </div>
-        @for (var i = 0; i < _editCourtNames.Count; i++)
-        {
-            var idx = i;
-            <div class="row">
-                <input class="grow" @bind="_editCourtNames[idx]" maxlength="60" />
-                <button class="btn ghost small danger" @onclick="() => RemoveCourt(idx)">✕</button>
+    @if (_activity.UsesCourts)
+    {
+        <div class="card stack">
+            <h2>Courts / lanes</h2>
+            <p class="muted" style="font-size:.85rem">Add the playing surfaces (courts, fields, tracks, lanes). For a knockout tournament they're used to schedule the order of play.</p>
+            <div class="field">
+                <label>What they're called</label>
+                <input @bind="_editCourtLabel" maxlength="30" placeholder="Court" style="width:180px" />
             </div>
-        }
-        <div class="row">
-            <button class="btn ghost small" @onclick="AddCourt">+ Add @((_editCourtLabel ?? "Court").Trim().ToLower())</button>
-            <span class="grow"></span>
-            <button class="btn success small" @onclick="SaveCourtsAsync" disabled="@_busy">Save courts</button>
+            @for (var i = 0; i < _editCourtNames.Count; i++)
+            {
+                var idx = i;
+                <div class="row">
+                    <input class="grow" @bind="_editCourtNames[idx]" maxlength="60" />
+                    <button class="btn ghost small danger" @onclick="() => RemoveCourt(idx)">✕</button>
+                </div>
+            }
+            <div class="row">
+                <button class="btn ghost small" @onclick="AddCourt">+ Add @((_editCourtLabel ?? "Court").Trim().ToLower())</button>
+                <span class="grow"></span>
+                <button class="btn success small" @onclick="SaveCourtsAsync" disabled="@_busy">Save courts</button>
+            </div>
         </div>
-    </div>
+    }
 
     @if (_activity.UsesQuestions)
     {

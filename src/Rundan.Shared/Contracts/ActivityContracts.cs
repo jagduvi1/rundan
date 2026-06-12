@@ -140,6 +140,11 @@ public class ActivityDto
     /// <summary>True for round-based score games (Boule / generic).</summary>
     public bool UsesRounds => Type is ActivityType.Boule or ActivityType.ScoreGame;
 
+    /// <summary>True for activities played on physical surfaces (knockout tournament / generic score
+    /// game), where courts / lanes are meaningful. Hidden for the digital games (quiz, tipspromenad,
+    /// word game, pin-the-city, music quiz, memory).</summary>
+    public bool UsesCourts => Type is ActivityType.Boule or ActivityType.ScoreGame;
+
     /// <summary>Tournament with the optional round-robin group stage switched on.</summary>
     public bool UsesGroups => Type == ActivityType.Boule && UseGroupStage;
 
