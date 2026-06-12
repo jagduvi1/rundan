@@ -83,6 +83,11 @@ public class Activity
     /// of typing the song + artist. Options are generated when the activity starts.</summary>
     public bool MusicChoices { get; set; }
 
+    /// <summary>MusicQuiz: graduated speed scoring (Kahoot-style) — a correct answer earns more the quicker
+    /// it comes in after the host starts the track; the speed bonus decays to zero across the window.
+    /// Off = a correct answer is worth flat points regardless of speed.</summary>
+    public bool SpeedScoring { get; set; }
+
     /// <summary>MusicQuiz auto-fill source: null = free oEmbed + MusicBrainz; set = use this saved Spotify
     /// connection for exact title/artist/year. Loose reference — a deleted connection falls back to free.</summary>
     public int? SpotifyConnectionId { get; set; }

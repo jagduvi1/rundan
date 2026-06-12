@@ -101,6 +101,9 @@ public class ActivityDto
     /// <summary>MusicQuiz: multiple-choice (pick the artist from 4 options) instead of typing.</summary>
     public bool MusicChoices { get; set; }
 
+    /// <summary>MusicQuiz: graduated speed scoring (Kahoot-style) — faster correct answers score higher.</summary>
+    public bool SpeedScoring { get; set; }
+
     /// <summary>MusicQuiz auto-fill source: null = free (oEmbed + MusicBrainz); set = use this saved Spotify
     /// connection (a logged-in Premium account) for exact title/artist/year.</summary>
     public int? SpotifyConnectionId { get; set; }
@@ -199,6 +202,7 @@ public class UpdateActivityRequest
     public int? TargetValue { get; set; }
     public bool RandomizeQuestions { get; set; }
     public bool MusicChoices { get; set; }
+    public bool SpeedScoring { get; set; }
     public int? SpotifyConnectionId { get; set; }
     public bool HideQuestionsFromHost { get; set; }
     public bool IsPublic { get; set; }
