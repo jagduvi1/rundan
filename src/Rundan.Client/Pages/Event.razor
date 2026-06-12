@@ -421,6 +421,9 @@ else
                 </div>
             }
 
+            <details open="@(_setupOpen == true)" style="margin-top:.5rem">
+                <summary style="cursor:pointer;font-weight:700;font-size:1rem">Add activity, restart &amp; dry run</summary>
+                <div class="stack" style="margin-top:.5rem">
             <h3 style="margin-top:.5rem">Add an activity — start fresh</h3>
             <input type="text" placeholder="Activity title" @bind="_newTitle" maxlength="200" />
             <select @bind="_newType">
@@ -499,6 +502,8 @@ else
                     <button class="btn small ghost" @onclick="() => _confirmBulk = null" disabled="@_busy">Cancel</button>
                 }
             </div>
+                </div>
+            </details>
         </div>
     }
 
@@ -727,6 +732,7 @@ else
     private HashSet<int> _selectedMemberIds = new();
     private HashSet<int> _selectedAdminIds = new();
     private bool? _playersOpen; // initial open-state for the players accordion (null = not yet decided)
+    private bool? _setupOpen;   // initial open-state for the add/restart/dry-run accordion
     private bool _isEventAdmin;
 
     private List<ActivityDto> _library = new();
@@ -955,6 +961,7 @@ else
         // flag so it can't leak into an event where we're not an admin.
         _isEventAdmin = false;
         _playersOpen = null; // recompute the players-accordion start state for this event
+        _setupOpen = null;   // and the add/restart/dry-run accordion's start state
 
         // Attach THIS event's stored member token to the very first GET so the server can compute
         // EventDto.CanManage (are we an admin of THIS event?) correctly on the initial load. Set it
@@ -1020,6 +1027,9 @@ else
                 // First load only: open the players accordion when none are set up yet, otherwise start
                 // it collapsed (it's been "checked and saved"). The ??= keeps the host's manual toggle.
                 _playersOpen ??= _selectedMemberIds.Count == 0;
+                // Likewise, fold the add/restart/dry-run tools away once the event is under way (any
+                // activity past Draft); keep them open while still setting the day up.
+                _setupOpen ??= !_event.Activities.Any(a => a.Status != ActivityStatus.Draft);
             }
 
             if (CanManage && _event.TeamShuffle == TeamShuffle.FixedForEvent)
